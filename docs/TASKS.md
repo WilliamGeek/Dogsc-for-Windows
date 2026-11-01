@@ -64,7 +64,7 @@
 - [x] T6.1 `OverlayTimeline.swift`(393)。
 - [x] T6.2 `StickerTransition.swift`(266)。
 - [x] T6.3 `FrameScene.swift` L1–L540（所有数据结构）。
-- [ ] T6.4 `FrameScene.swift` L540–L1284（`FrameSceneEvaluator`）。必测：同一输入调用两次 `deepEqual`；`refreshingCursor` 只改变 cursor 字段。
+- [x] T6.4 `FrameScene.swift` L540–L1284（`FrameSceneEvaluator`）。必测：同一输入调用两次 `deepEqual`；`refreshingCursor` 只改变 cursor 字段。
 
 ## B7 时间线与工程
 - [ ] T7.1 `MediaTimeline.swift`(121)、`ProjectTimeline.swift`(312)

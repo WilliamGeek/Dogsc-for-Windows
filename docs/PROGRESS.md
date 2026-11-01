@@ -29,5 +29,6 @@
 2026-11-02 05:33 | T6.1 | DONE | OverlayTimeline (马赛克裁剪/聚光灯、贴纸片段、互补退出动画与OverlayTiming) 移植完成 | 93 pass
 2026-11-02 05:36 | T6.2 | DONE | StickerTransition (贴纸背景过渡遮罩、相邻片段平滑手递手接力与BackdropBridge) 移植完成 | 97 pass
 2026-11-02 05:39 | T6.3 | DONE | FrameScene 第 1 段 (FrameScreenScene、FrameCameraScene、FrameCursorScene、FrameColorContract、FrameRenderPlan 等所有帧场景数据结构) 移植完成 | 104 pass
+2026-11-02 05:56 | T6.4 | DONE | FrameScene 第 2 段 (FrameSceneEvaluator、scene纯函数求值、开场动画采样、refreshingCursor与光标分离调度) 移植完成 (B6 收官) | 106 pass
 
-下一个任务：T6.4
+下一个任务：T7.1

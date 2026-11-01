@@ -18,6 +18,8 @@ import {
   FrameLayerRoleAllCases,
   makeFrameScene,
   makeFrameRenderPlan,
+  FrameSceneEvaluator,
+  type FrameSceneProjectLike,
 } from '../../src/core/FrameScene.ts';
 import {
   makeCompositionRect,
@@ -25,8 +27,8 @@ import {
 } from '../../src/core/CompositionScene.ts';
 import { makeProjectedScreenQuad } from '../../src/core/ScreenProjection.ts';
 import { HexColorWhite, HexColorBlack } from '../../src/core/HexColor.ts';
-import { makeNormalizedCrop } from '../../src/core/ProjectModel.ts';
-import { makeNormalizedPoint } from '../../src/core/ZoomAnimation.ts';
+import { makeNormalizedCrop, makeOpeningSequence } from '../../src/core/ProjectModel.ts';
+import { makeNormalizedPoint, ZoomAnimationTrack } from '../../src/core/ZoomAnimation.ts';
 import { makeNormalizedOverlayRect } from '../../src/core/OverlayTimeline.ts';
 
 test('T6.3: CompositionSize shortEdge and make', () => {
@@ -240,3 +242,178 @@ test('T6.3: FrameScene and FrameRenderPlan construction', () => {
   assert.equal(plan.frameRate, 60);
   assert.equal(plan.scene.canvasSize.width, 1920);
 });
+
+test('T6.4: FrameSceneEvaluator.scene idempotency (two identical calls deepEqual)', () => {
+  const project: FrameSceneProjectLike = {
+    canvas: {
+      crop: makeNormalizedCrop(0, 0, 1, 1),
+      padding: 20,
+      contentPosition: { x: 0.5, y: 0.5 },
+      contentScale: 1.0,
+      borderWidth: 2,
+      borderColor: HexColorBlack,
+      insetOpacity: 1.0,
+      screenFrame: 'windowLight',
+      screenFrameScale: 1.0,
+      screenFrameToolbarScale: 1.0,
+      screenFrameOuterCornerRadius: 12,
+      screenFrameContentCornerRadius: 8,
+      screenFrameTitle: 'Demo Window',
+      screenFrameBrowserAddress: 'https://example.com',
+      cornerRadius: 12,
+      shadowStrength: 0.2,
+      backgroundSource: { kind: 'color', color: HexColorWhite },
+      backgroundBlur: 10,
+      patternScale: 1.0,
+      patternOpacity: 1.0,
+    },
+    camera: {
+      shape: 'circle',
+      position: { x: 0.8, y: 0.8 },
+      size: 0.25,
+      roundness: 1.0,
+      scaleDuringZoom: 1.2,
+      borderWidth: 4,
+      shadowStrength: 0.3,
+      isHidden: false,
+      contentPosition: { x: 0.5, y: 0.5 },
+      contentScale: 1.0,
+      isMirrored: false,
+    },
+    motion: {
+      screenSpring: { mass: 2.4, stiffness: 210, damping: 42 },
+      cursorSpring: { mass: 2.8, stiffness: 450, damping: 66 },
+    },
+    cursorStyle: {
+      assetID: 'appleBlack',
+      size: 1.0,
+      clickEffectStyle: 'ripple',
+      clickColor: HexColorBlack,
+      clickOpacity: 0.8,
+      clickScale: 1.0,
+    },
+    openingSequence: makeOpeningSequence({
+      isEnabled: false,
+    }),
+    timeline: {
+      screenMotionClips: [],
+      cameraMotionClips: [],
+      stickerClips: [],
+      mosaicClips: [],
+    },
+    zoomAnimations: [],
+  };
+
+  const canvasSize = makeCompositionSize(1920, 1080);
+  const scene1 = FrameSceneEvaluator.scene(project, 2.5, 10.0, canvasSize, 16 / 9);
+  const scene2 = FrameSceneEvaluator.scene(project, 2.5, 10.0, canvasSize, 16 / 9);
+
+  // Exact idempotency requirement
+  assert.deepEqual(scene1, scene2);
+  assert.equal(scene1.time, 2.5);
+  assert.equal(scene1.screen.fittedRect.width > 0, true);
+  assert.equal(scene1.layerOrder.includes('screen'), true);
+});
+
+test('T6.4: FrameSceneEvaluator.refreshingCursor only modifies cursor and presentationTime', () => {
+  const project: FrameSceneProjectLike = {
+    canvas: {
+      crop: makeNormalizedCrop(0, 0, 1, 1),
+      padding: 0,
+      contentPosition: { x: 0.5, y: 0.5 },
+      contentScale: 1.0,
+      borderWidth: 0,
+      borderColor: HexColorBlack,
+      insetOpacity: 1.0,
+      screenFrame: 'none',
+      screenFrameScale: 1.0,
+      screenFrameToolbarScale: 1.0,
+      screenFrameOuterCornerRadius: null,
+      screenFrameContentCornerRadius: null,
+      screenFrameTitle: '',
+      screenFrameBrowserAddress: '',
+      cornerRadius: 0,
+      shadowStrength: 0,
+      backgroundSource: { kind: 'color', color: HexColorBlack },
+      backgroundBlur: 0,
+      patternScale: 1.0,
+      patternOpacity: 1.0,
+    },
+    camera: {
+      shape: 'circle',
+      position: { x: 0.5, y: 0.5 },
+      size: 0.2,
+      roundness: 1,
+      scaleDuringZoom: 1,
+      borderWidth: 0,
+      shadowStrength: 0,
+      isHidden: true,
+      contentPosition: { x: 0.5, y: 0.5 },
+      contentScale: 1,
+      isMirrored: false,
+    },
+    motion: {
+      screenSpring: { mass: 2.4, stiffness: 210, damping: 42 },
+      cursorSpring: { mass: 2.8, stiffness: 450, damping: 66 },
+    },
+    cursorStyle: {
+      assetID: 'appleBlack',
+      size: 1.0,
+      clickEffectStyle: 'ripple',
+      clickColor: null,
+      clickOpacity: 0.8,
+      clickScale: 1.0,
+    },
+    openingSequence: makeOpeningSequence({
+      isEnabled: false,
+    }),
+    timeline: {
+      screenMotionClips: [],
+      cameraMotionClips: [],
+      stickerClips: [],
+      mosaicClips: [],
+    },
+    zoomAnimations: [],
+  };
+
+  const canvasSize = makeCompositionSize(1920, 1080);
+  const zoomTrack = new ZoomAnimationTrack([]);
+
+  const plan = FrameSceneEvaluator.renderPlan(
+    project,
+    1.0,
+    10.0,
+    60,
+    canvasSize,
+    16 / 9,
+    null,
+    null,
+    null,
+    {},
+    zoomTrack
+  );
+
+  // refreshingCursor at t = 1.5
+  const refreshedPlan = FrameSceneEvaluator.refreshingCursor(
+    plan,
+    1.5,
+    project,
+    null,
+    null,
+    {},
+    zoomTrack
+  );
+
+  // presentationTime updated
+  assert.equal(refreshedPlan.presentationTime, 1.5);
+  assert.equal(plan.presentationTime, 1.0);
+
+  // Everything in scene except presentationTime / cursor remains strictly equal
+  assert.deepEqual(refreshedPlan.scene.screen, plan.scene.screen);
+  assert.deepEqual(refreshedPlan.scene.background, plan.scene.background);
+  assert.deepEqual(refreshedPlan.scene.canvasSize, plan.scene.canvasSize);
+  assert.deepEqual(refreshedPlan.scene.color, plan.scene.color);
+  assert.deepEqual(refreshedPlan.scene.stickers, plan.scene.stickers);
+  assert.deepEqual(refreshedPlan.scene.stickerBackdrop, plan.scene.stickerBackdrop);
+});
+
