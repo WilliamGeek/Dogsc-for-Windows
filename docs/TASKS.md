@@ -16,7 +16,7 @@
 ## B1 叶子文件
 - [x] T1.1 `RecordingMarker.swift`(15) `ExportSettings.swift`(19) → 两个同名 `.ts`
 - [x] T1.2 `BoundedMemoizationCache.swift`(86) → TS `class`，删除锁。必测：容量淘汰顺序；`valueIfBuilt` 构建函数返回 `null`（被取消）时不写入缓存。
-- [ ] T1.3 `CanvasCustomAspectRatio.swift`(32)、`TimelineTrackOrdering.swift`(55)、`PointerTimelineAlignment.swift`(56)。若需要 `CanvasStyle` 的值 → 按 PORTING_RULES §7 先做 B2。
+- [x] T1.3 `CanvasCustomAspectRatio.swift`(32)、`TimelineTrackOrdering.swift`(55)、`PointerTimelineAlignment.swift`(56)。若需要 `CanvasStyle` 的值 → 按 PORTING_RULES §7 先做 B2。
 - [ ] T1.4 `OutputFrameSchedule.swift`(96)。必测：60fps 下第 n 帧时间 = n/60；时长边界帧数。
 
 ## B2 工程数据模型
