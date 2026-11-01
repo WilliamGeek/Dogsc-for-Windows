@@ -72,7 +72,7 @@
 - [x] T7.3 `ProjectMediaModel.swift`(410)、`ProjectPointerTrack.swift`(469)
 - [x] T7.4 `ProjectValidator.swift`(210)、`ExportPolicy.swift`(68)、`CaptureConfiguration.swift`(492)
 - [x] T7.5 `ProjectTimelineRetime.swift`(215)
-- [ ] T7.6 `ProjectTimelineEditing.swift`(935) 分 2 段
+- [x] T7.6 `ProjectTimelineEditing.swift`(935) 分 2 段
 - [x] T7.7 `ProjectTimelineEditingTransforms.swift`(1168) 分 3 段（Swift `extension` 写进同一个 `ProjectTimelineEditing` 命名空间：在 `ProjectTimelineEditingTransforms.ts` 中导出函数，再由 `ProjectTimelineEditing.ts` re-export）
 - [ ] T7.8 `EditorTimeline.swift`(938) 分 2 段
 

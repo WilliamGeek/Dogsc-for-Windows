@@ -138,11 +138,30 @@ export class TimelineMap {
   readonly segments: readonly ResolvedRecordingSegment[];
   readonly fullSourceDuration: number;
 
-  constructor(sourceSequence: SourceSequence, fullSourceDuration: number) {
-    if (!Number.isFinite(fullSourceDuration) || fullSourceDuration <= 0) {
+  constructor(
+    sourceSequenceOrOptions:
+      | SourceSequence
+      | { sourceSequence: SourceSequence; fullSourceDuration: number },
+    fullSourceDuration?: number
+  ) {
+    let sourceSequence: SourceSequence;
+    let duration: number;
+    if (
+      typeof sourceSequenceOrOptions === 'object' &&
+      'sourceSequence' in sourceSequenceOrOptions &&
+      'fullSourceDuration' in sourceSequenceOrOptions
+    ) {
+      sourceSequence = sourceSequenceOrOptions.sourceSequence;
+      duration = sourceSequenceOrOptions.fullSourceDuration;
+    } else {
+      sourceSequence = sourceSequenceOrOptions as SourceSequence;
+      duration = fullSourceDuration!;
+    }
+    if (!Number.isFinite(duration) || duration <= 0) {
       throw new TimelineMapError('invalidFullSourceDuration');
     }
-    this.fullSourceDuration = fullSourceDuration;
+    this.fullSourceDuration = duration;
+    fullSourceDuration = duration;
 
     let authored: readonly RecordingSegment[];
     switch (sourceSequence.kind) {
@@ -258,6 +277,10 @@ export class TimelineMap {
     if (lower >= this.segments.length) return null;
     const candidate = this.segments[lower];
     return atOutputTime >= candidate.outputStart ? candidate : null;
+  }
+
+  segmentAtOutputTime(atOutputTime: number): ResolvedRecordingSegment | null {
+    return this.segment(atOutputTime);
   }
 
   sourceTime(atOutputTime: number): number | null {

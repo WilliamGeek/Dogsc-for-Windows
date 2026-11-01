@@ -37,5 +37,6 @@
 2026-11-02 07:00 | T7.5 | DONE | ProjectTimelineRetime (播放倍速重定时、时间锚点映射、缩放/贴纸动画重排与非重叠自适应修复) 移植完成 | 147 pass
 2026-11-02 07:05 | T7.6 | REORDER | T7.6 依赖 ProjectTimelineEditingTransforms (T7.7) 中的 ripple/inserting/validate，按 PORTING_RULES §7 优先执行 T7.7 | 147 pass
 2026-11-02 07:13 | T7.7 | DONE | ProjectTimelineEditingTransforms (时间线涟漪剪裁、相邻接点平滑回退过渡恢复、片段重映射与全轨道严格校验) 移植完成 | 153 pass
+2026-11-02 07:22 | T7.6 | DONE | ProjectTimelineEditing (主录屏片段拆分/双向裁切/移动重排/首尾空隙与剪切点恢复/同质合并、独立音频覆写与屏幕/摄像运动CRUD) 移植完成 | 159 pass
 
-下一个任务：T7.6
+下一个任务：T7.8
