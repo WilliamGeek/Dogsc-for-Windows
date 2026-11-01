@@ -47,7 +47,7 @@
   - `motion.cursor = 'smooth'`（取 Swift 中对应 rawValue）时，在左键点击时刻的 `samplePosition` 与点击坐标误差 < 1e-6。
   - `time <` 第一个事件时间 → `position === null`。
   - `style.assetID` 为 hidden 时 `cursor === null` 但 `position !== null`。
-- [ ] T4.4 `CursorRenderGeometry.swift`(358)。
+- [x] T4.4 `CursorRenderGeometry.swift`(358)。
 
 ## B5 3D 投影与构图
 - [x] T5.1 `CompositionScene.swift` 中的 `CompositionRect` `CompositionPoint` 先移植（其余部分在 T5.5）。
