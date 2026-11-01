@@ -50,10 +50,31 @@ export const NormalizedOverlayRect = Object.freeze({
 export interface OverlayTiming {
   startTime: number;
   duration: number;
+  readonly endTime: number;
 }
 
-export function makeOverlayTiming(startTime: number, duration: number = 3): OverlayTiming {
-  return { startTime, duration };
+export function makeOverlayTiming(
+  startTimeOrOptions: number | { startTime: number; duration?: number },
+  duration: number = 3
+): OverlayTiming {
+  if (typeof startTimeOrOptions === 'object') {
+    const s = startTimeOrOptions.startTime;
+    const d = startTimeOrOptions.duration ?? 3;
+    return {
+      startTime: s,
+      duration: d,
+      get endTime(): number {
+        return this.startTime + this.duration;
+      },
+    };
+  }
+  return {
+    startTime: startTimeOrOptions,
+    duration,
+    get endTime(): number {
+      return this.startTime + this.duration;
+    },
+  };
 }
 
 export function overlayTimingEndTime(timing: OverlayTiming): number {

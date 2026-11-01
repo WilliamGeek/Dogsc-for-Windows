@@ -288,6 +288,9 @@ export interface ZoomAnimationClip {
   endTime: number;
   readonly duration: number;
   readonly effectEndTime: number;
+  readonly requestedEnterDuration: number;
+  requestedExitDuration(defaultTransition?: number): number;
+  preserveTransitionIntent(defaultTransition?: number): void;
   scale: number;
   focus: NormalizedPoint;
   origin: ZoomKeyframeOrigin;
@@ -347,6 +350,23 @@ export function makeZoomAnimationClip(
     },
     get effectEndTime(): number {
       return this.endTime + this.exitDuration;
+    },
+    get requestedEnterDuration(): number {
+      return this.preferredEnterDuration ?? this.enterDuration;
+    },
+    requestedExitDuration(defaultTransition: number = 0.7): number {
+      return (
+        this.preferredExitDuration ??
+        (this.exitDuration > 0.0001 ? this.exitDuration : max(defaultTransition, 0))
+      );
+    },
+    preserveTransitionIntent(defaultTransition: number = 0.7): void {
+      if (this.preferredEnterDuration == null) {
+        this.preferredEnterDuration = this.enterDuration;
+      }
+      if (this.preferredExitDuration == null) {
+        this.preferredExitDuration = this.requestedExitDuration(defaultTransition);
+      }
     },
     scale,
     focus,

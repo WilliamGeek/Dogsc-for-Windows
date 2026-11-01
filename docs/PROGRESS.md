@@ -35,5 +35,7 @@
 2026-11-02 06:37 | T7.3 | DONE | ProjectMediaModel (工程媒体清单、项目JSON序列化与多版本兼容) 与 ProjectPointerTrack (剪辑桥接五次平滑插值、闲置隐藏与相机跟随阻尼) 移植完成 | 130 pass
 2026-11-02 06:49 | T7.4 | DONE | ProjectValidator (全工程参数域严格校验)、ExportPolicy (动态导出媒体清单与码率阶梯) 与 CaptureConfiguration (录制配置、帧间隔诊断与交付率统计) 移植完成 | 144 pass
 2026-11-02 07:00 | T7.5 | DONE | ProjectTimelineRetime (播放倍速重定时、时间锚点映射、缩放/贴纸动画重排与非重叠自适应修复) 移植完成 | 147 pass
+2026-11-02 07:05 | T7.6 | REORDER | T7.6 依赖 ProjectTimelineEditingTransforms (T7.7) 中的 ripple/inserting/validate，按 PORTING_RULES §7 优先执行 T7.7 | 147 pass
+2026-11-02 07:13 | T7.7 | DONE | ProjectTimelineEditingTransforms (时间线涟漪剪裁、相邻接点平滑回退过渡恢复、片段重映射与全轨道严格校验) 移植完成 | 153 pass
 
 下一个任务：T7.6

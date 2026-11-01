@@ -28,114 +28,14 @@ import {
 } from './OverlayTimeline.ts';
 import { ProjectValidator } from './ProjectValidator.ts';
 
-// MARK: - ProjectTimelineEditingError
-
-export type ProjectTimelineEditingErrorKind =
-  | 'invalidSourceSequence'
-  | 'segmentNotFound'
-  | 'splitOutsideSegment'
-  | 'duplicateSegmentID'
-  | 'trimOutsideSegment'
-  | 'cannotRemoveFinalSegment'
-  | 'restoreJunctionNotFound'
-  | 'noRestorableSourceGap'
-  | 'noRestorableLeadingSourceGap'
-  | 'noRestorableTrailingSourceGap'
-  | 'cannotMergeDeletedGap'
-  | 'cannotMergeDifferentPlaybackRates'
-  | 'cannotMergeDifferentAudioOverrides'
-  | 'invalidPrimarySegmentAudioOverrides'
-  | 'duplicateClipID'
-  | 'missingClip'
-  | 'mismatchedClipID'
-  | 'invalidClip'
-  | 'overlappingClips';
-
-export class ProjectTimelineEditingError extends Error {
-  readonly kind: ProjectTimelineEditingErrorKind;
-  readonly segmentID?: string;
-  readonly clipID?: string;
-  readonly firstID?: string;
-  readonly secondID?: string;
-
-  constructor(
-    kind: ProjectTimelineEditingErrorKind,
-    options?: {
-      segmentID?: string;
-      clipID?: string;
-      firstID?: string;
-      secondID?: string;
-    }
-  ) {
-    let msg: string;
-    switch (kind) {
-      case 'invalidSourceSequence':
-        msg = '主源序列无效。';
-        break;
-      case 'segmentNotFound':
-        msg = `找不到主片段：${options?.segmentID ?? ''}`;
-        break;
-      case 'splitOutsideSegment':
-        msg = '分割点必须位于某个有效主片段内部。';
-        break;
-      case 'duplicateSegmentID':
-        msg = '时间线中存在重复的主片段。';
-        break;
-      case 'trimOutsideSegment':
-        msg = '裁剪边界必须严格位于目标片段内部。';
-        break;
-      case 'cannotRemoveFinalSegment':
-        msg = '不能删除时间线中仅存的最后一个主片段。';
-        break;
-      case 'restoreJunctionNotFound':
-        msg = '找不到指定的相邻片段连接处。';
-        break;
-      case 'noRestorableSourceGap':
-        msg = '指定的相邻片段之间不存在已删除的源素材。';
-        break;
-      case 'noRestorableLeadingSourceGap':
-        msg = '首个片段前不存在可恢复的原始素材。';
-        break;
-      case 'noRestorableTrailingSourceGap':
-        msg = '末尾片段后不存在可恢复的原始素材。';
-        break;
-      case 'cannotMergeDeletedGap':
-        msg = '被删除的素材间隙未恢复，不能合并片段。';
-        break;
-      case 'cannotMergeDifferentPlaybackRates':
-        msg = '两段片段的播放倍速不同，不能直接合并。';
-        break;
-      case 'cannotMergeDifferentAudioOverrides':
-        msg = '两段片段的音频独立配置不同，不能直接合并。';
-        break;
-      case 'invalidPrimarySegmentAudioOverrides':
-        msg = '包含不存在的主片段音频覆写。';
-        break;
-      case 'duplicateClipID':
-        msg = '轨道中存在重复的片段 ID。';
-        break;
-      case 'missingClip':
-        msg = '找不到指定的片段。';
-        break;
-      case 'mismatchedClipID':
-        msg = '片段 ID 不匹配。';
-        break;
-      case 'invalidClip':
-        msg = '片段参数无效。';
-        break;
-      case 'overlappingClips':
-        msg = '片段之间存在非法重叠。';
-        break;
-    }
-    super(msg);
-    this.name = 'ProjectTimelineEditingError';
-    this.kind = kind;
-    this.segmentID = options?.segmentID;
-    this.clipID = options?.clipID;
-    this.firstID = options?.firstID;
-    this.secondID = options?.secondID;
-  }
-}
+import {
+  type ProjectTimelineEditingErrorKind,
+  ProjectTimelineEditingError,
+} from './ProjectTimelineEditingTransforms.ts';
+export {
+  type ProjectTimelineEditingErrorKind,
+  ProjectTimelineEditingError,
+};
 
 // MARK: - PlaybackRateTimeTransform
 

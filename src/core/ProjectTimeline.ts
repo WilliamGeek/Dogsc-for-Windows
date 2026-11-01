@@ -116,6 +116,10 @@ export interface TransitionTiming {
   duration: number;
   readonly endTime: number;
   readonly effectEndTime: number;
+  readonly leadInEndTime: number;
+  readonly requestedLeadInDuration: number;
+  requestedReturnDuration(defaultTransition?: number): number;
+  preserveTransitionIntent(defaultTransition?: number): void;
   /// 进入过渡时长（速度：慢/标准/快调整的就是它）；0 = 直接跳变。
   /// 超过 duration 时按 duration 截断（整段都是过渡，无保持）。
   leadInDuration: number;
@@ -155,6 +159,26 @@ export function makeTransitionTiming(options: {
     },
     get effectEndTime(): number {
       return this.endTime + this.returnDuration;
+    },
+    get leadInEndTime(): number {
+      return this.startTime + min(this.leadInDuration, this.duration);
+    },
+    get requestedLeadInDuration(): number {
+      return this.preferredLeadInDuration ?? this.leadInDuration;
+    },
+    requestedReturnDuration(defaultTransition: number = 0.7): number {
+      return (
+        this.preferredReturnDuration ??
+        (this.returnDuration > 0.0001 ? this.returnDuration : max(defaultTransition, 0))
+      );
+    },
+    preserveTransitionIntent(defaultTransition: number = 0.7): void {
+      if (this.preferredLeadInDuration == null) {
+        this.preferredLeadInDuration = this.leadInDuration;
+      }
+      if (this.preferredReturnDuration == null) {
+        this.preferredReturnDuration = this.requestedReturnDuration(defaultTransition);
+      }
     },
     leadInDuration: min(max(leadIn, 0), 5),
     leadInProgressOffset: min(max(options.leadInProgressOffset ?? 0, 0), 1),
