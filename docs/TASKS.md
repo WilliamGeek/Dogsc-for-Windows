@@ -57,7 +57,7 @@
   - rotationX=20, rotationY=-25, perspective=1：对 rect 内 5 个点 `unproject(project(p))` 与 p 误差 < 1e-6。
   - `contains(quad.center) === true`；远处点 `false`；NaN 点 `false`。
 - [x] T5.3 `ScreenMotion.swift`(611)、`ScreenMotionCreationStyle.swift`(45)。
-- [ ] T5.4 `CameraMotion.swift`(423)、`CameraContentFill.swift`(110)。
+- [x] T5.4 `CameraMotion.swift`(423)、`CameraContentFill.swift`(110)。
 - [ ] T5.5 `CompositionScene.swift` 剩余部分（`CompositionSceneEvaluator` 等）。
 
 ## B6 帧场景
