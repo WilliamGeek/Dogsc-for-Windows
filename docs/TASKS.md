@@ -26,7 +26,7 @@
 - [x] T2.4 `ScreenFrameDefaults.swift`(56)、`HexColor` 已有，检查 `ProjectModel.ts` 中引用 HexColor 处改为 import。
 
 ## B3 缩放动画
-- [ ] T3.1 `ZoomAnimation.swift` L1–L300（`NormalizedPoint` … `ZoomAnimationClip`）→ `ZoomAnimation.ts`。必测：
+- [x] T3.1 `ZoomAnimation.swift` L1–L300（`NormalizedPoint` … `ZoomAnimationClip`）→ `ZoomAnimation.ts`。必测：
   - `NormalizedPoint.constrained(0.12)`：(0,1) → (0.12,0.88)。
   - `ZoomBezierCurve.value`：`linear` 在 0.3 处 = 0.3（误差<1e-4）；四个预设在 t=0/1 精确为 0/1；`quadratic/cubic/quintic` 在 [0,1] 上单调不减（采样 101 点）。
   - `ZoomAnimationClip` 构造：`scale` < 1 被提到 1；`enterDuration` 9 → 5；`endTime < startTime` → 等于 startTime。

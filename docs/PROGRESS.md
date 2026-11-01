@@ -16,5 +16,6 @@
 2026-11-02 01:29 | T2.2 | DONE | ProjectModel 第 2 段 (光标样式、裁剪区域、画布样式与像素分辨率) 移植完成 | 46 pass
 2026-11-02 01:35 | T2.3 | DONE | ProjectModel 第 3 段 (音频、摄像头与运动物理样式默认值) 移植完成 | 48 pass
 2026-11-02 01:38 | T2.4 | DONE | ScreenFrameDefaults 窗口外框样式预设移植完成 (B2 收官) | 50 pass
+2026-11-02 04:36 | T3.1 | DONE | ZoomAnimation 第 1 段 (点坐标、贝塞尔高精度求根、缩放Clip构造) 移植完成 | 53 pass
 
-下一个任务：T3.1
+下一个任务：T3.2
