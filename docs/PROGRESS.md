@@ -38,5 +38,6 @@
 2026-11-02 07:05 | T7.6 | REORDER | T7.6 依赖 ProjectTimelineEditingTransforms (T7.7) 中的 ripple/inserting/validate，按 PORTING_RULES §7 优先执行 T7.7 | 147 pass
 2026-11-02 07:13 | T7.7 | DONE | ProjectTimelineEditingTransforms (时间线涟漪剪裁、相邻接点平滑回退过渡恢复、片段重映射与全轨道严格校验) 移植完成 | 153 pass
 2026-11-02 07:22 | T7.6 | DONE | ProjectTimelineEditing (主录屏片段拆分/双向裁切/移动重排/首尾空隙与剪切点恢复/同质合并、独立音频覆写与屏幕/摄像运动CRUD) 移植完成 | 159 pass
+2026-11-02 07:30 | T7.8 | DONE | EditorTimeline (编辑器轨道交互段模型、时间坐标映射、片段分割、磁吸吸附移动/调整、手柄命中测试与自适应空隙拟合) 移植完成 (B7 收官) | 167 pass
 
-下一个任务：T7.8
+下一个任务：T8.1
