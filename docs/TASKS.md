@@ -77,7 +77,7 @@
 - [x] T7.8 `EditorTimeline.swift`(938) 分 2 段
 
 ## B8 可选
-- [ ] T8.1 `AudioCaptureDiagnostics` `CameraCaptureDiagnostics` `RecordingPerformanceDiagnostics`
+- [x] T8.1 `AudioCaptureDiagnostics` `CameraCaptureDiagnostics` `RecordingPerformanceDiagnostics`
 
 ## 阶段 1 收尾
 - [ ] T9.1 新增 `test/core/pipeline.test.ts`：构造 3 次点击的 pointer 事件 → `AutoZoomPlanner` → 构造工程 → `FrameSceneEvaluator.scene` 在 t=0、点击时刻、末尾三个时间点求值，断言不含 NaN（递归检查所有数字字段）。
