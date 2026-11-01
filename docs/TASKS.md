@@ -36,7 +36,7 @@
 - [x] T3.3 `FocusEffect.swift`(118)、`ZoomTransitionResolution.swift`(54)。
 
 ## B4 自动运镜 + 光标（核心）
-- [ ] T4.1 `AutoZoomPlanner.swift`(651) → `AutoZoomPlanner.ts`。重载改名：`makeAnimationsFromPointerEvents` / `makeAnimationsFromClicks`、`clippedAnimations` / `clippedKeyframes`、`makeKeyframesFromPointerEvents` / `makeKeyframesFromClicks`。必测：
+- [x] T4.1 `AutoZoomPlanner.swift`(651) → `AutoZoomPlanner.ts`。重载改名：`makeAnimationsFromPointerEvents` / `makeAnimationsFromClicks`、`clippedAnimations` / `clippedKeyframes`、`makeKeyframesFromPointerEvents` / `makeKeyframesFromClicks`。必测：
   - 两次点击 t=1.0/1.5、位置 (0.5,0.5)/(0.52,0.5) → 1 个 clip；`startTime = 1.0 − 0.7×0.18 = 0.874`。
   - 两次点击相隔 3s → 2 个 clip，第二个 `startTime ≥` 第一个 `effectEndTime`。
   - 点击位置 (0.01,0.99) → focus = (0.12,0.88)。
