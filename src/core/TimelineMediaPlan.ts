@@ -15,26 +15,8 @@ import type { PointerEventRecord } from './ZoomAnimation.ts';
 import { PointerTimelineAlignment } from './PointerTimelineAlignment.ts';
 import type { SourceSequence } from './ProjectTimeline.ts';
 
-// Forward interface for ProjectMediaManifest
-export interface ProjectMediaManifest {
-  readonly screen: ProjectMediaReference;
-  readonly camera?: ProjectMediaReference | null;
-  readonly microphone?: ProjectMediaReference | null;
-  readonly pointerEvents?: ProjectMediaReference | null;
-}
-
-// Forward interface for RecorderProject
-export interface RecorderProjectLike {
-  readonly timeline: {
-    readonly sourceSequence: SourceSequence;
-  };
-  readonly media?: ProjectMediaManifest | null;
-}
-
-// Forward interface for ProjectPointerTrack
-export interface ProjectPointerTrackLike {
-  readonly segments: readonly any[];
-}
+import type { ProjectMediaManifest, RecorderProject } from './ProjectMediaModel.ts';
+import { ProjectPointerTrack } from './ProjectPointerTrack.ts';
 
 // MARK: - TimelineMediaSlice
 
@@ -345,12 +327,12 @@ export class ProjectTimelineMediaPlan {
   readonly systemAudio: TimelineMediaPlan | null;
   readonly camera: TimelineMediaPlan | null;
   readonly microphone: TimelineMediaPlan | null;
+  readonly pointer: ProjectPointerTrack;
   readonly primarySourceTimeOffset: number;
-  readonly pointerAlignedEvents: readonly PointerEventRecord[];
 
   constructor(options: {
     sourceSequence?: SourceSequence;
-    project?: RecorderProjectLike;
+    project?: RecorderProject;
     mediaManifest?: ProjectMediaManifest | null;
     primaryVideoRange: MediaTimeRange;
     systemAudioRange?: MediaTimeRange | null;
@@ -406,10 +388,13 @@ export class ProjectTimelineMediaPlan {
       primaryVideoRange.duration
     );
 
-    this.pointerAlignedEvents = PointerTimelineAlignment.align(
-      sourcePointerEvents,
-      mediaManifest?.pointerEvents?.startOffset ?? 0,
-      mediaManifest?.pointerEvents?.sourceStartTime ?? 0
+    this.pointer = new ProjectPointerTrack(
+      map,
+      PointerTimelineAlignment.align(
+        sourcePointerEvents,
+        mediaManifest?.pointerEvents?.startOffset ?? 0,
+        mediaManifest?.pointerEvents?.sourceStartTime ?? 0
+      )
     );
   }
 

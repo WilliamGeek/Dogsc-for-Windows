@@ -13,13 +13,24 @@ export interface RecordingMarker {
 
 /** Swift `init(id:sourceTime:number:)` */
 export function makeRecordingMarker(
-  sourceTime: number,
-  number: number,
-  id: string = newUUID(),
+  sourceTimeOrOptions: number | { id?: string; sourceTime: number; number: number },
+  number?: number,
+  id?: string,
 ): RecordingMarker {
+  if (typeof sourceTimeOrOptions === 'object') {
+    return Object.freeze({
+      id: sourceTimeOrOptions.id ?? newUUID(),
+      sourceTime: Number.isFinite(sourceTimeOrOptions.sourceTime)
+        ? max(sourceTimeOrOptions.sourceTime, 0)
+        : 0,
+      number: Number.isFinite(sourceTimeOrOptions.number)
+        ? max(sourceTimeOrOptions.number, 1)
+        : 1,
+    });
+  }
   return Object.freeze({
-    id,
-    sourceTime: Number.isFinite(sourceTime) ? max(sourceTime, 0) : 0,
-    number: max(number, 1),
+    id: id ?? newUUID(),
+    sourceTime: Number.isFinite(sourceTimeOrOptions) ? max(sourceTimeOrOptions, 0) : 0,
+    number: Number.isFinite(number!) ? max(number!, 1) : 1,
   });
 }

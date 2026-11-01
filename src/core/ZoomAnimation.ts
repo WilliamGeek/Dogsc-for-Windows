@@ -48,6 +48,11 @@ export function normalizedPointConstrained(
   };
 }
 
+export const NormalizedPoint = Object.freeze({
+  make: makeNormalizedPoint,
+  constrained: normalizedPointConstrained,
+});
+
 // ---------------------------------------------------------------------------
 // PointerClick & PointerEventRecord
 // ---------------------------------------------------------------------------

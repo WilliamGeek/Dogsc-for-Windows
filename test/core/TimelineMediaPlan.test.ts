@@ -187,5 +187,6 @@ test('T7.2: ProjectTimelineMediaPlan end-to-end plan generation', () => {
   assert.ok(plan.systemAudio);
   assert.equal(plan.camera, null);
   assert.equal(plan.microphone, null);
-  assert.equal(plan.pointerAlignedEvents.length, 1);
+  assert.ok(plan.pointer);
+  assert.equal(plan.pointer.segments.length, 1);
 });
