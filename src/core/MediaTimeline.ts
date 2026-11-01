@@ -143,6 +143,20 @@ export class MediaTimelinePlacement {
   }
 }
 
+export function makeMediaTimelinePlacement(options: {
+  reference: ProjectMediaReference;
+  sourceAvailableStart?: number;
+  sourceAvailableDuration: number;
+  timelineDuration: number;
+}): MediaTimelinePlacement {
+  return new MediaTimelinePlacement(
+    options.reference,
+    options.sourceAvailableDuration,
+    options.timelineDuration,
+    options.sourceAvailableStart ?? 0
+  );
+}
+
 // MARK: - MediaSyncAnchorCurve
 
 /// Evaluates piecewise-linear camera clock corrections against the original

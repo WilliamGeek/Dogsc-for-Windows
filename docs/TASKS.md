@@ -68,7 +68,7 @@
 
 ## B7 时间线与工程
 - [x] T7.1 `MediaTimeline.swift`(121)、`ProjectTimeline.swift`(312)
-- [ ] T7.2 `TimelineMap.swift`(305)、`TimelineMediaPlan.swift`(375)
+- [x] T7.2 `TimelineMap.swift`(305)、`TimelineMediaPlan.swift`(375)
 - [ ] T7.3 `ProjectMediaModel.swift`(410)、`ProjectPointerTrack.swift`(469)
 - [ ] T7.4 `ProjectValidator.swift`(210)、`ExportPolicy.swift`(68)、`CaptureConfiguration.swift`(492)
 - [ ] T7.5 `ProjectTimelineRetime.swift`(215)

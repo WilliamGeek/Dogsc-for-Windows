@@ -88,13 +88,36 @@ export interface PointerEventRecord {
 }
 
 export function makePointerEventRecord(
-  time: number,
-  location: NormalizedPoint,
-  kind: PointerEventKind,
+  timeOrOptions:
+    | number
+    | {
+        time: number;
+        location: NormalizedPoint;
+        kind: PointerEventKind;
+        modifiers?: PointerModifier[];
+        cursorAssetID?: CursorAssetID | null;
+      },
+  location?: NormalizedPoint,
+  kind?: PointerEventKind,
   modifiers: PointerModifier[] = [],
   cursorAssetID: CursorAssetID | null = null,
 ): PointerEventRecord {
-  return { time, location, kind, modifiers, cursorAssetID };
+  if (typeof timeOrOptions === 'object') {
+    return {
+      time: timeOrOptions.time,
+      location: timeOrOptions.location,
+      kind: timeOrOptions.kind,
+      modifiers: timeOrOptions.modifiers ?? [],
+      cursorAssetID: timeOrOptions.cursorAssetID ?? null,
+    };
+  }
+  return {
+    time: timeOrOptions,
+    location: location!,
+    kind: kind!,
+    modifiers,
+    cursorAssetID,
+  };
 }
 
 // ---------------------------------------------------------------------------

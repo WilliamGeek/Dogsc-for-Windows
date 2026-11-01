@@ -6,6 +6,7 @@ import { max, min, toInt } from './swift.ts';
 export interface MediaTimeRange {
   readonly start: number;
   readonly duration: number;
+  readonly end: number;
 }
 
 /** Swift `init?(start:duration:)` → returns `null` where Swift returns `nil`. */
@@ -14,7 +15,13 @@ export function makeMediaTimeRange(start: number, duration: number): MediaTimeRa
   if (!(Number.isFinite(start) && Number.isFinite(duration) && duration > 0 && Number.isFinite(end))) {
     return null;
   }
-  return Object.freeze({ start, duration });
+  return Object.freeze({
+    start,
+    duration,
+    get end() {
+      return this.start + this.duration;
+    },
+  });
 }
 
 /** Swift computed property `end`. */

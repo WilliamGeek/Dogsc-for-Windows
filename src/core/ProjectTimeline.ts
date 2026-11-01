@@ -25,6 +25,8 @@ export interface RecordingSegment {
   /// Source seconds consumed by one output second. The editor exposes
   /// 1×...100× fast-forward; animation tracks remain on the output clock.
   playbackRate: number;
+  readonly sourceEnd: number;
+  readonly outputDuration: number;
 }
 
 export const RECORDING_SEGMENT_MINIMUM_PLAYBACK_RATE = 1;
@@ -42,6 +44,12 @@ export function makeRecordingSegment(options: {
     sourceStart: options.sourceStart,
     sourceDuration: options.sourceDuration,
     playbackRate: Number.isFinite(playbackRate) && playbackRate > 0 ? playbackRate : 1,
+    get sourceEnd() {
+      return this.sourceStart + this.sourceDuration;
+    },
+    get outputDuration() {
+      return this.sourceDuration / this.playbackRate;
+    },
   };
 }
 
@@ -75,6 +83,10 @@ export type SourceSequence =
 export const SourceSequenceFullRecording: SourceSequence = Object.freeze({
   kind: 'fullRecording' as const,
 });
+
+export function makeSourceSequenceFullRecording(): SourceSequence {
+  return SourceSequenceFullRecording;
+}
 
 export function makeSourceSequenceEdited(
   segments: readonly RecordingSegment[]
