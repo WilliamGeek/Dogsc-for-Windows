@@ -58,7 +58,7 @@
   - `contains(quad.center) === true`；远处点 `false`；NaN 点 `false`。
 - [x] T5.3 `ScreenMotion.swift`(611)、`ScreenMotionCreationStyle.swift`(45)。
 - [x] T5.4 `CameraMotion.swift`(423)、`CameraContentFill.swift`(110)。
-- [ ] T5.5 `CompositionScene.swift` 剩余部分（`CompositionSceneEvaluator` 等）。
+- [x] T5.5 `CompositionScene.swift` 剩余部分（`CompositionSceneEvaluator` 等）。
 
 ## B6 帧场景
 - [ ] T6.1 `OverlayTimeline.swift`(393)。
