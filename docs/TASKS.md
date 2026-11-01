@@ -22,7 +22,7 @@
 ## B2 工程数据模型
 - [x] T2.1 `ProjectModel.swift` 第 1 段（文件开头 → `CursorAssetID` 之前）→ `ProjectModel.ts`。分段。
 - [x] T2.2 `ProjectModel.swift` 第 2 段（`CursorAssetID` → `CanvasStyle` 结束）。
-- [ ] T2.3 `ProjectModel.swift` 第 3 段（剩余，含 `AudioStyle` `CameraStyle` `MotionStyle`）。必测：`makeMotionStyle()` 默认值 = 屏幕弹簧 2.4/210/42、光标弹簧 2.8/450/66（Swift L1267–1272）。
+- [x] T2.3 `ProjectModel.swift` 第 3 段（剩余，含 `AudioStyle` `CameraStyle` `MotionStyle`）。必测：`makeMotionStyle()` 默认值 = 屏幕弹簧 2.4/210/42、光标弹簧 2.8/450/66（Swift L1267–1272）。
 - [ ] T2.4 `ScreenFrameDefaults.swift`(56)、`HexColor` 已有，检查 `ProjectModel.ts` 中引用 HexColor 处改为 import。
 
 ## B3 缩放动画

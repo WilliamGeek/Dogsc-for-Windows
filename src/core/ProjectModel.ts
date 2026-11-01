@@ -7,7 +7,8 @@ import {
   makeCanvasCustomAspectRatio,
   canvasStyleResolvedFixedAspectRatio,
 } from './CanvasCustomAspectRatio.ts';
-import type { NormalizedPoint } from './ZoomAnimation.ts';
+import type { NormalizedPoint, ZoomEasingPreset } from './ZoomAnimation.ts';
+import type { ScreenMotionCreationStyle } from './ScreenMotionCreationStyle.ts';
 
 // ---------------------------------------------------------------------------
 // ProjectSchema & ProjectSchemaError
@@ -899,4 +900,132 @@ export function canvasStylePixelDimensions(
     }
   }
 }
+
+// ---------------------------------------------------------------------------
+// AudioStyle
+// ---------------------------------------------------------------------------
+export interface AudioStyle {
+  isSystemMuted: boolean;
+  isMicrophoneMuted: boolean;
+  systemVolume: number;
+  microphoneVolume: number;
+}
+
+export function makeAudioStyle(options: Partial<AudioStyle> = {}): AudioStyle {
+  const isSystemMuted = options.isSystemMuted ?? false;
+  const isMicrophoneMuted = options.isMicrophoneMuted ?? false;
+  const rawSystemVolume = options.systemVolume ?? 0.82;
+  const systemVolume = clamp(Number.isFinite(rawSystemVolume) ? rawSystemVolume : 0.82, 0, 1);
+  const rawMicrophoneVolume = options.microphoneVolume ?? 0.9;
+  const microphoneVolume = clamp(
+    Number.isFinite(rawMicrophoneVolume) ? rawMicrophoneVolume : 0.9,
+    0,
+    1,
+  );
+  return {
+    isSystemMuted,
+    isMicrophoneMuted,
+    systemVolume,
+    microphoneVolume,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// CameraStyle
+// ---------------------------------------------------------------------------
+export interface CameraStyle {
+  shape: CameraShape;
+  position: NormalizedPoint;
+  size: number;
+  borderWidth: number;
+  shadowStrength: number;
+  roundness: number;
+  isMirrored: boolean;
+  isHidden: boolean;
+  scaleDuringZoom: number;
+  contentPosition: NormalizedPoint;
+  contentScale: number;
+}
+
+export function makeCameraStyle(options: Partial<CameraStyle> = {}): CameraStyle {
+  const shape = options.shape ?? '方形';
+  const position = options.position ?? { x: 0.96, y: 0.47 };
+  const size = options.size ?? 0.29;
+  const borderWidth = options.borderWidth ?? 3;
+  const shadowStrength = options.shadowStrength ?? 0.25;
+  const roundness = options.roundness ?? 0.5;
+  const isMirrored = options.isMirrored ?? true;
+  const isHidden = options.isHidden ?? false;
+  const scaleDuringZoom = options.scaleDuringZoom ?? 0.7;
+  const contentPosition = options.contentPosition ?? { x: 0.5, y: 0.5 };
+  const contentScale = options.contentScale ?? 1;
+
+  return {
+    shape,
+    position,
+    size,
+    borderWidth,
+    shadowStrength,
+    roundness,
+    isMirrored,
+    isHidden,
+    scaleDuringZoom,
+    contentPosition,
+    contentScale,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// MotionStyle
+// ---------------------------------------------------------------------------
+export interface MotionStyle {
+  screen: ScreenMotionStyle;
+  cursor: CursorMotionStyle;
+  screenSpringMass: number;
+  screenSpringStiffness: number;
+  screenSpringDamping: number;
+  cursorSpringMass: number;
+  cursorSpringStiffness: number;
+  cursorSpringDamping: number;
+  defaultZoomEasing: ZoomEasingPreset;
+  defaultZoomTransitionDuration: number;
+  defaultZoomScale: number | null;
+  defaultScreenMotion: ScreenMotionCreationStyle | null;
+}
+
+export function makeMotionStyle(options: Partial<MotionStyle> = {}): MotionStyle {
+  const screen = options.screen ?? '聚焦';
+  const cursor = options.cursor ?? '平滑';
+  const screenSpringMass = options.screenSpringMass ?? 2.4;
+  const screenSpringStiffness = options.screenSpringStiffness ?? 210;
+  const screenSpringDamping = options.screenSpringDamping ?? 42;
+  const cursorSpringMass = options.cursorSpringMass ?? 2.8;
+  const cursorSpringStiffness = options.cursorSpringStiffness ?? 450;
+  const cursorSpringDamping = options.cursorSpringDamping ?? 66;
+  const defaultZoomEasing = options.defaultZoomEasing ?? ('弹簧' as ZoomEasingPreset);
+  const rawDuration = options.defaultZoomTransitionDuration ?? 0.7;
+  const defaultZoomTransitionDuration = clamp(
+    Number.isFinite(rawDuration) ? rawDuration : 0.7,
+    0,
+    5,
+  );
+  const defaultZoomScale = options.defaultZoomScale ?? null;
+  const defaultScreenMotion = options.defaultScreenMotion ?? null;
+
+  return {
+    screen,
+    cursor,
+    screenSpringMass,
+    screenSpringStiffness,
+    screenSpringDamping,
+    cursorSpringMass,
+    cursorSpringStiffness,
+    cursorSpringDamping,
+    defaultZoomEasing,
+    defaultZoomTransitionDuration,
+    defaultZoomScale,
+    defaultScreenMotion,
+  };
+}
+
 

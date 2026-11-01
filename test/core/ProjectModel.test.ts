@@ -43,6 +43,9 @@ import {
   makeCanvasStyle,
   makeCanvasDimensions,
   canvasStylePixelDimensions,
+  makeAudioStyle,
+  makeCameraStyle,
+  makeMotionStyle,
 } from '../../src/core/ProjectModel.ts';
 
 test('ProjectSchema validation for versions 23-27 per Swift L6-41', () => {
@@ -249,4 +252,52 @@ test('CanvasStyle defaults and pixel dimensions calculation per Swift L830-1133'
   );
   assert.deepEqual(croppedDims, { width: 960, height: 540 });
 });
+
+test('AudioStyle and CameraStyle defaults per Swift L1134-1246', () => {
+  const audio = makeAudioStyle();
+  assert.equal(audio.systemVolume, 0.82);
+  assert.equal(audio.microphoneVolume, 0.9);
+  assert.equal(audio.isSystemMuted, false);
+  assert.equal(audio.isMicrophoneMuted, false);
+
+  // Volumes clamp to [0, 1]
+  assert.equal(makeAudioStyle({ systemVolume: -0.5 }).systemVolume, 0);
+  assert.equal(makeAudioStyle({ microphoneVolume: 2.5 }).microphoneVolume, 1);
+
+  const camera = makeCameraStyle();
+  assert.equal(camera.shape, '方形');
+  assert.deepEqual(camera.position, { x: 0.96, y: 0.47 });
+  assert.equal(camera.size, 0.29);
+  assert.equal(camera.borderWidth, 3);
+  assert.equal(camera.shadowStrength, 0.25);
+  assert.equal(camera.roundness, 0.5);
+  assert.equal(camera.isMirrored, true);
+  assert.equal(camera.isHidden, false);
+  assert.equal(camera.scaleDuringZoom, 0.7);
+  assert.deepEqual(camera.contentPosition, { x: 0.5, y: 0.5 });
+  assert.equal(camera.contentScale, 1);
+});
+
+test('MotionStyle exact spring defaults per Swift L1264-1277', () => {
+  const motion = makeMotionStyle();
+
+  // MUST TEST: Exact physical constants from Swift L1267-1272
+  assert.equal(motion.screen, '聚焦');
+  assert.equal(motion.cursor, '平滑');
+  assert.equal(motion.screenSpringMass, 2.4);
+  assert.equal(motion.screenSpringStiffness, 210);
+  assert.equal(motion.screenSpringDamping, 42);
+  assert.equal(motion.cursorSpringMass, 2.8);
+  assert.equal(motion.cursorSpringStiffness, 450);
+  assert.equal(motion.cursorSpringDamping, 66);
+  assert.equal(motion.defaultZoomEasing, '弹簧');
+  assert.equal(motion.defaultZoomTransitionDuration, 0.7);
+  assert.equal(motion.defaultZoomScale, null);
+  assert.equal(motion.defaultScreenMotion, null);
+
+  // Clamping of transition duration to [0, 5]
+  assert.equal(makeMotionStyle({ defaultZoomTransitionDuration: -1 }).defaultZoomTransitionDuration, 0);
+  assert.equal(makeMotionStyle({ defaultZoomTransitionDuration: 99 }).defaultZoomTransitionDuration, 5);
+});
+
 
