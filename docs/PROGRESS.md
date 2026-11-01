@@ -26,5 +26,6 @@
 2026-11-02 05:12 | T5.3 | DONE | ScreenMotion (屏幕运动轨道、视口锚点与无奇点像素位移) 与 ScreenMotionCreationStyle 移植完成 | 79 pass
 2026-11-02 05:17 | T5.4 | DONE | CameraMotion (摄像头运动轨道与多布局渐变) 与 CameraContentFill (比例填充与水平镜像) 移植完成 | 82 pass
 2026-11-02 05:30 | T5.5 | DONE | CompositionSceneEvaluator (场景几何求值、多布局相机、MotionTrackCacheStore) 移植完成 (B5 收官) | 88 pass
+2026-11-02 05:33 | T6.1 | DONE | OverlayTimeline (马赛克裁剪/聚光灯、贴纸片段、互补退出动画与OverlayTiming) 移植完成 | 93 pass
 
-下一个任务：T6.1
+下一个任务：T6.2
