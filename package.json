@@ -1,0 +1,15 @@
+{
+  "name": "dogsc-win",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Windows/cross-platform reconstruction of DogSC. Phase 1 = pure TypeScript port of Sources/RecorderCore (zero dependencies).",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "test": "node --test \"test/**/*.test.ts\"",
+    "test:one": "node --test"
+  },
+  "license": "MIT"
+}
