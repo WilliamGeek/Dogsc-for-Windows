@@ -67,7 +67,7 @@
 - [x] T6.4 `FrameScene.swift` L540–L1284（`FrameSceneEvaluator`）。必测：同一输入调用两次 `deepEqual`；`refreshingCursor` 只改变 cursor 字段。
 
 ## B7 时间线与工程
-- [ ] T7.1 `MediaTimeline.swift`(121)、`ProjectTimeline.swift`(312)
+- [x] T7.1 `MediaTimeline.swift`(121)、`ProjectTimeline.swift`(312)
 - [ ] T7.2 `TimelineMap.swift`(305)、`TimelineMediaPlan.swift`(375)
 - [ ] T7.3 `ProjectMediaModel.swift`(410)、`ProjectPointerTrack.swift`(469)
 - [ ] T7.4 `ProjectValidator.swift`(210)、`ExportPolicy.swift`(68)、`CaptureConfiguration.swift`(492)
