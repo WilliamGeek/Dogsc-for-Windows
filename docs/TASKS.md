@@ -1,4 +1,4 @@
-# TASKS.md — 阶段 1 任务卡（一卡 = 一次提交）
+﻿# TASKS.md — 阶段 1 任务卡（一卡 = 一次提交）
 
 通用完成条件（每张卡都适用，卡内不再重复）：
 1. 目标 `.ts` 已按 `PORTING_RULES.md` 写完，Swift 源文件中**每一个**类型/函数都有对应实现（private 的也要，用于内部调用；可不导出）。
@@ -50,8 +50,8 @@
 - [ ] T4.4 `CursorRenderGeometry.swift`(358)。
 
 ## B5 3D 投影与构图
-- [ ] T5.1 `CompositionScene.swift` 中的 `CompositionRect` `CompositionPoint` 先移植（其余部分在 T5.5）。
-- [ ] T5.2 `ScreenProjection.swift`(360)。必测：
+- [x] T5.1 `CompositionScene.swift` 中的 `CompositionRect` `CompositionPoint` 先移植（其余部分在 T5.5）。
+- [x] T5.2 `ScreenProjection.swift`(360)。必测：
   - 旋转全 0 → quad 四角 = rect 四角（误差<1e-9）。
   - `perspective = 0`，rotationY=30 → 投影结果为平行四边形（TL→TR 向量 = BL→BR 向量）。
   - rotationX=20, rotationY=-25, perspective=1：对 rect 内 5 个点 `unproject(project(p))` 与 p 误差 < 1e-6。
