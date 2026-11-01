@@ -1129,12 +1129,16 @@ export const FrameSceneEvaluator = Object.freeze({
     pointerTrack: ProjectPointerTrackLike | null = null,
     cursorMetrics: CursorAssetMetrics | null = null,
     cursorMetricsByAssetID: Record<string, CursorAssetMetrics> = {},
-    zoomTrack: ZoomAnimationTrack
+    zoomTrack: ZoomAnimationTrack | null = null
   ): FrameRenderPlan {
     const time = Number.isFinite(presentationTime)
       ? min(max(presentationTime, 0), plan.outputDuration)
       : 0;
-    const activeClip = zoomTrack.activeClip(time);
+    const resolvedZoomTrack =
+      zoomTrack != null
+        ? zoomTrack
+        : new ZoomAnimationTrack(project.zoomAnimations, plan.outputDuration);
+    const activeClip = resolvedZoomTrack.activeClip(time);
     const activeAutomaticClip = activeClip && activeClip.origin === 'automatic' ? activeClip : null;
     const pointer = pointerTrack?.evaluation(time, project.motion, project.cursorStyle, activeAutomaticClip);
     const newCursor = cursorScene(

@@ -40,5 +40,6 @@
 2026-11-02 07:22 | T7.6 | DONE | ProjectTimelineEditing (主录屏片段拆分/双向裁切/移动重排/首尾空隙与剪切点恢复/同质合并、独立音频覆写与屏幕/摄像运动CRUD) 移植完成 | 159 pass
 2026-11-02 07:30 | T7.8 | DONE | EditorTimeline (编辑器轨道交互段模型、时间坐标映射、片段分割、磁吸吸附移动/调整、手柄命中测试与自适应空隙拟合) 移植完成 (B7 收官) | 167 pass
 2026-11-02 07:36 | T8.1 | DONE | AudioCaptureDiagnostics (音频样本丢包与吞吐率统计)、CameraCaptureDiagnostics (系统/应用丢帧与帧间隔)、RecordingPerformanceDiagnostics (CPU/内存/磁盘与温度等级监控) 移植完成 (B8 收官) | 170 pass
+2026-11-02 07:47 | T9.1 | DONE | pipeline.test.ts 端到端管道集成测试 (3次点击事件序列 -> AutoZoomPlanner 运镜生成 -> RecorderProject 全参数工程装配 -> FrameSceneEvaluator 全时段场景求值与递归零 NaN 校验) | 173 pass
 
-下一个任务：T9.1
+下一个任务：T9.2
