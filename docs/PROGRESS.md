@@ -33,5 +33,6 @@
 2026-11-02 06:03 | T7.1 | DONE | MediaTimeline (源轨道与时间线映射、Piecewise相机同步曲线) 与 ProjectTimeline (剪辑片段、完整TransitionTiming与音频覆写) 移植完成 | 113 pass
 2026-11-02 06:23 | T7.2 | DONE | TimelineMap (时间线二分检索、单调性校验与指针事件切片映射) 与 TimelineMediaPlan (多轨道切片吸附与辅助时钟对齐) 移植完成 | 123 pass
 2026-11-02 06:37 | T7.3 | DONE | ProjectMediaModel (工程媒体清单、项目JSON序列化与多版本兼容) 与 ProjectPointerTrack (剪辑桥接五次平滑插值、闲置隐藏与相机跟随阻尼) 移植完成 | 130 pass
+2026-11-02 06:49 | T7.4 | DONE | ProjectValidator (全工程参数域严格校验)、ExportPolicy (动态导出媒体清单与码率阶梯) 与 CaptureConfiguration (录制配置、帧间隔诊断与交付率统计) 移植完成 | 144 pass
 
-下一个任务：T7.4
+下一个任务：T7.5
