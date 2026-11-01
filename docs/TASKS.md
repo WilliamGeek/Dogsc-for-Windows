@@ -43,7 +43,7 @@
   - 单次左键点击 t=0、位置 (0.5,0.5)，之后 t=0.1,0.2,…,1.0 每 0.1s 一个 move 事件 → 唯一 clip 的 `endTime = max(0+0.9, 1.0+0.55) = 1.55`（活动延长 L245–305）。
   - 空输入 → `[]`。
 - [x] T4.2 `PointerTrack.swift` L1–L460（含 `makeSpringSamples`）。分段。
-- [ ] T4.3 `PointerTrack.swift` L460–L894（点击锚定 `anchoringClicks`、`smootherStep`、`PointerInterpolator`）。必测：
+- [x] T4.3 `PointerTrack.swift` L460–L894（点击锚定 `anchoringClicks`、`smootherStep`、`PointerInterpolator`）。必测：
   - `motion.cursor = 'smooth'`（取 Swift 中对应 rawValue）时，在左键点击时刻的 `samplePosition` 与点击坐标误差 < 1e-6。
   - `time <` 第一个事件时间 → `position === null`。
   - `style.assetID` 为 hidden 时 `cursor === null` 但 `position !== null`。
