@@ -46,3 +46,4 @@ docs/PROGRESS.md                 # 进度日志（只追加）
 docs/reference/                  # 算法导读报告（非权威）
 ```
 已完成的范例文件（照着写）：`src/core/ElementMotion.ts`、`MediaTimeRange.ts`、`HexColor.ts`、`PointerEventTimelineOrdering.ts`、`swift.ts`。
+

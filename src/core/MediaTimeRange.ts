@@ -38,3 +38,4 @@ export function mediaTimeRangeBucketIndex(
   const normalized = (timestamp - range.start) / range.duration;
   return min(max(toInt(normalized * bucketCount), 0), bucketCount - 1);
 }
+

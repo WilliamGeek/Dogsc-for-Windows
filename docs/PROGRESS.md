@@ -1,4 +1,4 @@
-﻿# PROGRESS.md — 进度日志（只追加，不要改历史行）
+# PROGRESS.md — 进度日志（只追加，不要改历史行）
 
 格式：`YYYY-MM-DD HH:MM | 任务号 | DONE/BLOCKED/WIP/REORDER/NEED-DEP | 说明 | 测试数`
 
@@ -8,5 +8,6 @@
 
 2026-11-01 23:58 | T5.1 | DONE | CompositionScene.ts 仅 CompositionRect/Point（其余属 T5.5，追加到同一文件） | -
 2026-11-01 23:58 | T5.2 | DONE | ScreenProjection 完整移植（高阶 AI 提前完成，作为算法类范例） | 16 pass
+2026-11-02 00:10 | T1.1 | DONE | RecordingMarker & ExportSettings 移植完成 | 20 pass
 
-下一个任务：T1.1
+下一个任务：T1.2

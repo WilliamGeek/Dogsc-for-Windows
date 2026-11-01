@@ -62,3 +62,4 @@ export function hexColorFromJSON(value: unknown): HexColor {
   if (color === null) throw new Error('Expected #RRGGBB or RRGGBB sRGB color');
   return color;
 }
+

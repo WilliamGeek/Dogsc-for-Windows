@@ -42,3 +42,4 @@ function progress(linearProgress: number, curve: ElementMotionCurve): number {
 
 /** Swift `enum ElementMotionEvaluator` (caseless enum = namespace). */
 export const ElementMotionEvaluator = Object.freeze({ progress });
+

@@ -19,3 +19,4 @@ test('unordered / non-finite input is filtered and stably sorted, input untouche
   assert.equal(events.length, 4);
   assert.equal(events[0].time, 2);
 });
+

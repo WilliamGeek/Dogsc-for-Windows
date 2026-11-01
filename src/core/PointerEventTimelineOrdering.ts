@@ -21,3 +21,4 @@ function normalized(events: readonly PointerEventRecord[]): readonly PointerEven
 }
 
 export const PointerEventTimelineOrdering = Object.freeze({ isNormalized, normalized });
+

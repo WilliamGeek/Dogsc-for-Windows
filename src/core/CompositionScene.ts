@@ -30,3 +30,4 @@ export interface CompositionPoint {
 export function makeCompositionPoint(x: number, y: number): CompositionPoint {
   return { x, y };
 }
+

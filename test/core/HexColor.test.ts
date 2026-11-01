@@ -21,3 +21,4 @@ test('string, components and JSON round trip', () => {
   assert.throws(() => hexColorFromJSON(123));
   assert.throws(() => makeHexColor(0x1000000));
 });
+

@@ -66,3 +66,4 @@ export function copy<T extends object>(value: T): T {
 export function precondition(condition: boolean, message: string): asserts condition {
   if (!condition) throw new Error(`precondition failed: ${message}`);
 }
+

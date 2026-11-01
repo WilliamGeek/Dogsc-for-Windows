@@ -17,3 +17,4 @@ test('hand-computed midpoints', () => {
   assert.equal(ElementMotionEvaluator.progress(0.5, 'swift'), 1 - 0.0625);
   assert.equal(ElementMotionEvaluator.progress(0.5, 'gentle'), 1 - 0.125);
 });
+

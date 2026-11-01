@@ -16,3 +16,4 @@ test('clamp and toInt', () => {
   assert.equal(toInt(2.9), 2);
   assert.equal(toInt(-2.9), -2);
 });
+

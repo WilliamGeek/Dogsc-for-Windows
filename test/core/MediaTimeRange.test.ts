@@ -18,3 +18,4 @@ test('bucketIndex is end-exclusive', () => {
   assert.equal(mediaTimeRangeBucketIndex(r, 9.99, 4), null);
   assert.equal(mediaTimeRangeBucketIndex(r, 11, 0), null);
 });
+

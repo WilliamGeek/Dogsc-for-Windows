@@ -1,4 +1,4 @@
-﻿# TASKS.md — 阶段 1 任务卡（一卡 = 一次提交）
+# TASKS.md — 阶段 1 任务卡（一卡 = 一次提交）
 
 通用完成条件（每张卡都适用，卡内不再重复）：
 1. 目标 `.ts` 已按 `PORTING_RULES.md` 写完，Swift 源文件中**每一个**类型/函数都有对应实现（private 的也要，用于内部调用；可不导出）。
@@ -14,7 +14,7 @@
 - [x] T0.2 范例：`ElementMotion` `MediaTimeRange` `HexColor` `PointerEventTimelineOrdering`
 
 ## B1 叶子文件
-- [ ] T1.1 `RecordingMarker.swift`(15) `ExportSettings.swift`(19) → 两个同名 `.ts`
+- [x] T1.1 `RecordingMarker.swift`(15) `ExportSettings.swift`(19) → 两个同名 `.ts`
 - [ ] T1.2 `BoundedMemoizationCache.swift`(86) → TS `class`，删除锁。必测：容量淘汰顺序；`valueIfBuilt` 构建函数返回 `null`（被取消）时不写入缓存。
 - [ ] T1.3 `CanvasCustomAspectRatio.swift`(32)、`TimelineTrackOrdering.swift`(55)、`PointerTimelineAlignment.swift`(56)。若需要 `CanvasStyle` 的值 → 按 PORTING_RULES §7 先做 B2。
 - [ ] T1.4 `OutputFrameSchedule.swift`(96)。必测：60fps 下第 n 帧时间 = n/60；时长边界帧数。

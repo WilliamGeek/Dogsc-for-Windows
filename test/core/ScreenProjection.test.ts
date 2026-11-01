@@ -67,3 +67,4 @@ test('extreme rotation never yields NaN (denominator floor, Swift L332)', () => 
   const q = ScreenProjection.project(rect, 89, 89, 0, 2);
   for (const c of projectedScreenQuadCorners(q)) assert.ok(Number.isFinite(c.x) && Number.isFinite(c.y));
 });
+
