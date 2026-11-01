@@ -56,7 +56,7 @@
   - `perspective = 0`，rotationY=30 → 投影结果为平行四边形（TL→TR 向量 = BL→BR 向量）。
   - rotationX=20, rotationY=-25, perspective=1：对 rect 内 5 个点 `unproject(project(p))` 与 p 误差 < 1e-6。
   - `contains(quad.center) === true`；远处点 `false`；NaN 点 `false`。
-- [ ] T5.3 `ScreenMotion.swift`(611)、`ScreenMotionCreationStyle.swift`(45)。
+- [x] T5.3 `ScreenMotion.swift`(611)、`ScreenMotionCreationStyle.swift`(45)。
 - [ ] T5.4 `CameraMotion.swift`(423)、`CameraContentFill.swift`(110)。
 - [ ] T5.5 `CompositionScene.swift` 剩余部分（`CompositionSceneEvaluator` 等）。
 

@@ -23,5 +23,6 @@
 2026-11-02 05:03 | T4.2 | DONE | PointerTrack 第 1 段 (数据结构、240Hz物理弹簧模拟与预热缓存) 移植完成 | 70 pass
 2026-11-02 05:04 | T4.3 | DONE | PointerTrack 第 2 段 (点击锚定与五次平滑插值、单调埃尔米特样条、PointerInterpolator) 移植完成 | 74 pass
 2026-11-02 05:06 | T4.4 | DONE | CursorRenderGeometry (光标渲染几何、热点偏置与四种点击动效布局) 移植完成 (B4 收官) | 76 pass
+2026-11-02 05:12 | T5.3 | DONE | ScreenMotion (屏幕运动轨道、视口锚点与无奇点像素位移) 与 ScreenMotionCreationStyle 移植完成 | 79 pass
 
-下一个任务：T5.3
+下一个任务：T5.4
