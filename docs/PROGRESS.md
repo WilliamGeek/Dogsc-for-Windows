@@ -41,5 +41,6 @@
 2026-11-02 07:30 | T7.8 | DONE | EditorTimeline (编辑器轨道交互段模型、时间坐标映射、片段分割、磁吸吸附移动/调整、手柄命中测试与自适应空隙拟合) 移植完成 (B7 收官) | 167 pass
 2026-11-02 07:36 | T8.1 | DONE | AudioCaptureDiagnostics (音频样本丢包与吞吐率统计)、CameraCaptureDiagnostics (系统/应用丢帧与帧间隔)、RecordingPerformanceDiagnostics (CPU/内存/磁盘与温度等级监控) 移植完成 (B8 收官) | 170 pass
 2026-11-02 07:47 | T9.1 | DONE | pipeline.test.ts 端到端管道集成测试 (3次点击事件序列 -> AutoZoomPlanner 运镜生成 -> RecorderProject 全参数工程装配 -> FrameSceneEvaluator 全时段场景求值与递归零 NaN 校验) | 173 pass
+2026-11-02 07:48 | T9.2 | DONE | 阶段 1 完成：所有核心模块（B0–B8）及端到端集成测试（T9.1）全部通过，共 173 个测试用例全绿，等待用户确认阶段 2 方案 | 173 pass
 
-下一个任务：T9.2
+阶段 1 完成

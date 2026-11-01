@@ -81,4 +81,4 @@
 
 ## 阶段 1 收尾
 - [x] T9.1 新增 `test/core/pipeline.test.ts`：构造 3 次点击的 pointer 事件 → `AutoZoomPlanner` → 构造工程 → `FrameSceneEvaluator.scene` 在 t=0、点击时刻、末尾三个时间点求值，断言不含 NaN（递归检查所有数字字段）。
-- [ ] T9.2 在 PROGRESS.md 写「阶段 1 完成」，**停止**，等待用户确认阶段 2 方案。
+- [x] T9.2 在 PROGRESS.md 写「阶段 1 完成」，**停止**，等待用户确认阶段 2 方案。
