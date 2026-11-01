@@ -8,8 +8,9 @@
 3. 在 `docs/TASKS.md` 中找到该任务卡，**只做这一张卡**。
 4. 完成后执行 `npm test`，全部通过才算完成。
 5. 在 `docs/TASKS.md` 把该卡的 `[ ]` 改成 `[x]`；在 `docs/PROGRESS.md` 末尾追加一行日志。
-6. `git add -A; git commit -m "<任务编号> <简述>"`。
-7. 开始下一张卡，或结束会话。
+6. `git add -A; git commit -m "<type>(core): <中文描述> (<任务号>)"`（遵循 Conventional Commits 规范，如 `feat(core): 移植录制标记与导出设置数据模型 (T1.1)`）。
+7. 为当前提交打上含中文功能特征描述的 Git Tag：`git tag -a "<任务号>-<中文功能描述>" -m "<详细说明>"`。
+8. 开始下一张卡，或结束会话。
 
 ## 1. 硬性规则
 - **唯一真相来源是 Swift 源码** `F:\dogsc\Sources\RecorderCore\*.swift`。`docs/reference/` 下的算法解析报告只作导读，数字与公式若与源码冲突，以源码为准。

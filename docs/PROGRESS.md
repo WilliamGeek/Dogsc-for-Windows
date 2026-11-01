@@ -9,5 +9,6 @@
 2026-11-01 23:58 | T5.1 | DONE | CompositionScene.ts 仅 CompositionRect/Point（其余属 T5.5，追加到同一文件） | -
 2026-11-01 23:58 | T5.2 | DONE | ScreenProjection 完整移植（高阶 AI 提前完成，作为算法类范例） | 16 pass
 2026-11-02 00:10 | T1.1 | DONE | RecordingMarker & ExportSettings 移植完成 | 20 pass
+2026-11-02 00:39 | T1.2 | DONE | BoundedMemoizationCache LRU 缓存移植完成 | 24 pass
 
-下一个任务：T1.2
+下一个任务：T1.3
