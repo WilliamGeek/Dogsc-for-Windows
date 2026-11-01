@@ -30,7 +30,7 @@
   - `NormalizedPoint.constrained(0.12)`：(0,1) → (0.12,0.88)。
   - `ZoomBezierCurve.value`：`linear` 在 0.3 处 = 0.3（误差<1e-4）；四个预设在 t=0/1 精确为 0/1；`quadratic/cubic/quintic` 在 [0,1] 上单调不减（采样 101 点）。
   - `ZoomAnimationClip` 构造：`scale` < 1 被提到 1；`enterDuration` 9 → 5；`endTime < startTime` → 等于 startTime。
-- [ ] T3.2 `ZoomAnimation.swift` L300–L943（`ZoomKeyframe`、`ZoomViewportTransform`、`ZoomAnimationTrack`、`ZoomInterpolator`、缓存类）。必测：
+- [x] T3.2 `ZoomAnimation.swift` L300–L943（`ZoomKeyframe`、`ZoomViewportTransform`、`ZoomAnimationTrack`、`ZoomInterpolator`、缓存类）。必测：
   - `springProgress(t, 2.4, 210, 42)`：t=0 → 0，t=1 → 1（精确），t∈(0,1) 结果在 [0,1]。
   - `ZoomInterpolator.sample` 在无动画时 scale=1、focus=(0.5,0.5)。
 - [ ] T3.3 `FocusEffect.swift`(118)、`ZoomTransitionResolution.swift`(54)。
