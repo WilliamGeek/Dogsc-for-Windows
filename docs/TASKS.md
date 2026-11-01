@@ -33,7 +33,7 @@
 - [x] T3.2 `ZoomAnimation.swift` L300–L943（`ZoomKeyframe`、`ZoomViewportTransform`、`ZoomAnimationTrack`、`ZoomInterpolator`、缓存类）。必测：
   - `springProgress(t, 2.4, 210, 42)`：t=0 → 0，t=1 → 1（精确），t∈(0,1) 结果在 [0,1]。
   - `ZoomInterpolator.sample` 在无动画时 scale=1、focus=(0.5,0.5)。
-- [ ] T3.3 `FocusEffect.swift`(118)、`ZoomTransitionResolution.swift`(54)。
+- [x] T3.3 `FocusEffect.swift`(118)、`ZoomTransitionResolution.swift`(54)。
 
 ## B4 自动运镜 + 光标（核心）
 - [ ] T4.1 `AutoZoomPlanner.swift`(651) → `AutoZoomPlanner.ts`。重载改名：`makeAnimationsFromPointerEvents` / `makeAnimationsFromClicks`、`clippedAnimations` / `clippedKeyframes`、`makeKeyframesFromPointerEvents` / `makeKeyframesFromClicks`。必测：

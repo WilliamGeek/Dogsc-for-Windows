@@ -18,5 +18,6 @@
 2026-11-02 01:38 | T2.4 | DONE | ScreenFrameDefaults 窗口外框样式预设移植完成 (B2 收官) | 50 pass
 2026-11-02 04:36 | T3.1 | DONE | ZoomAnimation 第 1 段 (点坐标、贝塞尔高精度求根、缩放Clip构造) 移植完成 | 53 pass
 2026-11-02 04:45 | T3.2 | DONE | ZoomAnimation 第 2 段 (关键帧、视口变换、缩放轨道二分查找、弹簧与缓动插值) 移植完成 | 60 pass
+2026-11-02 04:49 | T3.3 | DONE | FocusEffect (焦点特效求值) 与 ZoomTransitionResolution (过渡意图求解与尾部裁剪) 移植完成 (B3 收官) | 63 pass
 
-下一个任务：T3.3
+下一个任务：T4.1
