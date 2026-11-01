@@ -114,6 +114,8 @@ export interface TransitionTiming {
   startTime: number;
   /// 整段时长（进入过渡 + 保持）；在时间线上拖动两端改变的就是它。
   duration: number;
+  readonly endTime: number;
+  readonly effectEndTime: number;
   /// 进入过渡时长（速度：慢/标准/快调整的就是它）；0 = 直接跳变。
   /// 超过 duration 时按 duration 截断（整段都是过渡，无保持）。
   leadInDuration: number;
@@ -148,9 +150,15 @@ export function makeTransitionTiming(options: {
   return {
     startTime: options.startTime,
     duration,
+    get endTime(): number {
+      return this.startTime + this.duration;
+    },
+    get effectEndTime(): number {
+      return this.endTime + this.returnDuration;
+    },
     leadInDuration: min(max(leadIn, 0), 5),
     leadInProgressOffset: min(max(options.leadInProgressOffset ?? 0, 0), 1),
-    easing: options.easing ?? 'cubic',
+    easing: options.easing ?? '三次方缓动',
     customCurve: options.customCurve ?? ZoomBezierCurveCubic,
     returnDuration: min(max(options.returnDuration ?? 0, 0), 5),
     returnProgressOffset: min(max(options.returnProgressOffset ?? 0, 0), 1),

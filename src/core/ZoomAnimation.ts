@@ -286,6 +286,8 @@ export interface ZoomAnimationClip {
   id: string;
   startTime: number;
   endTime: number;
+  readonly duration: number;
+  readonly effectEndTime: number;
   scale: number;
   focus: NormalizedPoint;
   origin: ZoomKeyframeOrigin;
@@ -340,6 +342,12 @@ export function makeZoomAnimationClip(
     id,
     startTime,
     endTime,
+    get duration(): number {
+      return max(this.endTime - this.startTime, 0);
+    },
+    get effectEndTime(): number {
+      return this.endTime + this.exitDuration;
+    },
     scale,
     focus,
     origin,
