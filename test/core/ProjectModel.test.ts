@@ -28,6 +28,21 @@ import {
   ScreenMotionStyleAllCases,
   CursorMotionStyleAllCases,
   CursorAppearanceAllCases,
+  CursorClickEffectStyleAllCases,
+  cursorClickEffectStyleDuration,
+  cursorClickEffectStyleDisplayName,
+  makeCursorStyle,
+  cursorStyleShowsClickEffect,
+  cursorStyleSetShowsClickEffect,
+  cursorStyleAppearance,
+  cursorStyleAssetIDForAppearance,
+  makeNormalizedCrop,
+  NormalizedCropFull,
+  normalizedCropClamped,
+  normalizedCropFromEdges,
+  makeCanvasStyle,
+  makeCanvasDimensions,
+  canvasStylePixelDimensions,
 } from '../../src/core/ProjectModel.ts';
 
 test('ProjectSchema validation for versions 23-27 per Swift L6-41', () => {
@@ -140,3 +155,98 @@ test('CameraShape legacy decoders per Swift L477-483', () => {
   assert.equal(cameraShapeFromJSON('圆形'), '圆形');
   assert.equal(cameraShapeFromJSON('unknown'), '方形');
 });
+
+test('CursorClickEffectStyle durations and CursorStyle defaults per Swift L554-772', () => {
+  assert.equal(CursorClickEffectStyleAllCases.length, 5);
+  assert.equal(cursorClickEffectStyleDuration('ripple'), 0.36);
+  assert.equal(cursorClickEffectStyleDuration('glow'), 0.32);
+  assert.equal(cursorClickEffectStyleDuration('none'), 0.0);
+  assert.equal(cursorClickEffectStyleDisplayName('ripple'), '涟漪扩散');
+
+  const cursor = makeCursorStyle();
+  assert.equal(cursor.assetID, 'system.automatic');
+  assert.equal(cursor.size, 1.25);
+  assert.equal(cursor.hideWhenIdle, false);
+  assert.equal(cursor.idleDelay, 1.2);
+  assert.equal(cursor.clickEffectStyle, 'ripple');
+  assert.equal(cursor.motionTiltStrength, 2.0);
+  assert.equal(cursorStyleShowsClickEffect(cursor), true);
+
+  // Clamps
+  assert.equal(makeCursorStyle({ size: 0.01 }).size, 0.25);
+  assert.equal(makeCursorStyle({ size: 10 }).size, 6);
+  assert.equal(makeCursorStyle({ motionTiltStrength: 10 }).motionTiltStrength, 4);
+
+  // Setter for showsClickEffect
+  const disabled = cursorStyleSetShowsClickEffect(cursor, false);
+  assert.equal(disabled.clickEffectStyle, 'none');
+  const restored = cursorStyleSetShowsClickEffect(disabled, true);
+  assert.equal(restored.clickEffectStyle, 'ripple');
+
+  // Appearance mapping
+  assert.equal(cursorStyleAppearance(cursor), '系统箭头');
+  assert.equal(
+    cursorStyleAppearance({ ...cursor, assetID: 'system.pointing-hand' }),
+    '指向手势',
+  );
+  assert.equal(cursorStyleAssetIDForAppearance('指向手势'), 'system.pointing-hand');
+});
+
+test('NormalizedCrop clamping and edge creation per Swift L777-828', () => {
+  assert.deepEqual(NormalizedCropFull, { x: 0, y: 0, width: 1, height: 1 });
+
+  // Out of bound crop clamped
+  const oob = makeNormalizedCrop(-0.5, -0.5, 2, 2);
+  const clamped = normalizedCropClamped(oob, 0.1);
+  assert.equal(clamped.x, 0);
+  assert.equal(clamped.y, 0);
+  assert.equal(clamped.width, 1.0);
+  assert.equal(clamped.height, 1.0);
+
+  // fromEdges
+  const fromEdges = normalizedCropFromEdges(0.1, 0.2, 0.05, 0.15);
+  assert.ok(Math.abs(fromEdges.x - 0.1) < 1e-9);
+  assert.ok(Math.abs(fromEdges.y - 0.05) < 1e-9);
+  assert.ok(Math.abs(fromEdges.width - 0.7) < 1e-9);
+  assert.ok(Math.abs(fromEdges.height - 0.8) < 1e-9);
+});
+
+test('CanvasStyle defaults and pixel dimensions calculation per Swift L830-1133', () => {
+  const style = makeCanvasStyle();
+  assert.equal(style.aspectRatio, '适应');
+  assert.equal(style.padding, 100);
+  assert.equal(style.cornerRadius, 24);
+  assert.equal(style.shadowStrength, 0.28);
+  assert.equal(style.screenFrame, 'none');
+
+  // Fixed aspect ratio presets under 1080p
+  const landscape = makeCanvasStyle({ aspectRatio: '16:9' });
+  const dims1080p = canvasStylePixelDimensions(landscape, '1080p');
+  assert.deepEqual(dims1080p, { width: 1920, height: 1080 });
+
+  const portrait = makeCanvasStyle({ aspectRatio: '9:16' });
+  assert.deepEqual(canvasStylePixelDimensions(portrait, '1080p'), { width: 1080, height: 1920 });
+
+  const square = makeCanvasStyle({ aspectRatio: '1:1' });
+  assert.deepEqual(canvasStylePixelDimensions(square, '1080p'), { width: 1080, height: 1080 });
+
+  // 4K 16:9
+  assert.deepEqual(canvasStylePixelDimensions(landscape, '4K'), { width: 3840, height: 2160 });
+
+  // Source resolution
+  const sourceDims = canvasStylePixelDimensions(style, '原始素材', null, makeCanvasDimensions(1920, 1080));
+  assert.deepEqual(sourceDims, { width: 1920, height: 1080 });
+
+  // Source resolution with 50% crop
+  const croppedStyle = makeCanvasStyle({
+    crop: makeNormalizedCrop(0, 0, 0.5, 0.5),
+  });
+  const croppedDims = canvasStylePixelDimensions(
+    croppedStyle,
+    '原始素材',
+    null,
+    makeCanvasDimensions(1920, 1080),
+  );
+  assert.deepEqual(croppedDims, { width: 960, height: 540 });
+});
+

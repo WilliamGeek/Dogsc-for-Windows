@@ -13,5 +13,6 @@
 2026-11-02 00:43 | T1.3 | DONE | CanvasCustomAspectRatio, TimelineTrackOrdering, PointerTimelineAlignment 移植完成 | 32 pass
 2026-11-02 00:45 | T1.4 | DONE | OutputFrameSchedule 帧调度与浮点截断移植完成 | 37 pass
 2026-11-02 01:20 | T2.1 | DONE | ProjectModel 第 1 段 (版本、画布、开场序列、背景模型) 移植完成 | 43 pass
+2026-11-02 01:29 | T2.2 | DONE | ProjectModel 第 2 段 (光标样式、裁剪区域、画布样式与像素分辨率) 移植完成 | 46 pass
 
-下一个任务：T2.2
+下一个任务：T2.3

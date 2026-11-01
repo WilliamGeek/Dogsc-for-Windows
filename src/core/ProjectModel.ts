@@ -1,6 +1,13 @@
-// Port of: F:\dogsc\Sources\RecorderCore\ProjectModel.swift (Part 1: lines 1-515)
+// Port of: F:\dogsc\Sources\RecorderCore\ProjectModel.swift
 import { clamp, max, min } from './swift.ts';
 import type { ElementMotionCurve } from './ElementMotion.ts';
+import { HexColorWhite, type HexColor } from './HexColor.ts';
+import {
+  type CanvasCustomAspectRatio,
+  makeCanvasCustomAspectRatio,
+  canvasStyleResolvedFixedAspectRatio,
+} from './CanvasCustomAspectRatio.ts';
+import type { NormalizedPoint } from './ZoomAnimation.ts';
 
 // ---------------------------------------------------------------------------
 // ProjectSchema & ProjectSchemaError
@@ -466,3 +473,430 @@ export const CursorAppearanceAllCases: readonly CursorAppearance[] = Object.free
   '十字准星',
   '隐藏',
 ]);
+
+// ---------------------------------------------------------------------------
+// CursorAssetID
+// ---------------------------------------------------------------------------
+export type CursorAssetID = string;
+
+export const CursorAssetIDConstants = Object.freeze({
+  systemArrow: 'system.arrow',
+  automatic: 'system.automatic',
+  systemPointingHand: 'system.pointing-hand',
+  systemCrosshair: 'system.crosshair',
+  systemIBeam: 'system.ibeam',
+  systemOpenHand: 'system.open-hand',
+  systemClosedHand: 'system.closed-hand',
+  systemNotAllowed: 'system.not-allowed',
+  touchDot: 'system.touch-dot',
+  hidden: 'system.hidden',
+  // Retired styles mapped to system arrow
+  classicLavender: 'cursor.classic-lavender',
+  violetGlass: 'cursor.violet-glass',
+  graphiteIvory: 'cursor.graphite-ivory',
+  creamCoral: 'cursor.cream-coral',
+});
+
+// ---------------------------------------------------------------------------
+// CursorClickEffectStyle
+// ---------------------------------------------------------------------------
+export type CursorClickEffectStyle = 'ripple' | 'glow' | 'pulse' | 'burst' | 'none';
+
+export const CursorClickEffectStyleAllCases: readonly CursorClickEffectStyle[] = Object.freeze([
+  'ripple',
+  'glow',
+  'pulse',
+  'burst',
+  'none',
+]);
+
+export function cursorClickEffectStyleDisplayName(style: CursorClickEffectStyle): string {
+  switch (style) {
+    case 'ripple':
+      return '涟漪扩散';
+    case 'glow':
+      return '柔和光晕';
+    case 'pulse':
+      return '弹性双环';
+    case 'burst':
+      return '聚焦微闪';
+    case 'none':
+      return '无效果';
+  }
+}
+
+export function cursorClickEffectStyleDuration(style: CursorClickEffectStyle): number {
+  switch (style) {
+    case 'ripple':
+      return 0.36;
+    case 'glow':
+      return 0.32;
+    case 'pulse':
+      return 0.38;
+    case 'burst':
+      return 0.22;
+    case 'none':
+      return 0.0;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// CursorStyle
+// ---------------------------------------------------------------------------
+export interface CursorStyle {
+  assetID: CursorAssetID;
+  size: number;
+  hideWhenIdle: boolean;
+  idleDelay: number;
+  clickEffectStyle: CursorClickEffectStyle;
+  clickColor: HexColor | null;
+  clickOpacity: number;
+  clickScale: number;
+  motionTiltStrength: number;
+}
+
+export function makeCursorStyle(options: Partial<CursorStyle> = {}): CursorStyle {
+  const rawAssetID = options.assetID ?? CursorAssetIDConstants.automatic;
+  const assetID = rawAssetID.trim().length === 0 ? CursorAssetIDConstants.systemArrow : rawAssetID;
+  const rawSize = options.size ?? 1.25;
+  const size = clamp(Number.isFinite(rawSize) ? rawSize : 1.25, 0.25, 6);
+  const hideWhenIdle = options.hideWhenIdle ?? false;
+  const rawIdleDelay = options.idleDelay ?? 1.2;
+  const idleDelay = clamp(Number.isFinite(rawIdleDelay) ? rawIdleDelay : 1.2, 0.2, 8);
+  const clickEffectStyle = options.clickEffectStyle ?? 'ripple';
+  const clickColor = options.clickColor ?? null;
+  const rawClickOpacity = options.clickOpacity ?? 0.8;
+  const clickOpacity = clamp(Number.isFinite(rawClickOpacity) ? rawClickOpacity : 0.8, 0.05, 1.0);
+  const rawClickScale = options.clickScale ?? 1.0;
+  const clickScale = clamp(Number.isFinite(rawClickScale) ? rawClickScale : 1.0, 0.4, 3.0);
+  const rawMotionTilt = options.motionTiltStrength ?? 2.0;
+  const motionTiltStrength = clamp(Number.isFinite(rawMotionTilt) ? rawMotionTilt : 2.0, 2, 4);
+
+  return {
+    assetID,
+    size,
+    hideWhenIdle,
+    idleDelay,
+    clickEffectStyle,
+    clickColor,
+    clickOpacity,
+    clickScale,
+    motionTiltStrength,
+  };
+}
+
+export function cursorStyleShowsClickEffect(style: CursorStyle): boolean {
+  return style.clickEffectStyle !== 'none';
+}
+
+export function cursorStyleSetShowsClickEffect(
+  style: CursorStyle,
+  showsClickEffect: boolean,
+): CursorStyle {
+  if (!showsClickEffect) {
+    return { ...style, clickEffectStyle: 'none' };
+  } else if (style.clickEffectStyle === 'none') {
+    return { ...style, clickEffectStyle: 'ripple' };
+  }
+  return style;
+}
+
+export function cursorStyleAssetIDForAppearance(appearance: CursorAppearance): CursorAssetID {
+  switch (appearance) {
+    case '系统箭头':
+      return CursorAssetIDConstants.systemArrow;
+    case '指向手势':
+      return CursorAssetIDConstants.systemPointingHand;
+    case '十字准星':
+      return CursorAssetIDConstants.systemCrosshair;
+    case '隐藏':
+      return CursorAssetIDConstants.hidden;
+  }
+}
+
+export function cursorStyleAppearance(style: CursorStyle): CursorAppearance {
+  switch (style.assetID) {
+    case CursorAssetIDConstants.systemPointingHand:
+      return '指向手势';
+    case CursorAssetIDConstants.systemCrosshair:
+      return '十字准星';
+    case CursorAssetIDConstants.hidden:
+      return '隐藏';
+    default:
+      return '系统箭头';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// NormalizedCrop
+// ---------------------------------------------------------------------------
+export interface NormalizedCrop {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export function makeNormalizedCrop(
+  x: number = 0,
+  y: number = 0,
+  width: number = 1,
+  height: number = 1,
+): NormalizedCrop {
+  return { x, y, width, height };
+}
+
+export const NormalizedCropFull: NormalizedCrop = Object.freeze(makeNormalizedCrop(0, 0, 1, 1));
+
+export function normalizedCropLeft(crop: NormalizedCrop): number {
+  return crop.x;
+}
+export function normalizedCropTop(crop: NormalizedCrop): number {
+  return crop.y;
+}
+export function normalizedCropRight(crop: NormalizedCrop): number {
+  return 1 - crop.x - crop.width;
+}
+export function normalizedCropBottom(crop: NormalizedCrop): number {
+  return 1 - crop.y - crop.height;
+}
+
+export function normalizedCropClamped(
+  crop: NormalizedCrop,
+  minimumSize: number = 0.02,
+): NormalizedCrop {
+  const minimum = clamp(Number.isFinite(minimumSize) ? minimumSize : 0.02, 0.001, 1);
+  const safeX = clamp(crop.x, 0, 1 - minimum);
+  const safeY = clamp(crop.y, 0, 1 - minimum);
+  return {
+    x: safeX,
+    y: safeY,
+    width: clamp(crop.width, minimum, 1 - safeX),
+    height: clamp(crop.height, minimum, 1 - safeY),
+  };
+}
+
+export function normalizedCropFromEdges(
+  left: number,
+  right: number,
+  top: number,
+  bottom: number,
+  minimumSize: number = 0.02,
+): NormalizedCrop {
+  const minimum = clamp(Number.isFinite(minimumSize) ? minimumSize : 0.02, 0.001, 1);
+  const safeLeft = clamp(left, 0, 1 - minimum);
+  const safeTop = clamp(top, 0, 1 - minimum);
+  const safeRight = clamp(right, 0, 1 - safeLeft - minimum);
+  const safeBottom = clamp(bottom, 0, 1 - safeTop - minimum);
+  return {
+    x: safeLeft,
+    y: safeTop,
+    width: 1 - safeLeft - safeRight,
+    height: 1 - safeTop - safeBottom,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// CanvasDimensions & CanvasStyle
+// ---------------------------------------------------------------------------
+export interface CanvasDimensions {
+  width: number;
+  height: number;
+}
+
+export function makeCanvasDimensions(width: number, height: number): CanvasDimensions {
+  return { width: Math.trunc(width), height: Math.trunc(height) };
+}
+
+export interface CanvasStyle {
+  aspectRatio: CanvasAspectRatio;
+  customAspectRatio: CanvasCustomAspectRatio;
+  backgroundSource: BackgroundSource;
+  padding: number;
+  contentScale: number;
+  contentPosition: NormalizedPoint;
+  crop: NormalizedCrop;
+  cornerRadius: number;
+  borderWidth: number;
+  borderColor: HexColor;
+  shadowStrength: number;
+  backgroundBlur: number;
+  insetOpacity: number;
+  screenFrame: ScreenFrameStyle;
+  screenFrameScale: number;
+  screenFrameToolbarScale: number;
+  screenFrameOuterCornerRadius: number | null;
+  screenFrameContentCornerRadius: number | null;
+  screenFrameTitle: string;
+  screenFrameBrowserAddress: string;
+  patternScale: number;
+  patternOpacity: number;
+}
+
+export function makeCanvasStyle(options: Partial<CanvasStyle> = {}): CanvasStyle {
+  const aspectRatio = options.aspectRatio ?? '适应';
+  const customAspectRatio = options.customAspectRatio ?? makeCanvasCustomAspectRatio();
+  const backgroundSource = options.backgroundSource ?? BackgroundSourceSafeFallback;
+  const padding = options.padding ?? 100;
+  const contentScale = options.contentScale ?? 1;
+  const contentPosition = options.contentPosition ?? { x: 0.5, y: 0.5 };
+  const crop = normalizedCropClamped(options.crop ?? NormalizedCropFull);
+  const cornerRadius = options.cornerRadius ?? 24;
+  const borderWidth = options.borderWidth ?? 0;
+  const borderColor = options.borderColor ?? HexColorWhite;
+  const shadowStrength = options.shadowStrength ?? 0.28;
+  const backgroundBlur = options.backgroundBlur ?? 0;
+  const insetOpacity = options.insetOpacity ?? 0.125;
+  const screenFrame = options.screenFrame ?? 'none';
+  const rawFrameScale = options.screenFrameScale ?? 1;
+  const screenFrameScale = clamp(rawFrameScale, 0.6, 1.6);
+  const rawToolbarScale = options.screenFrameToolbarScale ?? 1;
+  const screenFrameToolbarScale = clamp(rawToolbarScale, 0.65, 1.6);
+  const screenFrameOuterCornerRadius =
+    options.screenFrameOuterCornerRadius !== undefined &&
+    options.screenFrameOuterCornerRadius !== null
+      ? clamp(options.screenFrameOuterCornerRadius, 0, 160)
+      : null;
+  const screenFrameContentCornerRadius =
+    options.screenFrameContentCornerRadius !== undefined &&
+    options.screenFrameContentCornerRadius !== null
+      ? clamp(options.screenFrameContentCornerRadius, 0, 160)
+      : null;
+  const screenFrameTitle = (options.screenFrameTitle ?? '').slice(0, 120);
+  const screenFrameBrowserAddress = (options.screenFrameBrowserAddress ?? '').slice(0, 240);
+  const rawPatternScale = options.patternScale ?? 1;
+  const patternScale = clamp(rawPatternScale, 0.4, 6.0);
+  const rawPatternOpacity = options.patternOpacity ?? 1;
+  const patternOpacity = clamp(rawPatternOpacity, 0.0, 1.0);
+
+  return {
+    aspectRatio,
+    customAspectRatio,
+    backgroundSource,
+    padding,
+    contentScale,
+    contentPosition,
+    crop,
+    cornerRadius,
+    borderWidth,
+    borderColor,
+    shadowStrength,
+    backgroundBlur,
+    insetOpacity,
+    screenFrame,
+    screenFrameScale,
+    screenFrameToolbarScale,
+    screenFrameOuterCornerRadius,
+    screenFrameContentCornerRadius,
+    screenFrameTitle,
+    screenFrameBrowserAddress,
+    patternScale,
+    patternOpacity,
+  };
+}
+
+function evenDouble(value: number): number {
+  return max(Math.round(value / 2) * 2, 2);
+}
+
+function evenInt(value: number): number {
+  return max(value - (value % 2), 2);
+}
+
+function canvasStyleSourcePixelDimensions(
+  style: CanvasStyle,
+  sourcePixelSize?: CanvasDimensions | null,
+): CanvasDimensions {
+  const source = sourcePixelSize ?? { width: 1920, height: 1080 };
+  const crop = normalizedCropClamped(style.crop);
+  const croppedWidth = max(source.width * crop.width, 2);
+  const croppedHeight = max(source.height * crop.height, 2);
+
+  if (style.aspectRatio === '适应') {
+    return {
+      width: evenDouble(croppedWidth),
+      height: evenDouble(croppedHeight),
+    };
+  }
+
+  const targetRatio =
+    canvasStyleResolvedFixedAspectRatio(style) ?? croppedWidth / croppedHeight;
+
+  if (croppedWidth / croppedHeight >= targetRatio) {
+    return {
+      width: evenDouble(croppedHeight * targetRatio),
+      height: evenDouble(croppedHeight),
+    };
+  }
+  return {
+    width: evenDouble(croppedWidth),
+    height: evenDouble(croppedWidth / targetRatio),
+  };
+}
+
+export function canvasStylePixelDimensions(
+  style: CanvasStyle,
+  resolution: CanvasResolution,
+  sourceAspectRatio?: number | null,
+  sourcePixelSize?: CanvasDimensions | null,
+): CanvasDimensions {
+  if (resolution === '原始素材') {
+    return canvasStyleSourcePixelDimensions(style, sourcePixelSize);
+  }
+  const preset = canvasResolutionPresetEdges(resolution);
+  if (preset === null) {
+    return canvasStyleSourcePixelDimensions(style, sourcePixelSize);
+  }
+  const shortEdge = preset.short;
+  switch (style.aspectRatio) {
+    case '适应': {
+      const ratio = clamp(sourceAspectRatio ?? 16.0 / 9.0, 0.2, 5);
+      const longEdge = preset.long;
+      if (ratio >= 1) {
+        return {
+          width: evenInt(longEdge),
+          height: evenDouble(longEdge / ratio),
+        };
+      }
+      return {
+        width: evenDouble(longEdge * ratio),
+        height: evenInt(longEdge),
+      };
+    }
+    case '16:9':
+      return {
+        width: Math.trunc((shortEdge * 16) / 9),
+        height: shortEdge,
+      };
+    case '4:3':
+      return {
+        width: Math.trunc((shortEdge * 4) / 3),
+        height: shortEdge,
+      };
+    case '9:16':
+      return {
+        width: shortEdge,
+        height: Math.trunc((shortEdge * 16) / 9),
+      };
+    case '1:1':
+      return {
+        width: shortEdge,
+        height: shortEdge,
+      };
+    case '3:4':
+      return {
+        width: shortEdge,
+        height: Math.trunc((shortEdge * 4) / 3),
+      };
+    case '2.39:1':
+    case '1:2.39':
+    case '自定义': {
+      const ratio = canvasStyleResolvedFixedAspectRatio(style) ?? 1;
+      const long = preset.long;
+      return ratio >= 1
+        ? { width: evenDouble(long), height: evenDouble(long / ratio) }
+        : { width: evenDouble(long * ratio), height: evenDouble(long) };
+    }
+  }
+}
+
