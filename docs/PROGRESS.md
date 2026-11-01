@@ -27,5 +27,6 @@
 2026-11-02 05:17 | T5.4 | DONE | CameraMotion (摄像头运动轨道与多布局渐变) 与 CameraContentFill (比例填充与水平镜像) 移植完成 | 82 pass
 2026-11-02 05:30 | T5.5 | DONE | CompositionSceneEvaluator (场景几何求值、多布局相机、MotionTrackCacheStore) 移植完成 (B5 收官) | 88 pass
 2026-11-02 05:33 | T6.1 | DONE | OverlayTimeline (马赛克裁剪/聚光灯、贴纸片段、互补退出动画与OverlayTiming) 移植完成 | 93 pass
+2026-11-02 05:36 | T6.2 | DONE | StickerTransition (贴纸背景过渡遮罩、相邻片段平滑手递手接力与BackdropBridge) 移植完成 | 97 pass
 
-下一个任务：T6.2
+下一个任务：T6.3
