@@ -115,7 +115,7 @@
   - 纯函数：`export function buildProjectFromRecording(events: PointerEventRecord[], offsetSeconds: number, durationSeconds: number): RecorderProject`：事件时间加 offset → `makeAnimationsFromPointerEvents` → `makeRecorderProject({zoomAnimations, timeline: makeProjectTimeline({zoomClips})})`。
   - `export async function recordSession(o:{seconds:number; fps?:number; baseDir?:string}): Promise<string>`（返回录制目录）：先启动钩子并等表头，再启动录屏，等 `seconds`，先停录屏再停钩子，写 meta.json / project.json（`encodeRecorderProject`）。
   - 必测：buildMeta 的 offset 计算；buildProjectFromRecording 3 次点击 → 3 个 zoomAnimations 且 `ProjectValidator.validate` 不抛错；offset 使所有事件时间 +offset。
-- [ ] T10.5 `scripts/record.ts`（CLI）+ `docs/USAGE.md`
+- [x] T10.5 `scripts/record.ts`（CLI）+ `docs/USAGE.md`
   - `node scripts/record.ts --seconds 10 [--fps 60]`，结束时打印录制目录。USAGE.md 写使用方法与「手动验收清单」（见 T10.6）。
 - [ ] T10.6 阶段 2 手动验收与校准（**需要用户在场操作**）
   - Agent 先写好 `scripts/calibrate.ts`：录 6 秒，屏幕上无需任何东西，仅提示用户「在第 2、4 秒各点击一次屏幕任意位置」，结束后打印 `pointer.jsonl` 中的点击时间与 `meta.json` 的 offset。
