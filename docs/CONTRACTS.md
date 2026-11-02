@@ -65,9 +65,9 @@ recordings/<id>/ å½•åˆ¶äº§ç‰©ï¼ˆå·²åŠ å…¥ .gitignoreï¼Œä¸æäº¤ï¼‰
 - æ‰€æœ‰å­è¿›ç¨‹å¿…é¡»æœ‰è¶…æ—¶ä¸ killï¼Œæµ‹è¯•é‡Œä¸å¾—ç•™ä¸‹å­¤å„¿ ffmpeg/powershell è¿›ç¨‹ï¼ˆ`afterEach` ä¸­ killï¼‰ã€‚
 - æ¶‰åŠçœŸå®å±å¹•/é¼ æ ‡çš„æµ‹è¯•ç”¨ `{ skip: !process.env.DOGSC_E2E }` æ ‡è®°ï¼Œ`npm test` é»˜è®¤è·³è¿‡ï¼›E2E æ‰‹åŠ¨ `$env:DOGSC_E2E=1; npm test`ã€‚
 
-## 6. »·¾³ÏŞÖÆ£¨2026-11-02 Êµ²â£©
-Agent ËùÔÚ»á»°**ÎŞ·¨·ÃÎÊ½»»¥Ê½×ÀÃæ**£º`ffmpeg ddagrab` ±¨ `Desktop duplication access denied`£¬`gdigrab` ±¨ `error 5`¡£
-Òò´Ë£º
-- ·²Éæ¼°ÕæÊµÆÁÄ»/Êó±êµÄ E2E£¨T10.2¡¢T10.3¡¢T10.4 µÄ E2E ²¿·Ö¡¢T10.6¡¢T11.7£©**Agent ²»µÃ³¢ÊÔÔËĞĞ£¬Ò²²»µÃÉè·¨ÈÆ¹ı**£»Ö»Ğ´´úÂë + ´¿º¯Êıµ¥²â£¬²¢ÔÚ PROGRESS.md ¼Ç `NEED-USER-E2E: <ÈÎÎñºÅ> <ÃüÁî>`£¬ÓÉÓÃ»§ÔÚ×Ô¼ºµÄ PowerShell ÀïÖ´ĞĞ `$env:DOGSC_E2E=1; npm test` ²¢·´À¡½á¹û¡£
-- ÒÑÑéÖ¤¿ÉÓÃ£¨Agent »á»°ÄÚ£©£ºffmpeg º¬ `ddagrab`/`h264_nvenc`/`libx264`£¬`ffprobe` ´æÔÚ£¬Node 24.15£¬PowerShell 5.1£¬Ö´ĞĞ²ßÂÔ RemoteSigned£¬Edge Î»ÓÚ `C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`¡£
-- äÖÈ¾½×¶Î£¨T11.x£©Ê¹ÓÃµÄÊÇÒÑÂ¼ºÃµÄÎÄ¼şÓë±¾µØ HTTP£¬²»ÒÀÀµ×ÀÃæ·ÃÎÊ£»µ« Edge headless ÄÜ·ñÔÚ Agent »á»°ÔËĞĞÎ´ÑéÖ¤£¬T11.4 ÈôÊ§°Ü°´ `NEED-USER-E2E` ´¦Àí¡£
+## 6. ç¯å¢ƒé™åˆ¶ï¼ˆ2026-11-02 å®æµ‹ï¼‰
+Agent æ‰€åœ¨ä¼šè¯**æ— æ³•è®¿é—®äº¤äº’å¼æ¡Œé¢**ï¼š`ffmpeg ddagrab` æŠ¥ `Desktop duplication access denied`ï¼Œ`gdigrab` æŠ¥ `error 5`ã€‚
+å› æ­¤ï¼š
+- å‡¡æ¶‰åŠçœŸå®å±å¹•/é¼ æ ‡çš„ E2Eï¼ˆT10.2ã€T10.3ã€T10.4 çš„ E2E éƒ¨åˆ†ã€T10.6ã€T11.7ï¼‰**Agent ä¸å¾—å°è¯•è¿è¡Œï¼Œä¹Ÿä¸å¾—è®¾æ³•ç»•è¿‡**ï¼›åªå†™ä»£ç  + çº¯å‡½æ•°å•æµ‹ï¼Œå¹¶åœ¨ PROGRESS.md è®° `NEED-USER-E2E: <ä»»åŠ¡å·> <å‘½ä»¤>`ï¼Œç”±ç”¨æˆ·åœ¨è‡ªå·±çš„ PowerShell é‡Œæ‰§è¡Œ `$env:DOGSC_E2E=1; npm test` å¹¶åé¦ˆç»“æœã€‚
+- å·²éªŒè¯å¯ç”¨ï¼ˆAgent ä¼šè¯å†…ï¼‰ï¼šffmpeg å« `ddagrab`/`h264_nvenc`/`libx264`ï¼Œ`ffprobe` å­˜åœ¨ï¼ŒNode 24.15ï¼ŒPowerShell 5.1ï¼Œæ‰§è¡Œç­–ç•¥ RemoteSignedï¼ŒEdge ä½äº `C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`ã€‚
+- æ¸²æŸ“é˜¶æ®µï¼ˆT11.xï¼‰ä½¿ç”¨çš„æ˜¯å·²å½•å¥½çš„æ–‡ä»¶ä¸æœ¬åœ° HTTPï¼Œä¸ä¾èµ–æ¡Œé¢è®¿é—®ï¼›ä½† Edge headless èƒ½å¦åœ¨ Agent ä¼šè¯è¿è¡ŒæœªéªŒè¯ï¼ŒT11.4 è‹¥å¤±è´¥æŒ‰ `NEED-USER-E2E` å¤„ç†ã€‚
