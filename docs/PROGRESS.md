@@ -50,6 +50,7 @@
 2026-11-02 19:50 | T10.1 | DONE | PointerJsonl (鼠标事件 JSONL 解析器，表头校验、坐标归一化、坏行容错、时间戳稳定排序) | 179 pass
 2026-11-02 19:56 | T10.2 | DONE | tools/mousehook.ps1 (WH_MOUSE_LL 低级鼠标钩子) 与 MouseHook.ts 进程生命周期管理 (安全启动参数、异步行流、双向优雅停止) | 180 pass (1 skip E2E)
 2026-11-02 19:59 | T10.3 | DONE | ScreenRecorder (ffmpeg ddagrab 屏幕录制参数构造、NVENC/libx264 自动探测与优雅停止) | 183 pass (2 skip E2E)
+2026-11-02 20:03 | T10.4 | DONE | RecordingSession (录制时钟偏置计算、事件时间对齐、工程自动生成、双进程生命周期编排) | 186 pass (3 skip E2E)
 
-下一个任务：T10.4
+下一个任务：T10.5
 

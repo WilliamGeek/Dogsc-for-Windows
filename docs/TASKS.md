@@ -110,7 +110,7 @@
   - `export async function detectEncoder(): Promise<'h264_nvenc'|'libx264'>`：执行 `ffmpeg -hide_banner -encoders`，输出含 `h264_nvenc` 则用之（不做实机编码探测）。
   - `export function startScreenRecording(o): { screenStartUnixMs:number; stop(): Promise<void> }`：`Date.now()` 在 spawn 之前取；`stop()` 往 stdin 写 `q`，5 秒不退出则 kill。
   - 必测：buildFfmpegArgs 两种 encoder 的断言；`detectEncoder` 返回值属于两者之一。E2E（`DOGSC_E2E`）：录 2 秒，`ffprobe -v error -show_entries format=duration -of csv=p=0` 时长在 1.5~3.5 秒。
-- [ ] T10.4 `src/capture/RecordingSession.ts` + `test/capture/RecordingSession.test.ts`
+- [x] T10.4 `src/capture/RecordingSession.ts` + `test/capture/RecordingSession.test.ts`
   - 纯函数（可测）：`export function buildMeta(i:{id:string;fps:number;width:number;height:number;screenStartUnixMs:number;pointerOriginUnixMs:number;encoder:string;durationSeconds:number}): object`（含 `pointerOffsetSeconds`，见 CONTRACTS §3）。
   - 纯函数：`export function buildProjectFromRecording(events: PointerEventRecord[], offsetSeconds: number, durationSeconds: number): RecorderProject`：事件时间加 offset → `makeAnimationsFromPointerEvents` → `makeRecorderProject({zoomAnimations, timeline: makeProjectTimeline({zoomClips})})`。
   - `export async function recordSession(o:{seconds:number; fps?:number; baseDir?:string}): Promise<string>`（返回录制目录）：先启动钩子并等表头，再启动录屏，等 `seconds`，先停录屏再停钩子，写 meta.json / project.json（`encodeRecorderProject`）。
