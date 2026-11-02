@@ -98,7 +98,7 @@
   - `PointerEventRecord` 用 `makePointerEventRecord({time, location: makeNormalizedPoint(nx,ny), kind})`（见 `src/core/ZoomAnimation.ts`）。
   - 规则严格按 CONTRACTS §2。无表头 → `throw new Error('pointer.jsonl 缺少表头')`。
   - 必测：①正常 3 行（含 1 次 leftClick）；②坏行/空行/未知 k 被忽略；③坐标越界被夹到 [0,1]；④乱序 t 被稳定排序；⑤screen 偏移（x=1920,w=1920）归一化正确；⑥无表头抛错。
-- [ ] T10.2 `tools/mousehook.ps1`（PowerShell 5.1 + `Add-Type` 内嵌 C#）+ `src/capture/MouseHook.ts` + `test/capture/MouseHook.test.ts`
+- [x] T10.2 `tools/mousehook.ps1`（PowerShell 5.1 + `Add-Type` 内嵌 C#）+ `src/capture/MouseHook.ts` + `test/capture/MouseHook.test.ts`
   - ps1：C# 里 `SetWindowsHookEx(WH_MOUSE_LL=14,...)`，消息循环用 `Application.Run()`（`Add-Type -AssemblyName System.Windows.Forms`）；`Stopwatch` 计时；`WM_MOUSEMOVE(0x200)→move`、`WM_LBUTTONDOWN(0x201)→leftClick`、`WM_RBUTTONDOWN(0x204)→rightClick`，其余丢弃；move 事件节流到 ≥4ms 一条；每行立即 `Console.Out.Flush()`。表头按 CONTRACTS §2（screen 用 `[System.Windows.Forms.Screen]::PrimaryScreen.Bounds`；若进程非 DPI 感知，需在 C# 中调用 `SetProcessDPIAware()` 以拿到真实像素）。
   - 退出：stdin 读到一行 `q` 或 stdin 关闭 → `Application.Exit()`、卸载钩子。
   - MouseHook.ts：`export function startMouseHook(): { process: ChildProcess; lines: AsyncIterable<string>; stop(): Promise<void> }`；用 `child_process.spawn('powershell.exe',['-NoProfile','-File', <abs path>])`，**不得**加 ExecutionPolicy 参数。`stop()` 写 `q\n`，2 秒未退出则 `kill()`。
