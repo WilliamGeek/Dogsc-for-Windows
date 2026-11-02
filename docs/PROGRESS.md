@@ -52,6 +52,9 @@
 2026-11-02 19:59 | T10.3 | DONE | ScreenRecorder (ffmpeg ddagrab 屏幕录制参数构造、NVENC/libx264 自动探测与优雅停止) | 183 pass (2 skip E2E)
 2026-11-02 20:03 | T10.4 | DONE | RecordingSession (录制时钟偏置计算、事件时间对齐、工程自动生成、双进程生命周期编排) | 186 pass (3 skip E2E)
 2026-11-02 20:06 | T10.5 | DONE | scripts/record.ts (CLI命令行入口) 与 docs/USAGE.md (录制与手动验收指南) | 186 pass (3 skip E2E)
+2026-11-02 20:08 | T10.6 | DONE | scripts/calibrate.ts (阶段2交互式校准工具) 交付完成，阶段2代码与单测全部就绪，停止等待用户手动校准与阶段3确认 | 186 pass (3 skip E2E)
 
-下一个任务：T10.6
+阶段 2 完成（代码就绪）
+
+下一个任务：T11.1
 

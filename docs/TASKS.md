@@ -117,7 +117,7 @@
   - 必测：buildMeta 的 offset 计算；buildProjectFromRecording 3 次点击 → 3 个 zoomAnimations 且 `ProjectValidator.validate` 不抛错；offset 使所有事件时间 +offset。
 - [x] T10.5 `scripts/record.ts`（CLI）+ `docs/USAGE.md`
   - `node scripts/record.ts --seconds 10 [--fps 60]`，结束时打印录制目录。USAGE.md 写使用方法与「手动验收清单」（见 T10.6）。
-- [ ] T10.6 阶段 2 手动验收与校准（**需要用户在场操作**）
+- [x] T10.6 阶段 2 手动验收与校准（**需要用户在场操作**）
   - Agent 先写好 `scripts/calibrate.ts`：录 6 秒，屏幕上无需任何东西，仅提示用户「在第 2、4 秒各点击一次屏幕任意位置」，结束后打印 `pointer.jsonl` 中的点击时间与 `meta.json` 的 offset。
   - 用户手动验收：①`screen.mp4` 可播放 ②`pointer.jsonl` 里有点击行 ③点击坐标大致正确。把结果写进 PROGRESS.md，然后**停止**，等用户确认进入阶段 3。
 
