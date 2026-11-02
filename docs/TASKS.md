@@ -82,3 +82,56 @@
 ## é˜¶æ®µ 1 æ”¶å°¾
 - [x] T9.1 æ–°å¢ `test/core/pipeline.test.ts`ï¼šæ„é€  3 æ¬¡ç‚¹å‡»çš„ pointer äº‹ä»¶ â†’ `AutoZoomPlanner` â†’ æ„é€ å·¥ç¨‹ â†’ `FrameSceneEvaluator.scene` åœ¨ t=0ã€ç‚¹å‡»æ—¶åˆ»ã€æœ«å°¾ä¸‰ä¸ªæ—¶é—´ç‚¹æ±‚å€¼ï¼Œæ–­è¨€ä¸å« NaNï¼ˆé€’å½’æ£€æŸ¥æ‰€æœ‰æ•°å­—å­—æ®µï¼‰ã€‚
 - [x] T9.2 åœ¨ PROGRESS.md å†™ã€Œé˜¶æ®µ 1 å®Œæˆã€ï¼Œ**åœæ­¢**ï¼Œç­‰å¾…ç”¨æˆ·ç¡®è®¤é˜¶æ®µ 2 æ–¹æ¡ˆã€‚
+
+
+---
+# ½×¶Î 2~5 ÈÎÎñ¿¨£¨¸ß½× AI ÓÚ 2026-11-02 ¹æ»®£»ÆõÔ¼¼û `docs/CONTRACTS.md`£¬¿ª¹¤Ç°±Ø¶Á£©
+
+Í¨ÓÃ²¹³ä£¨½×¶Î 2 ÆğÊÊÓÃ£©£º
+- Ã¿ÕÅ¿¨Ö»¸Ä¿¨ÄÚÁĞ³öµÄÎÄ¼ş£»ĞÂÔöÎÄ¼ş±ØĞëÔÚ¿¨ÄÚÁĞ³ö¡£
+- Ã¿ÕÅ¿¨Íê³ÉÌõ¼şÈÔÊÇ AGENTS.md ¡ì0 µÄ 8 ²½¡£²âÊÔÎÄ¼ş·Å `test/<Ä¿Â¼>/`£¬ÓëÔ´ÎÄ¼şÍ¬Ãû¼Ó `.test.ts`¡£
+- ¿¨ÄÚ¡¸º¯ÊıÇ©Ãû¡¹ÊÇ**Ó²Ô¼¶¨**£¬Ãû×Ö/²ÎÊıË³Ğò²»µÃ¸Ä¡£
+- Óöµ½¿¨ÄÚÃ»Ğ´µÄ¾ö²ß£º²»Òª²Â£¬Ğ´ `NEED-DECISION` ²¢Í£Ö¹¡£
+
+## ½×¶Î 2 ²É¼¯£¨B10£©
+- [ ] T10.1 `src/capture/PointerJsonl.ts` + `test/capture/PointerJsonl.test.ts`
+  - Ç©Ãû£º`export function parsePointerJsonl(text: string): { originUnixMs: number; screen: {x:number;y:number;w:number;h:number}; events: PointerEventRecord[] }`
+  - `PointerEventRecord` ÓÃ `makePointerEventRecord({time, location: makeNormalizedPoint(nx,ny), kind})`£¨¼û `src/core/ZoomAnimation.ts`£©¡£
+  - ¹æÔòÑÏ¸ñ°´ CONTRACTS ¡ì2¡£ÎŞ±íÍ· ¡ú `throw new Error('pointer.jsonl È±ÉÙ±íÍ·')`¡£
+  - ±Ø²â£º¢ÙÕı³£ 3 ĞĞ£¨º¬ 1 ´Î leftClick£©£»¢Ú»µĞĞ/¿ÕĞĞ/Î´Öª k ±»ºöÂÔ£»¢Û×ø±êÔ½½ç±»¼Ğµ½ [0,1]£»¢ÜÂÒĞò t ±»ÎÈ¶¨ÅÅĞò£»¢İscreen Æ«ÒÆ£¨x=1920,w=1920£©¹éÒ»»¯ÕıÈ·£»¢ŞÎŞ±íÍ·Å×´í¡£
+- [ ] T10.2 `tools/mousehook.ps1`£¨PowerShell 5.1 + `Add-Type` ÄÚÇ¶ C#£©+ `src/capture/MouseHook.ts` + `test/capture/MouseHook.test.ts`
+  - ps1£ºC# Àï `SetWindowsHookEx(WH_MOUSE_LL=14,...)`£¬ÏûÏ¢Ñ­»·ÓÃ `Application.Run()`£¨`Add-Type -AssemblyName System.Windows.Forms`£©£»`Stopwatch` ¼ÆÊ±£»`WM_MOUSEMOVE(0x200)¡úmove`¡¢`WM_LBUTTONDOWN(0x201)¡úleftClick`¡¢`WM_RBUTTONDOWN(0x204)¡úrightClick`£¬ÆäÓà¶ªÆú£»move ÊÂ¼ş½ÚÁ÷µ½ ¡İ4ms Ò»Ìõ£»Ã¿ĞĞÁ¢¼´ `Console.Out.Flush()`¡£±íÍ·°´ CONTRACTS ¡ì2£¨screen ÓÃ `[System.Windows.Forms.Screen]::PrimaryScreen.Bounds`£»Èô½ø³Ì·Ç DPI ¸ĞÖª£¬ĞèÔÚ C# ÖĞµ÷ÓÃ `SetProcessDPIAware()` ÒÔÄÃµ½ÕæÊµÏñËØ£©¡£
+  - ÍË³ö£ºstdin ¶Áµ½Ò»ĞĞ `q` »ò stdin ¹Ø±Õ ¡ú `Application.Exit()`¡¢Ğ¶ÔØ¹³×Ó¡£
+  - MouseHook.ts£º`export function startMouseHook(): { process: ChildProcess; lines: AsyncIterable<string>; stop(): Promise<void> }`£»ÓÃ `child_process.spawn('powershell.exe',['-NoProfile','-File', <abs path>])`£¬**²»µÃ**¼Ó ExecutionPolicy ²ÎÊı¡£`stop()` Ğ´ `q\n`£¬2 ÃëÎ´ÍË³öÔò `kill()`¡£
+  - ±Ø²â£¨ÓÃ `{ skip: !process.env.DOGSC_E2E }` °ü×¡ÕæÊµ½ø³Ì²¿·Ö£©£ºÆô¶¯ºó 3 ÃëÄÚ¶Áµ½±íÍ·ĞĞÇÒ `JSON.parse` ³É¹¦ÇÒº¬ `hdr/originUnixMs/screen`£»`stop()` ºó½ø³ÌÒÑÍË³ö¡£ÔÙĞ´Ò»¸ö**²»ĞèÒªÕæÊµ½ø³Ì**µÄ²âÊÔ£º¶Ô `startMouseHook` µÄ²ÎÊı¹¹Ôì²¿·Ö³é³É´¿º¯Êı `buildMouseHookCommand(): {command:string;args:string[]}` ²¢¶ÏÑÔ args ²»º¬ `Bypass`¡£
+  - Èô `-File` ±»Ö´ĞĞ²ßÂÔ¾Ü¾ø£¨µ±Ç°»úÆ÷Îª RemoteSigned£¬±¾µØ½Å±¾Ó¦¿ÉÔËĞĞ£©£º`BLOCKED`£¬Ñ¯ÎÊÓÃ»§£¬**²»Òª**ÈÆ¹ı¡£
+- [ ] T10.3 `src/capture/ScreenRecorder.ts` + `test/capture/ScreenRecorder.test.ts`
+  - ´¿º¯Êı£º`export function buildFfmpegArgs(o: { outFile: string; fps: number; encoder: 'h264_nvenc'|'libx264'; outputIdx?: number }): string[]`
+    - ÆÚÍû£¨nvenc£©£º`['-y','-f','lavfi','-i',`ddagrab=output_idx=${idx}:framerate=${fps}`,'-c:v','h264_nvenc','-preset','p4','-rc','vbr','-cq','23','-b:v','0','-pix_fmt','yuv420p','-r',String(fps),'-fps_mode','cfr',outFile]`£»ddagrab Êä³öÊÇ D3D11 Ö¡£¬×ª yuv420p Ğè `-vf hwdownload,format=bgra,format=yuv420p`£¬²åÔÚ `-c:v` Ç°£¨nvenc Óë libx264 ¶¼ÓÃ£©¡£ÒÔÊµ¼ÊÄÜÅÜÍ¨Îª×¼£¬ÅÜÍ¨ºó°Ñ×îÖÕ²ÎÊıĞ´»Ø±¾¿¨×¢ÊÍÓë²âÊÔÆÚÍû£¨µ¥¶ÀÒ»´ÎÌá½»ËµÃ÷Ô­Òò£©¡£
+  - `export async function detectEncoder(): Promise<'h264_nvenc'|'libx264'>`£ºÖ´ĞĞ `ffmpeg -hide_banner -encoders`£¬Êä³öº¬ `h264_nvenc` ÔòÓÃÖ®£¨²»×öÊµ»ú±àÂëÌ½²â£©¡£
+  - `export function startScreenRecording(o): { screenStartUnixMs:number; stop(): Promise<void> }`£º`Date.now()` ÔÚ spawn Ö®Ç°È¡£»`stop()` Íù stdin Ğ´ `q`£¬5 Ãë²»ÍË³öÔò kill¡£
+  - ±Ø²â£ºbuildFfmpegArgs Á½ÖÖ encoder µÄ¶ÏÑÔ£»`detectEncoder` ·µ»ØÖµÊôÓÚÁ½ÕßÖ®Ò»¡£E2E£¨`DOGSC_E2E`£©£ºÂ¼ 2 Ãë£¬`ffprobe -v error -show_entries format=duration -of csv=p=0` Ê±³¤ÔÚ 1.5~3.5 Ãë¡£
+- [ ] T10.4 `src/capture/RecordingSession.ts` + `test/capture/RecordingSession.test.ts`
+  - ´¿º¯Êı£¨¿É²â£©£º`export function buildMeta(i:{id:string;fps:number;width:number;height:number;screenStartUnixMs:number;pointerOriginUnixMs:number;encoder:string;durationSeconds:number}): object`£¨º¬ `pointerOffsetSeconds`£¬¼û CONTRACTS ¡ì3£©¡£
+  - ´¿º¯Êı£º`export function buildProjectFromRecording(events: PointerEventRecord[], offsetSeconds: number, durationSeconds: number): RecorderProject`£ºÊÂ¼şÊ±¼ä¼Ó offset ¡ú `makeAnimationsFromPointerEvents` ¡ú `makeRecorderProject({zoomAnimations, timeline: makeProjectTimeline({zoomClips})})`¡£
+  - `export async function recordSession(o:{seconds:number; fps?:number; baseDir?:string}): Promise<string>`£¨·µ»ØÂ¼ÖÆÄ¿Â¼£©£ºÏÈÆô¶¯¹³×Ó²¢µÈ±íÍ·£¬ÔÙÆô¶¯Â¼ÆÁ£¬µÈ `seconds`£¬ÏÈÍ£Â¼ÆÁÔÙÍ£¹³×Ó£¬Ğ´ meta.json / project.json£¨`encodeRecorderProject`£©¡£
+  - ±Ø²â£ºbuildMeta µÄ offset ¼ÆËã£»buildProjectFromRecording 3 ´Îµã»÷ ¡ú 3 ¸ö zoomAnimations ÇÒ `ProjectValidator.validate` ²»Å×´í£»offset Ê¹ËùÓĞÊÂ¼şÊ±¼ä +offset¡£
+- [ ] T10.5 `scripts/record.ts`£¨CLI£©+ `docs/USAGE.md`
+  - `node scripts/record.ts --seconds 10 [--fps 60]`£¬½áÊøÊ±´òÓ¡Â¼ÖÆÄ¿Â¼¡£USAGE.md Ğ´Ê¹ÓÃ·½·¨Óë¡¸ÊÖ¶¯ÑéÊÕÇåµ¥¡¹£¨¼û T10.6£©¡£
+- [ ] T10.6 ½×¶Î 2 ÊÖ¶¯ÑéÊÕÓëĞ£×¼£¨**ĞèÒªÓÃ»§ÔÚ³¡²Ù×÷**£©
+  - Agent ÏÈĞ´ºÃ `scripts/calibrate.ts`£ºÂ¼ 6 Ãë£¬ÆÁÄ»ÉÏÎŞĞèÈÎºÎ¶«Î÷£¬½öÌáÊ¾ÓÃ»§¡¸ÔÚµÚ 2¡¢4 Ãë¸÷µã»÷Ò»´ÎÆÁÄ»ÈÎÒâÎ»ÖÃ¡¹£¬½áÊøºó´òÓ¡ `pointer.jsonl` ÖĞµÄµã»÷Ê±¼äÓë `meta.json` µÄ offset¡£
+  - ÓÃ»§ÊÖ¶¯ÑéÊÕ£º¢Ù`screen.mp4` ¿É²¥·Å ¢Ú`pointer.jsonl` ÀïÓĞµã»÷ĞĞ ¢Ûµã»÷×ø±ê´óÖÂÕıÈ·¡£°Ñ½á¹ûĞ´½ø PROGRESS.md£¬È»ºó**Í£Ö¹**£¬µÈÓÃ»§È·ÈÏ½øÈë½×¶Î 3¡£
+
+## ½×¶Î 3 äÖÈ¾Óëµ¼³ö£¨B11£©¡ª¡ª¿ª¹¤Ç°Ğè¸ß½× AI ¸´ºË CONTRACTS ¡ì4
+- [ ] T11.1 `src/server/DevServer.ts` + ²âÊÔ£º`export function startDevServer(o:{rootDir:string; port?:number}): Promise<{port:number; close():Promise<void>}>`£»¾²Ì¬ÎÄ¼ş + `.ts`¡úJS£¨CONTRACTS ¡ì4£©£»`port` È±Ê¡È¡ 0£¨Ëæ»ú£©¡£±Ø²â£ºGET `/src/core/swift.ts` ·µ»Ø 200¡¢`content-type` º¬ `javascript`¡¢ÕıÎÄ²»º¬ `: number` ÕâÀàÀàĞÍ±ê×¢£¨ÓÃ `export function clamp(` ¸½½ü¶ÏÑÔ¼´¿É£©£»Â·¾¶´©Ô½ `/../package.json` ·µ»Ø 403/404¡£
+- [ ] T11.2 `src/render/FramePlan.ts` + ²âÊÔ£º`export function makeFramePlan(i:{project:RecorderProject; pointerEvents:PointerEventRecord[]; fps:number; durationSeconds:number; sourceFrameCount:number; canvas:{width:number;height:number}}): { frameCount:number; frameAt(n:number): { scene: FrameScene; sourceFrameFile: number } }`¡£ÑÏ¸ñ°´ CONTRACTS ¡ì4 µÄÓ³Éä¡£±Ø²â£ºn=0 µÄ sourceFrameFile=1£»Ä©Ö¡²»Ô½½ç£»Í¬Ò» n Á½´Î `deepEqual`£»Õû¶ÎËùÓĞ scene ÎŞ NaN£¨¸´ÓÃ `assertNoNaN` Ğ´·¨£¬¼û `test/core/pipeline.test.ts`£©¡£
+- [ ] T11.3 `src/capture/FrameExtractor.ts` + ²âÊÔ£º`extractFrames(i:{video:string; outDir:string; fps:number}): Promise<number>` µ÷ÓÃ ffmpeg Ô¤½âÂë£¬·µ»ØÖ¡Êı£»´¿º¯Êı `buildExtractArgs` µ¥²â£»E2E ÓÃ `DOGSC_E2E`¡£
+- [ ] T11.4 `web/render.html` + `web/renderer.ts`£º×îĞ¡ WebGL2 äÖÈ¾¡ª¡ªÇåÆÁÎª±³¾°É«¡¢°ÑÆÁÄ»Ö¡ JPEG ×÷ÎªÎÆÀí»­³É `scene.screen.projectedQuad` µÄËÄ±ßĞÎ£¨Á½¸öÈı½ÇĞÎ£¬Í¸ÊÓĞ£ÕıÓÃÆë´Î×ø±ê£¬²Î¿¼ `ScreenProjection.ts`£©¡£Ò³Ãæ¶Á URL `?mode=preview&frame=N` äÖÈ¾µ¥Ö¡¡£ÑéÊÕ£ºEdge ÃüÁîĞĞ `--headless=new --screenshot=out/t114.png --window-size=1920,1080 http://127.0.0.1:<port>/web/render.html?...` Éú³É·Ç¿Õ PNG£¨>10KB£©¡£
+- [ ] T11.5 äÖÈ¾ÔöÇ¿£¨Ò»¸öĞ§¹ûÒ»´ÎÌá½»£¬¿É²ğ T11.5a~e£©£ºa Ô²½Ç+±ß¿ò£»b ÒõÓ°£»c ±³¾°£¨´¿É«/½¥±ä£¬¶Á `scene.background`£©£»d ¹â±ê£¨»­ `scene.cursor.layout`£¬ÏÈÓÃ¼òµ¥¼ıÍ·¶à±ßĞÎ£¬²»¼ÓÔØËØ²Ä£©+ µã»÷Á°äô£»e ÉãÏñÍ·/ÌùÖ½**Ìø¹ı**£¨½×¶Î 3 ²»×ö£©¡£
+- [ ] T11.6 µ¼³ö£º`src/server/ExportServer.ts`£¨`/api/plan`¡¢`/api/frame/:n`¡¢`/api/done`£¬ÑÏ¸ñµİÔöË³Ğò£¬³¤¶ÈĞ£Ñé£©+ `web/exporter.ts`£¨Ñ­»·äÖÈ¾+POST£©+ `scripts/export.ts`£¨Æô¶¯·şÎñ¡úÆô¶¯ Edge¡úµÈ´ı¡úÊä³ö mp4£©¡£±Ø²â£ºExportServer ¶Ô´íÎó³¤¶È·µ»Ø 400¡¢ÂÒĞòÖ¡·µ»Ø 409£»ÓÃ¼ÙµÄ ffmpeg ÃüÁî£¨`node -e` ÍÌ stdin£©ÑéÖ¤Ö¡¼ÆÊı¡£
+- [ ] T11.7 ½×¶Î 3 ÑéÊÕ£¨**ĞèÒªÓÃ»§ÔÚ³¡**£©£ºÓÃ T10 µÄÕæÊµÂ¼ÖÆµ¼³ö MP4£¬ÓÃ»§ÈâÑÛÈ·ÈÏ¡¸×Ô¶¯Ëõ·Å¸úËæµã»÷¡¢¹â±êÆ½»¬¡¹¡£Í¨¹ıºó PROGRESS.md Ğ´¡¸½×¶Î 3 Íê³É¡¹²¢**Í£Ö¹**¡£
+
+## ½×¶Î 4 ±à¼­Æ÷£¨´ÖÁ£¶È£¬½×¶Î 3 Íê³ÉºóÓÉ¸ß½× AI Ï¸»¯³É¿¨£©
+Ô¤ÀÀÒ³£¨ÍÏÊ±¼äÏßÔ¤ÀÀ£©¡ú Ëõ·ÅÆ¬¶ÎÍÏ×§£¨ÓÃ `EditorTimeline.ts`£©¡ú ¼ôÇĞ/±äËÙ£¨ÓÃ `ProjectTimelineEditing.ts`£©¡ú ±£´æ `project.json`¡£
+
+## ½×¶Î 5 ´ò°ü£¨ĞèÓÃ»§¾ö²ß Electron/Tauri/´¿½Å±¾Æô¶¯Æ÷£©
