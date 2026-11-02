@@ -64,3 +64,10 @@ recordings/<id>/ å½•åˆ¶äº§ç‰©ï¼ˆå·²åŠ å…¥ .gitignoreï¼Œä¸æäº¤ï¼‰
 - **ä¸å¾—ä½¿ç”¨ `-ExecutionPolicy Bypass`** æˆ–ä»»ä½•ç»•è¿‡æ‰§è¡Œç­–ç•¥çš„æ‰‹æ®µï¼›è¿è¡Œ `.ps1` å‰å…ˆ `Get-ExecutionPolicy`ï¼Œè‹¥ `-File` è¢«ç­–ç•¥æ‹’ç» â†’ å†™ `BLOCKED` å¹¶è¯¢é—®ç”¨æˆ·ã€‚
 - æ‰€æœ‰å­è¿›ç¨‹å¿…é¡»æœ‰è¶…æ—¶ä¸ killï¼Œæµ‹è¯•é‡Œä¸å¾—ç•™ä¸‹å­¤å„¿ ffmpeg/powershell è¿›ç¨‹ï¼ˆ`afterEach` ä¸­ killï¼‰ã€‚
 - æ¶‰åŠçœŸå®å±å¹•/é¼ æ ‡çš„æµ‹è¯•ç”¨ `{ skip: !process.env.DOGSC_E2E }` æ ‡è®°ï¼Œ`npm test` é»˜è®¤è·³è¿‡ï¼›E2E æ‰‹åŠ¨ `$env:DOGSC_E2E=1; npm test`ã€‚
+
+## 6. »·¾³ÏŞÖÆ£¨2026-11-02 Êµ²â£©
+Agent ËùÔÚ»á»°**ÎŞ·¨·ÃÎÊ½»»¥Ê½×ÀÃæ**£º`ffmpeg ddagrab` ±¨ `Desktop duplication access denied`£¬`gdigrab` ±¨ `error 5`¡£
+Òò´Ë£º
+- ·²Éæ¼°ÕæÊµÆÁÄ»/Êó±êµÄ E2E£¨T10.2¡¢T10.3¡¢T10.4 µÄ E2E ²¿·Ö¡¢T10.6¡¢T11.7£©**Agent ²»µÃ³¢ÊÔÔËĞĞ£¬Ò²²»µÃÉè·¨ÈÆ¹ı**£»Ö»Ğ´´úÂë + ´¿º¯Êıµ¥²â£¬²¢ÔÚ PROGRESS.md ¼Ç `NEED-USER-E2E: <ÈÎÎñºÅ> <ÃüÁî>`£¬ÓÉÓÃ»§ÔÚ×Ô¼ºµÄ PowerShell ÀïÖ´ĞĞ `$env:DOGSC_E2E=1; npm test` ²¢·´À¡½á¹û¡£
+- ÒÑÑéÖ¤¿ÉÓÃ£¨Agent »á»°ÄÚ£©£ºffmpeg º¬ `ddagrab`/`h264_nvenc`/`libx264`£¬`ffprobe` ´æÔÚ£¬Node 24.15£¬PowerShell 5.1£¬Ö´ĞĞ²ßÂÔ RemoteSigned£¬Edge Î»ÓÚ `C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe`¡£
+- äÖÈ¾½×¶Î£¨T11.x£©Ê¹ÓÃµÄÊÇÒÑÂ¼ºÃµÄÎÄ¼şÓë±¾µØ HTTP£¬²»ÒÀÀµ×ÀÃæ·ÃÎÊ£»µ« Edge headless ÄÜ·ñÔÚ Agent »á»°ÔËĞĞÎ´ÑéÖ¤£¬T11.4 ÈôÊ§°Ü°´ `NEED-USER-E2E` ´¦Àí¡£
