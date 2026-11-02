@@ -93,7 +93,7 @@
 - 遇到卡内没写的决策：不要猜，写 `NEED-DECISION` 并停止。
 
 ## 阶段 2 采集（B10）
-- [ ] T10.1 `src/capture/PointerJsonl.ts` + `test/capture/PointerJsonl.test.ts`
+- [x] T10.1 `src/capture/PointerJsonl.ts` + `test/capture/PointerJsonl.test.ts`
   - 签名：`export function parsePointerJsonl(text: string): { originUnixMs: number; screen: {x:number;y:number;w:number;h:number}; events: PointerEventRecord[] }`
   - `PointerEventRecord` 用 `makePointerEventRecord({time, location: makeNormalizedPoint(nx,ny), kind})`（见 `src/core/ZoomAnimation.ts`）。
   - 规则严格按 CONTRACTS §2。无表头 → `throw new Error('pointer.jsonl 缺少表头')`。
@@ -134,3 +134,4 @@
 预览页（拖时间线预览）→ 缩放片段拖拽（用 `EditorTimeline.ts`）→ 剪切/变速（用 `ProjectTimelineEditing.ts`）→ 保存 `project.json`。
 
 ## 阶段 5 打包（需用户决策 Electron/Tauri/纯脚本启动器）
+
