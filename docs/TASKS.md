@@ -104,7 +104,7 @@
   - MouseHook.ts：`export function startMouseHook(): { process: ChildProcess; lines: AsyncIterable<string>; stop(): Promise<void> }`；用 `child_process.spawn('powershell.exe',['-NoProfile','-File', <abs path>])`，**不得**加 ExecutionPolicy 参数。`stop()` 写 `q\n`，2 秒未退出则 `kill()`。
   - 必测（用 `{ skip: !process.env.DOGSC_E2E }` 包住真实进程部分）：启动后 3 秒内读到表头行且 `JSON.parse` 成功且含 `hdr/originUnixMs/screen`；`stop()` 后进程已退出。再写一个**不需要真实进程**的测试：对 `startMouseHook` 的参数构造部分抽成纯函数 `buildMouseHookCommand(): {command:string;args:string[]}` 并断言 args 不含 `Bypass`。
   - 若 `-File` 被执行策略拒绝（当前机器为 RemoteSigned，本地脚本应可运行）：`BLOCKED`，询问用户，**不要**绕过。
-- [ ] T10.3 `src/capture/ScreenRecorder.ts` + `test/capture/ScreenRecorder.test.ts`
+- [x] T10.3 `src/capture/ScreenRecorder.ts` + `test/capture/ScreenRecorder.test.ts`
   - 纯函数：`export function buildFfmpegArgs(o: { outFile: string; fps: number; encoder: 'h264_nvenc'|'libx264'; outputIdx?: number }): string[]`
     - 期望（nvenc）：`['-y','-f','lavfi','-i',`ddagrab=output_idx=${idx}:framerate=${fps}`,'-c:v','h264_nvenc','-preset','p4','-rc','vbr','-cq','23','-b:v','0','-pix_fmt','yuv420p','-r',String(fps),'-fps_mode','cfr',outFile]`；ddagrab 输出是 D3D11 帧，转 yuv420p 需 `-vf hwdownload,format=bgra,format=yuv420p`，插在 `-c:v` 前（nvenc 与 libx264 都用）。以实际能跑通为准，跑通后把最终参数写回本卡注释与测试期望（单独一次提交说明原因）。
   - `export async function detectEncoder(): Promise<'h264_nvenc'|'libx264'>`：执行 `ffmpeg -hide_banner -encoders`，输出含 `h264_nvenc` 则用之（不做实机编码探测）。
