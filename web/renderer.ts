@@ -24,7 +24,8 @@ import {
   type ProjectedScreenQuad,
 } from '../src/core/ScreenProjection.ts';
 import type { CompositionRect } from '../src/core/CompositionScene.ts';
-import type { FrameScene } from '../src/core/FrameScene.ts';
+import type { FrameScene, FrameScreenScene } from '../src/core/FrameScene.ts';
+import { hexColorComponents } from '../src/core/HexColor.ts';
 
 export interface RendererPlanContext {
   fps: number;
@@ -102,8 +103,44 @@ export function buildProjectedQuadVertices(
   ]);
 }
 
+export interface ScreenShaderUniforms {
+  screenSize: [number, number];
+  cornerRadius: number;
+  effectiveBorderWidth: number;
+  borderColor: [number, number, number, number];
+}
+
+/**
+ * Pure function: extracts rounded-corner and anti-aliased border uniforms from FrameScreenScene.
+ */
+export function computeScreenShaderUniforms(screen: FrameScreenScene): ScreenShaderUniforms {
+  const w = Number.isFinite(screen.finalRect.width) ? Math.max(screen.finalRect.width, 1) : 1;
+  const h = Number.isFinite(screen.finalRect.height) ? Math.max(screen.finalRect.height, 1) : 1;
+  const cornerRadius = Number.isFinite(screen.cornerRadius) ? Math.max(screen.cornerRadius, 0) : 0;
+  const bw = Number.isFinite(screen.borderWidth) ? Math.max(screen.borderWidth, 0) : 0;
+  const bo = Number.isFinite(screen.borderOpacity) ? Math.min(Math.max(screen.borderOpacity, 0), 1) : 0;
+
+  let effectiveBorderWidth = 0;
+  let borderAlpha = 0;
+  if (bw > 0) {
+    effectiveBorderWidth = bw;
+    borderAlpha = Math.max(bo, 0.85);
+  } else if (bo > 0) {
+    effectiveBorderWidth = 1.5;
+    borderAlpha = bo;
+  }
+
+  const rgb = hexColorComponents(screen.borderColor);
+  return {
+    screenSize: [w, h],
+    cornerRadius,
+    effectiveBorderWidth,
+    borderColor: [rgb.red, rgb.green, rgb.blue, borderAlpha],
+  };
+}
+
 // ---------------------------------------------------------------------------
-// Shaders (T11.4 Minimal Screen Texture Quad)
+// Shaders (T11.4 + T11.5a Screen Texture Quad with SDF Rounded Corners & Border)
 // ---------------------------------------------------------------------------
 
 const SCREEN_VERTEX_SHADER = `#version 300 es
@@ -123,11 +160,37 @@ in vec2 v_uv;
 uniform sampler2D u_screenTex;
 uniform vec4 u_sourceCrop;
 uniform float u_opacity;
+uniform vec2 u_screenSize;
+uniform float u_cornerRadius;
+uniform float u_borderWidth;
+uniform vec4 u_borderColor;
 out vec4 fragColor;
+
+float sdRoundedBox(vec2 p, vec2 b, float r) {
+  float clampedR = min(r, min(b.x, b.y));
+  vec2 q = abs(p) - b + clampedR;
+  return min(max(q.x, q.y), 0.0) + length(max(q, 0.0)) - clampedR;
+}
+
 void main() {
+  vec2 p = v_uv * u_screenSize - 0.5 * u_screenSize;
+  vec2 b = 0.5 * u_screenSize;
+  float dist = sdRoundedBox(p, b, u_cornerRadius);
+  float outerAlpha = 1.0 - smoothstep(-0.75, 0.75, dist);
+  if (outerAlpha <= 0.001) {
+    discard;
+  }
+
   vec2 croppedUV = u_sourceCrop.xy + clamp(v_uv, 0.0, 1.0) * u_sourceCrop.zw;
   vec3 texColor = texture(u_screenTex, croppedUV).rgb;
-  fragColor = vec4(texColor, u_opacity);
+
+  vec3 outColor = texColor;
+  if (u_borderWidth > 0.0 && u_borderColor.a > 0.0) {
+    float borderMask = smoothstep(-u_borderWidth - 0.75, -u_borderWidth + 0.75, dist);
+    outColor = mix(texColor, u_borderColor.rgb, borderMask * u_borderColor.a);
+  }
+
+  fragColor = vec4(outColor, outerAlpha * u_opacity);
 }
 `;
 
@@ -469,6 +532,10 @@ async function bootstrapBrowser(): Promise<void> {
   const uScreenTex = gl.getUniformLocation(program, 'u_screenTex');
   const uSourceCrop = gl.getUniformLocation(program, 'u_sourceCrop');
   const uOpacity = gl.getUniformLocation(program, 'u_opacity');
+  const uScreenSize = gl.getUniformLocation(program, 'u_screenSize');
+  const uCornerRadius = gl.getUniformLocation(program, 'u_cornerRadius');
+  const uBorderWidth = gl.getUniformLocation(program, 'u_borderWidth');
+  const uBorderColor = gl.getUniformLocation(program, 'u_borderColor');
 
   const vao = gl.createVertexArray();
   const vbo = gl.createBuffer();
@@ -543,6 +610,18 @@ async function bootstrapBrowser(): Promise<void> {
       scene.screen.sourceCrop.height
     );
     gl.uniform1f(uOpacity, scene.screen.opacity);
+
+    const screenUniforms = computeScreenShaderUniforms(scene.screen);
+    gl.uniform2f(uScreenSize, screenUniforms.screenSize[0], screenUniforms.screenSize[1]);
+    gl.uniform1f(uCornerRadius, screenUniforms.cornerRadius);
+    gl.uniform1f(uBorderWidth, screenUniforms.effectiveBorderWidth);
+    gl.uniform4f(
+      uBorderColor,
+      screenUniforms.borderColor[0],
+      screenUniforms.borderColor[1],
+      screenUniforms.borderColor[2],
+      screenUniforms.borderColor[3]
+    );
 
     gl.drawArrays(gl.TRIANGLES, 0, 6);
     gl.finish();

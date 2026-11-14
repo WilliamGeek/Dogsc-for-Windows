@@ -58,8 +58,9 @@
 2026-11-14 19:26 | T11.2 | DONE | FramePlan (输出帧与源帧映射、CONTRACTS §4 sourceFrameFile=1约束、FrameSceneEvaluator幂等求值与零NaN校验) | 188 pass (3 skip E2E)
 2026-11-14 19:40 | T11.3 | DONE | FrameExtractor (ffmpeg视频预解码帧序列提取、buildExtractArgs纯函数与错误处理) | 191 pass (4 skip E2E)
 2026-11-14 20:00 | T11.4 | DONE | WebGL2最小渲染页 (web/render.html + web/renderer.ts 透视校正齐次顶点生成与无头Edge截图验证 out/t114.png 203KB) | 193 pass (4 skip E2E)
+2026-11-14 20:03 | T11.5a | DONE | 屏幕SDF圆角裁剪与抗锯齿边框渲染 (computeScreenShaderUniforms 纯函数与GLSL片段着色器) | 194 pass (4 skip E2E)
 
 阶段 2 验收通过
 
-下一个任务：T11.5a
+下一个任务：T11.5b
 
