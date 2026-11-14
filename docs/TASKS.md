@@ -127,7 +127,7 @@
 - [x] T11.3 `src/capture/FrameExtractor.ts` + 测试：`extractFrames(i:{video:string; outDir:string; fps:number}): Promise<number>` 调用 ffmpeg 预解码，返回帧数；纯函数 `buildExtractArgs` 单测；E2E 用 `DOGSC_E2E`。
 - [x] T11.4 `web/render.html` + `web/renderer.ts`：最小 WebGL2 渲染——清屏为背景色、把屏幕帧 JPEG 作为纹理画成 `scene.screen.projectedQuad` 的四边形（两个三角形，透视校正用齐次坐标，参考 `ScreenProjection.ts`）。页面读 URL `?mode=preview&frame=N` 渲染单帧。验收：Edge 命令行 `--headless=new --screenshot=out/t114.png --window-size=1920,1080 http://127.0.0.1:<port>/web/render.html?...` 生成非空 PNG（>10KB）。
 - [x] T11.5 渲染增强（一个效果一次提交，可拆 T11.5a~e）：a 圆角+边框；b 阴影；c 背景（纯色/渐变，读 `scene.background`）；d 光标（画 `scene.cursor.layout`，先用简单箭头多边形，不加载素材）+ 点击涟漪；e 摄像头/贴纸**跳过**（阶段 3 不做）。
-- [ ] T11.6 导出：`src/server/ExportServer.ts`（`/api/plan`、`/api/frame/:n`、`/api/done`，严格递增顺序，长度校验）+ `web/exporter.ts`（循环渲染+POST）+ `scripts/export.ts`（启动服务→启动 Edge→等待→输出 mp4）。必测：ExportServer 对错误长度返回 400、乱序帧返回 409；用假的 ffmpeg 命令（`node -e` 吞 stdin）验证帧计数。
+- [x] T11.6 导出：`src/server/ExportServer.ts`（`/api/plan`、`/api/frame/:n`、`/api/done`，严格递增顺序，长度校验）+ `web/exporter.ts`（循环渲染+POST）+ `scripts/export.ts`（启动服务→启动 Edge→等待→输出 mp4）。必测：ExportServer 对错误长度返回 400、乱序帧返回 409；用假的 ffmpeg 命令（`node -e` 吞 stdin）验证帧计数。
 - [ ] T11.7 阶段 3 验收（**需要用户在场**）：用 T10 的真实录制导出 MP4，用户肉眼确认「自动缩放跟随点击、光标平滑」。通过后 PROGRESS.md 写「阶段 3 完成」并**停止**。
 
 ## 阶段 4 编辑器（粗粒度，阶段 3 完成后由高阶 AI 细化成卡）

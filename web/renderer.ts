@@ -41,6 +41,7 @@ import {
   CursorRenderGeometry,
   type CursorClickGeometryFrame,
 } from '../src/core/CursorRenderGeometry.ts';
+import { runExportLoop } from './exporter.ts';
 
 export interface RendererPlanContext {
   fps: number;
@@ -1307,10 +1308,9 @@ async function bootstrapBrowser(): Promise<void> {
     gl.finish();
   };
 
-  if (mode === 'preview') {
-    await renderFrameAt(initialFrame);
+  if (mode === 'export') {
+    await runExportLoop(renderFrameAt, gl, ctx);
   } else {
-    // Export mode will be hooked up in T11.6
     await renderFrameAt(initialFrame);
   }
 }
