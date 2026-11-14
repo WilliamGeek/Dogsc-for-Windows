@@ -55,8 +55,9 @@
 2026-11-02 20:08 | T10.6 | DONE | scripts/calibrate.ts (阶段2交互式校准工具) 交付完成，阶段2代码与单测全部就绪，停止等待用户手动校准与阶段3确认 | 186 pass (3 skip E2E)
 2026-11-14 19:10 | T10.6 | VERIFIED | 用户手动执行 scripts/calibrate.ts 验收成功 (1080p 60fps h264_nvenc 录屏正常播放，鼠标点击精确捕获，时钟偏移 -0.001s)，阶段 2 正式完结收官 | 186 pass (3 skip E2E)
 2026-11-14 19:21 | T11.1 | DONE | DevServer (原生Node HTTP服务、安全路径遍历拦截、stripTypeScriptTypes 动态类型擦除无构建服务) | 187 pass (3 skip E2E)
+2026-11-14 19:26 | T11.2 | DONE | FramePlan (输出帧与源帧映射、CONTRACTS §4 sourceFrameFile=1约束、FrameSceneEvaluator幂等求值与零NaN校验) | 188 pass (3 skip E2E)
 
 阶段 2 验收通过
 
-下一个任务：T11.2
+下一个任务：T11.3
 
