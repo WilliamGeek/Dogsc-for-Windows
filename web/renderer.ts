@@ -21,9 +21,13 @@ import {
 } from '../src/core/ZoomAnimation.ts';
 import {
   projectedScreenQuadProjector,
+  projectedScreenQuadProject,
   type ProjectedScreenQuad,
 } from '../src/core/ScreenProjection.ts';
-import type { CompositionRect } from '../src/core/CompositionScene.ts';
+import {
+  makeCompositionPoint,
+  type CompositionRect,
+} from '../src/core/CompositionScene.ts';
 import type { FrameScene, FrameScreenScene } from '../src/core/FrameScene.ts';
 import { hexColorComponents } from '../src/core/HexColor.ts';
 
@@ -139,8 +143,73 @@ export function computeScreenShaderUniforms(screen: FrameScreenScene): ScreenSha
   };
 }
 
+/**
+ * Pure function: builds expanded perspective-projected vertices for the screen shadow quad.
+ * Returns null if shadow is disabled or zero-opacity.
+ */
+export function buildShadowQuadVertices(
+  screen: FrameScreenScene,
+  canvasWidth: number,
+  canvasHeight: number
+): Float32Array | null {
+  if (!screen.shadow || screen.shadow.opacity <= 0) {
+    return null;
+  }
+
+  const safeWidth = canvasWidth > 0 ? canvasWidth : 1920;
+  const safeHeight = canvasHeight > 0 ? canvasHeight : 1080;
+  const w = Math.max(screen.finalRect.width, 1);
+  const h = Math.max(screen.finalRect.height, 1);
+
+  const margin =
+    screen.shadow.radius * 2.5 +
+    Math.max(Math.abs(screen.shadow.offset.x), Math.abs(screen.shadow.offset.y)) +
+    8;
+
+  const u0 = -margin / w;
+  const u1 = 1 + margin / w;
+  const v0 = -margin / h;
+  const v1 = 1 + margin / h;
+
+  const p0 = makeCompositionPoint(screen.finalRect.x - margin, screen.finalRect.y - margin);
+  const p1 = makeCompositionPoint(screen.finalRect.x + w + margin, screen.finalRect.y - margin);
+  const p2 = makeCompositionPoint(screen.finalRect.x + w + margin, screen.finalRect.y + h + margin);
+  const p3 = makeCompositionPoint(screen.finalRect.x - margin, screen.finalRect.y + h + margin);
+
+  const q0 = projectedScreenQuadProject(screen.projectedQuad, p0, screen.finalRect) ?? p0;
+  const q1 = projectedScreenQuadProject(screen.projectedQuad, p1, screen.finalRect) ?? p1;
+  const q2 = projectedScreenQuadProject(screen.projectedQuad, p2, screen.finalRect) ?? p2;
+  const q3 = projectedScreenQuadProject(screen.projectedQuad, p3, screen.finalRect) ?? p3;
+
+  const mapper = projectedScreenQuadProjector(screen.projectedQuad, screen.finalRect);
+  const px = mapper && Number.isFinite(mapper.perspectiveX) ? mapper.perspectiveX : 0;
+  const py = mapper && Number.isFinite(mapper.perspectiveY) ? mapper.perspectiveY : 0;
+
+  const w0 = Math.max(1 + px * u0 + py * v0, 1e-4);
+  const w1 = Math.max(1 + px * u1 + py * v0, 1e-4);
+  const w2 = Math.max(1 + px * u1 + py * v1, 1e-4);
+  const w3 = Math.max(1 + px * u0 + py * v1, 1e-4);
+
+  const toNdcX = (x: number): number => (x / safeWidth) * 2 - 1;
+  const toNdcY = (y: number): number => 1 - (y / safeHeight) * 2;
+
+  const c0: [number, number, number, number, number] = [toNdcX(q0.x), toNdcY(q0.y), w0, u0, v0];
+  const c1: [number, number, number, number, number] = [toNdcX(q1.x), toNdcY(q1.y), w1, u1, v0];
+  const c2: [number, number, number, number, number] = [toNdcX(q2.x), toNdcY(q2.y), w2, u1, v1];
+  const c3: [number, number, number, number, number] = [toNdcX(q3.x), toNdcY(q3.y), w3, u0, v1];
+
+  return new Float32Array([
+    ...c0,
+    ...c1,
+    ...c2,
+    ...c0,
+    ...c2,
+    ...c3,
+  ]);
+}
+
 // ---------------------------------------------------------------------------
-// Shaders (T11.4 + T11.5a Screen Texture Quad with SDF Rounded Corners & Border)
+// Shaders (T11.4 + T11.5a + T11.5b Screen & Shadow Shaders)
 // ---------------------------------------------------------------------------
 
 const SCREEN_VERTEX_SHADER = `#version 300 es
@@ -191,6 +260,33 @@ void main() {
   }
 
   fragColor = vec4(outColor, outerAlpha * u_opacity);
+}
+`;
+
+const SHADOW_FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+uniform vec2 u_screenSize;
+uniform float u_cornerRadius;
+uniform vec2 u_shadowOffset;
+uniform float u_shadowRadius;
+uniform vec4 u_shadowColor;
+out vec4 fragColor;
+
+float sdRoundedBox(vec2 p, vec2 b, float r) {
+  float clampedR = min(r, min(b.x, b.y));
+  vec2 q = abs(p) - b + clampedR;
+  return min(max(q.x, q.y), 0.0) + length(max(q, 0.0)) - clampedR;
+}
+
+void main() {
+  vec2 localPos = v_uv * u_screenSize - u_shadowOffset;
+  float dist = sdRoundedBox(localPos - 0.5 * u_screenSize, 0.5 * u_screenSize, u_cornerRadius);
+  float alpha = u_shadowColor.a * (1.0 - smoothstep(-u_shadowRadius * 0.25, max(u_shadowRadius * 1.35, 1.0), dist));
+  if (alpha <= 0.001) {
+    discard;
+  }
+  fragColor = vec4(u_shadowColor.rgb, alpha);
 }
 `;
 
@@ -537,6 +633,13 @@ async function bootstrapBrowser(): Promise<void> {
   const uBorderWidth = gl.getUniformLocation(program, 'u_borderWidth');
   const uBorderColor = gl.getUniformLocation(program, 'u_borderColor');
 
+  const shadowProgram = createProgram(gl, SCREEN_VERTEX_SHADER, SHADOW_FRAGMENT_SHADER);
+  const uShadowScreenSize = gl.getUniformLocation(shadowProgram, 'u_screenSize');
+  const uShadowCornerRadius = gl.getUniformLocation(shadowProgram, 'u_cornerRadius');
+  const uShadowOffset = gl.getUniformLocation(shadowProgram, 'u_shadowOffset');
+  const uShadowRadius = gl.getUniformLocation(shadowProgram, 'u_shadowRadius');
+  const uShadowColor = gl.getUniformLocation(shadowProgram, 'u_shadowColor');
+
   const vao = gl.createVertexArray();
   const vbo = gl.createBuffer();
   gl.bindVertexArray(vao);
@@ -587,6 +690,31 @@ async function bootstrapBrowser(): Promise<void> {
     gl.clearColor(0.08, 0.1, 0.14, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
+    const screenUniforms = computeScreenShaderUniforms(scene.screen);
+
+    // Shadow pass (rendered behind screen)
+    const shadowVerts = buildShadowQuadVertices(scene.screen, ctx.width, ctx.height);
+    if (shadowVerts && scene.screen.shadow) {
+      const sRgb = hexColorComponents(scene.screen.shadow.color);
+      gl.useProgram(shadowProgram);
+      gl.bindVertexArray(vao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, shadowVerts);
+
+      gl.uniform2f(uShadowScreenSize, screenUniforms.screenSize[0], screenUniforms.screenSize[1]);
+      gl.uniform1f(uShadowCornerRadius, screenUniforms.cornerRadius);
+      gl.uniform2f(uShadowOffset, scene.screen.shadow.offset.x, scene.screen.shadow.offset.y);
+      gl.uniform1f(uShadowRadius, scene.screen.shadow.radius);
+      gl.uniform4f(
+        uShadowColor,
+        sRgb.red,
+        sRgb.green,
+        sRgb.blue,
+        scene.screen.shadow.opacity * scene.screen.opacity
+      );
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+    }
+
     const vertices = buildProjectedQuadVertices(
       scene.screen.projectedQuad,
       scene.screen.finalRect,
@@ -611,7 +739,6 @@ async function bootstrapBrowser(): Promise<void> {
     );
     gl.uniform1f(uOpacity, scene.screen.opacity);
 
-    const screenUniforms = computeScreenShaderUniforms(scene.screen);
     gl.uniform2f(uScreenSize, screenUniforms.screenSize[0], screenUniforms.screenSize[1]);
     gl.uniform1f(uCornerRadius, screenUniforms.cornerRadius);
     gl.uniform1f(uBorderWidth, screenUniforms.effectiveBorderWidth);

@@ -5,10 +5,11 @@ import assert from 'node:assert/strict';
 import {
   buildProjectedQuadVertices,
   computeScreenShaderUniforms,
+  buildShadowQuadVertices,
 } from '../../web/renderer.ts';
 import { ScreenProjection } from '../../src/core/ScreenProjection.ts';
-import { makeCompositionRect } from '../../src/core/CompositionScene.ts';
-import { makeFrameScreenScene } from '../../src/core/FrameScene.ts';
+import { makeCompositionRect, makeCompositionPoint } from '../../src/core/CompositionScene.ts';
+import { makeFrameScreenScene, makeFrameShadow } from '../../src/core/FrameScene.ts';
 import { makeNormalizedCrop } from '../../src/core/ProjectModel.ts';
 import { makeHexColor } from '../../src/core/HexColor.ts';
 
@@ -87,4 +88,57 @@ test('T11.5a: computeScreenShaderUniforms extracts corner radius and effective b
   assert.equal(u2.cornerRadius, 16);
   assert.equal(u2.effectiveBorderWidth, 1.5);
   assert.ok(Math.abs(u2.borderColor[3] - 0.125) < 1e-6);
+});
+
+test('T11.5b: buildShadowQuadVertices returns null when shadow is disabled and expanded vertices when enabled', () => {
+  const rect = makeCompositionRect(160, 90, 1600, 900);
+  const quad = ScreenProjection.project(rect, 10, -15, 0, 1);
+
+  const noShadowScreen = makeFrameScreenScene({
+    sourceCrop: makeNormalizedCrop(),
+    fittedRect: rect,
+    baseRect: rect,
+    finalRect: rect,
+    projectedQuad: quad,
+    cornerRadius: 24,
+    borderWidth: 0,
+    borderColor: makeHexColor(0xffffff),
+    borderOpacity: 0,
+    shadow: null,
+  });
+  assert.equal(buildShadowQuadVertices(noShadowScreen, 1920, 1080), null);
+
+  const withShadowScreen = makeFrameScreenScene({
+    sourceCrop: makeNormalizedCrop(),
+    fittedRect: rect,
+    baseRect: rect,
+    finalRect: rect,
+    projectedQuad: quad,
+    cornerRadius: 24,
+    borderWidth: 0,
+    borderColor: makeHexColor(0xffffff),
+    borderOpacity: 0.125,
+    shadow: makeFrameShadow({
+      color: makeHexColor(0x000000),
+      opacity: 0.35,
+      radius: 22,
+      offset: makeCompositionPoint(0, 12),
+    }),
+  });
+
+  const screenVerts = buildProjectedQuadVertices(quad, rect, 1920, 1080);
+  const shadowVerts = buildShadowQuadVertices(withShadowScreen, 1920, 1080);
+  assert.ok(shadowVerts !== null);
+  assert.equal(shadowVerts.length, 30);
+
+  for (let i = 0; i < shadowVerts.length; i++) {
+    assert.ok(Number.isFinite(shadowVerts[i]), `Shadow vertex float ${i} must be finite`);
+  }
+
+  // Shadow topLeft (corner 0) should be farther left (smaller ndcX) and higher (larger ndcY) than screen topLeft
+  assert.ok(shadowVerts[0] < screenVerts[0]);
+  assert.ok(shadowVerts[1] > screenVerts[1]);
+  // Shadow uv topLeft should be negative (< 0)
+  assert.ok(shadowVerts[3] < 0);
+  assert.ok(shadowVerts[4] < 0);
 });

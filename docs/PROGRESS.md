@@ -59,8 +59,9 @@
 2026-11-14 19:40 | T11.3 | DONE | FrameExtractor (ffmpeg视频预解码帧序列提取、buildExtractArgs纯函数与错误处理) | 191 pass (4 skip E2E)
 2026-11-14 20:00 | T11.4 | DONE | WebGL2最小渲染页 (web/render.html + web/renderer.ts 透视校正齐次顶点生成与无头Edge截图验证 out/t114.png 203KB) | 193 pass (4 skip E2E)
 2026-11-14 20:03 | T11.5a | DONE | 屏幕SDF圆角裁剪与抗锯齿边框渲染 (computeScreenShaderUniforms 纯函数与GLSL片段着色器) | 194 pass (4 skip E2E)
+2026-11-14 20:08 | T11.5b | DONE | 屏幕3D透视圆角阴影渲染 (buildShadowQuadVertices外扩透视投影与SDF柔和衰减着色器) | 195 pass (4 skip E2E)
 
 阶段 2 验收通过
 
-下一个任务：T11.5b
+下一个任务：T11.5c
 
