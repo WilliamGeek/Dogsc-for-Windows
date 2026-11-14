@@ -141,7 +141,6 @@ function sendJson(res: ServerResponse, status: number, obj: unknown): void {
     'Content-Type': 'application/json; charset=utf-8',
     'Content-Length': Buffer.byteLength(payload),
     'Cache-Control': 'no-store',
-    Connection: 'close',
   });
   res.end(payload);
 }
@@ -149,8 +148,8 @@ function sendJson(res: ServerResponse, status: number, obj: unknown): void {
 function sendText(res: ServerResponse, status: number, text: string): void {
   res.writeHead(status, {
     'Content-Type': 'text/plain; charset=utf-8',
+    'Content-Length': Buffer.byteLength(text),
     'Cache-Control': 'no-store',
-    Connection: 'close',
   });
   res.end(text);
 }
@@ -312,7 +311,6 @@ export async function startExportServer(o: ExportServerOptions): Promise<ExportS
           'Content-Type': 'image/jpeg',
           'Content-Length': buf.length,
           'Cache-Control': 'no-cache',
-          Connection: 'close',
         });
         res.end(buf);
         return;
@@ -336,8 +334,8 @@ export async function startExportServer(o: ExportServerOptions): Promise<ExportS
         const stripped = stripTypeScriptTypes(rawCode);
         res.writeHead(200, {
           'Content-Type': 'text/javascript; charset=utf-8',
+          'Content-Length': Buffer.byteLength(stripped),
           'Cache-Control': 'no-cache',
-          Connection: 'close',
         });
         res.end(stripped);
         return;
@@ -348,7 +346,6 @@ export async function startExportServer(o: ExportServerOptions): Promise<ExportS
         'Content-Type': contentType,
         'Content-Length': buffer.length,
         'Cache-Control': 'no-cache',
-        Connection: 'close',
       });
       res.end(buffer);
     } catch (err: any) {

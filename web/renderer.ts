@@ -998,6 +998,20 @@ async function loadImage(url: string): Promise<HTMLImageElement | null> {
   }
 }
 
+async function loadFrameBitmap(url: string): Promise<ImageBitmap | HTMLImageElement | null> {
+  if (typeof fetch === 'function' && typeof createImageBitmap === 'function') {
+    try {
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      return await createImageBitmap(blob);
+    } catch {
+      return null;
+    }
+  }
+  return loadImage(url);
+}
+
 async function bootstrapBrowser(): Promise<void> {
   const params = new URLSearchParams(window.location.search);
   const mode = params.get('mode') ?? 'preview';
@@ -1128,11 +1142,17 @@ async function bootstrapBrowser(): Promise<void> {
       if (ctx.framesBaseUrl) {
         const padded = String(sourceFrameFile).padStart(6, '0');
         const imgUrl = `${ctx.framesBaseUrl}/${padded}.jpg`;
-        const img = await loadImage(imgUrl);
-        if (img) {
-          gl.bindTexture(gl.TEXTURE_2D, screenTex);
-          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
-          uploaded = true;
+        const sourceImg = await loadFrameBitmap(imgUrl);
+        if (sourceImg) {
+          try {
+            gl.bindTexture(gl.TEXTURE_2D, screenTex);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, sourceImg);
+            uploaded = true;
+          } finally {
+            if ('close' in sourceImg && typeof sourceImg.close === 'function') {
+              sourceImg.close();
+            }
+          }
         }
       }
       if (!uploaded) {

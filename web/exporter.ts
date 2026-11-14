@@ -38,6 +38,11 @@ export async function runExportLoop(
       const errText = await res.text().catch(() => '');
       throw new Error(`POST /api/frame/${n} failed (${res.status}): ${errText}`);
     }
+    await res.arrayBuffer();
+
+    if (n > 0 && n % 15 === 0) {
+      await new Promise<void>((r) => setTimeout(r, 0));
+    }
   }
 
   const doneRes = await fetch('/api/done', { method: 'POST' });
@@ -45,4 +50,5 @@ export async function runExportLoop(
     const errText = await doneRes.text().catch(() => '');
     throw new Error(`POST /api/done failed (${doneRes.status}): ${errText}`);
   }
+  await doneRes.arrayBuffer();
 }
