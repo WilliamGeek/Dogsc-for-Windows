@@ -28,7 +28,7 @@ import {
   makeCompositionPoint,
   type CompositionRect,
 } from '../src/core/CompositionScene.ts';
-import type { FrameScene, FrameScreenScene } from '../src/core/FrameScene.ts';
+import type { FrameScene, FrameScreenScene, FrameBackgroundScene } from '../src/core/FrameScene.ts';
 import { hexColorComponents } from '../src/core/HexColor.ts';
 
 export interface RendererPlanContext {
@@ -208,9 +208,211 @@ export function buildShadowQuadVertices(
   ]);
 }
 
+export interface BackgroundShaderParams {
+  topLeftColor: [number, number, number];
+  bottomRightColor: [number, number, number];
+  accentColor: [number, number, number];
+  gridColor: [number, number, number];
+  patternMode: number; // 0=pure gradient, 1=orthogonal grid, 2=dot matrix, 3=isometric/flow
+  patternScale: number;
+  patternOpacity: number;
+  time: number;
+}
+
+/**
+ * Pure function: maps FrameBackgroundScene presets into shader uniforms for gradients and procedural patterns.
+ */
+export function resolveBackgroundShaderParams(
+  bg: FrameBackgroundScene,
+  time: number
+): BackgroundShaderParams {
+  const safeScale = Number.isFinite(bg.patternScale) ? Math.max(bg.patternScale, 0.1) : 1.0;
+  const safeOpacity = Number.isFinite(bg.patternOpacity)
+    ? Math.min(Math.max(bg.patternOpacity, 0), 1)
+    : 1.0;
+  const safeTime = Number.isFinite(time) ? time : 0;
+
+  if (bg.source.kind === 'pattern') {
+    switch (bg.source.preset) {
+      case '黑曜石网格':
+        return {
+          topLeftColor: [0.06, 0.08, 0.12],
+          bottomRightColor: [0.13, 0.16, 0.24],
+          accentColor: [0.22, 0.34, 0.56],
+          gridColor: [0.55, 0.65, 0.85],
+          patternMode: 1,
+          patternScale: safeScale,
+          patternOpacity: safeOpacity,
+          time: safeTime,
+        };
+      case '工程白网格':
+        return {
+          topLeftColor: [0.94, 0.95, 0.98],
+          bottomRightColor: [0.84, 0.88, 0.94],
+          accentColor: [0.72, 0.8, 0.95],
+          gridColor: [0.35, 0.42, 0.55],
+          patternMode: 1,
+          patternScale: safeScale,
+          patternOpacity: safeOpacity,
+          time: safeTime,
+        };
+      case '暗夜星阵':
+        return {
+          topLeftColor: [0.04, 0.05, 0.1],
+          bottomRightColor: [0.11, 0.09, 0.22],
+          accentColor: [0.35, 0.22, 0.6],
+          gridColor: [0.7, 0.78, 1.0],
+          patternMode: 2,
+          patternScale: safeScale,
+          patternOpacity: safeOpacity,
+          time: safeTime,
+        };
+      case '建筑极简点':
+        return {
+          topLeftColor: [0.92, 0.91, 0.89],
+          bottomRightColor: [0.84, 0.83, 0.8],
+          accentColor: [0.96, 0.94, 0.9],
+          gridColor: [0.25, 0.25, 0.28],
+          patternMode: 2,
+          patternScale: safeScale,
+          patternOpacity: safeOpacity,
+          time: safeTime,
+        };
+      case '立体等角网':
+        return {
+          topLeftColor: [0.08, 0.12, 0.16],
+          bottomRightColor: [0.14, 0.22, 0.28],
+          accentColor: [0.16, 0.5, 0.55],
+          gridColor: [0.45, 0.82, 0.88],
+          patternMode: 3,
+          patternScale: safeScale,
+          patternOpacity: safeOpacity,
+          time: safeTime,
+        };
+    }
+  }
+
+  if (bg.source.kind === 'dynamicFlow') {
+    switch (bg.source.preset) {
+      case '赛博微流网格':
+        return {
+          topLeftColor: [0.09, 0.07, 0.14],
+          bottomRightColor: [0.2, 0.14, 0.08],
+          accentColor: [0.78, 0.56, 0.2],
+          gridColor: [0.95, 0.78, 0.35],
+          patternMode: 3,
+          patternScale: safeScale,
+          patternOpacity: safeOpacity,
+          time: safeTime,
+        };
+      case '星辉漫步点阵':
+        return {
+          topLeftColor: [0.07, 0.06, 0.12],
+          bottomRightColor: [0.18, 0.12, 0.18],
+          accentColor: [0.65, 0.38, 0.45],
+          gridColor: [0.98, 0.86, 0.7],
+          patternMode: 2,
+          patternScale: safeScale,
+          patternOpacity: safeOpacity,
+          time: safeTime,
+        };
+      case '极光流体星云':
+        return {
+          topLeftColor: [0.05, 0.11, 0.18],
+          bottomRightColor: [0.12, 0.25, 0.38],
+          accentColor: [0.35, 0.68, 0.92],
+          gridColor: [0.75, 0.92, 1.0],
+          patternMode: 3,
+          patternScale: safeScale,
+          patternOpacity: safeOpacity,
+          time: safeTime,
+        };
+    }
+  }
+
+  // Fallback for wallpaper images/videos
+  return {
+    topLeftColor: [0.07, 0.09, 0.14],
+    bottomRightColor: [0.15, 0.19, 0.28],
+    accentColor: [0.28, 0.38, 0.62],
+    gridColor: [0.6, 0.7, 0.9],
+    patternMode: 1,
+    patternScale: safeScale,
+    patternOpacity: safeOpacity * 0.6,
+    time: safeTime,
+  };
+}
+
 // ---------------------------------------------------------------------------
-// Shaders (T11.4 + T11.5a + T11.5b Screen & Shadow Shaders)
+// Shaders (T11.4 + T11.5a/b/c Background, Shadow & Screen Shaders)
 // ---------------------------------------------------------------------------
+
+const BG_VERTEX_SHADER = `#version 300 es
+layout(location = 0) in vec2 a_pos;
+out vec2 v_uv;
+void main() {
+  gl_Position = vec4(a_pos, 0.0, 1.0);
+  v_uv = a_pos * 0.5 + 0.5;
+}
+`;
+
+const BG_FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+in vec2 v_uv;
+uniform vec2 u_resolution;
+uniform vec3 u_topLeftColor;
+uniform vec3 u_bottomRightColor;
+uniform vec3 u_accentColor;
+uniform vec3 u_gridColor;
+uniform int u_patternMode;
+uniform float u_patternScale;
+uniform float u_patternOpacity;
+uniform float u_time;
+out vec4 fragColor;
+
+void main() {
+  vec2 uv = vec2(v_uv.x, 1.0 - v_uv.y);
+  float diag = clamp(uv.x * 0.55 + uv.y * 0.45, 0.0, 1.0);
+  vec3 base = mix(u_topLeftColor, u_bottomRightColor, diag);
+
+  // Subtle accent radial glow
+  vec2 glowCenter = vec2(0.72 + 0.05 * sin(u_time * 0.5), 0.28 + 0.05 * cos(u_time * 0.4));
+  float dGlow = length(uv - glowCenter);
+  float glow = exp(-dGlow * 2.4) * 0.28;
+  vec3 col = mix(base, u_accentColor, glow);
+
+  float spacing = 48.0 * max(u_patternScale, 0.1);
+  vec2 px = uv * u_resolution;
+  float patternMask = 0.0;
+
+  if (u_patternMode == 1) {
+    // Orthogonal grid
+    vec2 cell = abs(fract(px / spacing - 0.5) - 0.5) * spacing;
+    float dLine = min(cell.x, cell.y);
+    patternMask = (1.0 - smoothstep(0.4, 1.4, dLine)) * 0.16;
+  } else if (u_patternMode == 2) {
+    // Dot matrix
+    vec2 drift = vec2(u_time * 6.0, u_time * 4.0);
+    vec2 cell = (fract((px + drift) / spacing) - 0.5) * spacing;
+    float dDot = length(cell);
+    patternMask = (1.0 - smoothstep(1.2, 2.4, dDot)) * 0.24;
+  } else if (u_patternMode == 3) {
+    // Isometric / diagonal flow grid
+    float angle = 0.52359877; // 30 deg
+    mat2 rotA = mat2(cos(angle), -sin(angle), sin(angle), cos(angle));
+    mat2 rotB = mat2(cos(-angle), -sin(-angle), sin(-angle), cos(-angle));
+    vec2 pA = rotA * (px + vec2(u_time * 10.0, 0.0));
+    vec2 pB = rotB * (px - vec2(0.0, u_time * 8.0));
+    vec2 cA = abs(fract(pA / spacing - 0.5) - 0.5) * spacing;
+    vec2 cB = abs(fract(pB / spacing - 0.5) - 0.5) * spacing;
+    float dIso = min(cA.x, cB.x);
+    patternMask = (1.0 - smoothstep(0.4, 1.5, dIso)) * 0.18;
+  }
+
+  col = mix(col, u_gridColor, clamp(patternMask * u_patternOpacity, 0.0, 0.45));
+  fragColor = vec4(col, 1.0);
+}
+`;
 
 const SCREEN_VERTEX_SHADER = `#version 300 es
 layout(location = 0) in vec2 a_ndc;
@@ -624,6 +826,29 @@ async function bootstrapBrowser(): Promise<void> {
   gl.enable(gl.BLEND);
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
+  const bgProgram = createProgram(gl, BG_VERTEX_SHADER, BG_FRAGMENT_SHADER);
+  const uBgResolution = gl.getUniformLocation(bgProgram, 'u_resolution');
+  const uBgTopLeft = gl.getUniformLocation(bgProgram, 'u_topLeftColor');
+  const uBgBottomRight = gl.getUniformLocation(bgProgram, 'u_bottomRightColor');
+  const uBgAccent = gl.getUniformLocation(bgProgram, 'u_accentColor');
+  const uBgGrid = gl.getUniformLocation(bgProgram, 'u_gridColor');
+  const uBgPatternMode = gl.getUniformLocation(bgProgram, 'u_patternMode');
+  const uBgPatternScale = gl.getUniformLocation(bgProgram, 'u_patternScale');
+  const uBgPatternOpacity = gl.getUniformLocation(bgProgram, 'u_patternOpacity');
+  const uBgTime = gl.getUniformLocation(bgProgram, 'u_time');
+
+  const bgVao = gl.createVertexArray();
+  const bgVbo = gl.createBuffer();
+  gl.bindVertexArray(bgVao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, bgVbo);
+  gl.bufferData(
+    gl.ARRAY_BUFFER,
+    new Float32Array([-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1]),
+    gl.STATIC_DRAW
+  );
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 2 * 4, 0);
+
   const program = createProgram(gl, SCREEN_VERTEX_SHADER, SCREEN_FRAGMENT_SHADER);
   const uScreenTex = gl.getUniformLocation(program, 'u_screenTex');
   const uSourceCrop = gl.getUniformLocation(program, 'u_sourceCrop');
@@ -687,8 +912,23 @@ async function bootstrapBrowser(): Promise<void> {
     }
 
     gl.viewport(0, 0, ctx.width, ctx.height);
-    gl.clearColor(0.08, 0.1, 0.14, 1.0);
+    gl.clearColor(0.0, 0.0, 0.0, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT);
+
+    // Background pass
+    const bgParams = resolveBackgroundShaderParams(scene.background, scene.time);
+    gl.useProgram(bgProgram);
+    gl.bindVertexArray(bgVao);
+    gl.uniform2f(uBgResolution, ctx.width, ctx.height);
+    gl.uniform3f(uBgTopLeft, ...bgParams.topLeftColor);
+    gl.uniform3f(uBgBottomRight, ...bgParams.bottomRightColor);
+    gl.uniform3f(uBgAccent, ...bgParams.accentColor);
+    gl.uniform3f(uBgGrid, ...bgParams.gridColor);
+    gl.uniform1i(uBgPatternMode, bgParams.patternMode);
+    gl.uniform1f(uBgPatternScale, bgParams.patternScale);
+    gl.uniform1f(uBgPatternOpacity, bgParams.patternOpacity);
+    gl.uniform1f(uBgTime, bgParams.time);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
 
     const screenUniforms = computeScreenShaderUniforms(scene.screen);
 

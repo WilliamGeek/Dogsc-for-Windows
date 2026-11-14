@@ -6,11 +6,20 @@ import {
   buildProjectedQuadVertices,
   computeScreenShaderUniforms,
   buildShadowQuadVertices,
+  resolveBackgroundShaderParams,
 } from '../../web/renderer.ts';
 import { ScreenProjection } from '../../src/core/ScreenProjection.ts';
 import { makeCompositionRect, makeCompositionPoint } from '../../src/core/CompositionScene.ts';
-import { makeFrameScreenScene, makeFrameShadow } from '../../src/core/FrameScene.ts';
-import { makeNormalizedCrop } from '../../src/core/ProjectModel.ts';
+import {
+  makeFrameScreenScene,
+  makeFrameShadow,
+  makeFrameBackgroundScene,
+} from '../../src/core/FrameScene.ts';
+import {
+  makeNormalizedCrop,
+  BackgroundPatternPresetAllCases,
+  DynamicBackgroundPresetAllCases,
+} from '../../src/core/ProjectModel.ts';
 import { makeHexColor } from '../../src/core/HexColor.ts';
 
 test('T11.4: buildProjectedQuadVertices produces valid homogeneous vertices for orthographic quad', () => {
@@ -141,4 +150,46 @@ test('T11.5b: buildShadowQuadVertices returns null when shadow is disabled and e
   // Shadow uv topLeft should be negative (< 0)
   assert.ok(shadowVerts[3] < 0);
   assert.ok(shadowVerts[4] < 0);
+});
+
+test('T11.5c: resolveBackgroundShaderParams produces valid colors and pattern modes for all presets', () => {
+  const verifyColor = (rgb: [number, number, number], label: string) => {
+    for (const c of rgb) {
+      assert.ok(Number.isFinite(c) && c >= 0 && c <= 1, `Invalid color channel in ${label}: ${c}`);
+    }
+  };
+
+  for (const preset of BackgroundPatternPresetAllCases) {
+    const bg = makeFrameBackgroundScene({
+      source: { kind: 'pattern', preset },
+      blurRadius: 0,
+      patternScale: 1.5,
+      patternOpacity: 0.8,
+    });
+    const params = resolveBackgroundShaderParams(bg, 1.25);
+    verifyColor(params.topLeftColor, `${preset}.topLeft`);
+    verifyColor(params.bottomRightColor, `${preset}.bottomRight`);
+    verifyColor(params.accentColor, `${preset}.accent`);
+    verifyColor(params.gridColor, `${preset}.grid`);
+    assert.ok([0, 1, 2, 3].includes(params.patternMode));
+    assert.equal(params.patternScale, 1.5);
+    assert.equal(params.patternOpacity, 0.8);
+    assert.equal(params.time, 1.25);
+  }
+
+  for (const preset of DynamicBackgroundPresetAllCases) {
+    const bg = makeFrameBackgroundScene({
+      source: { kind: 'dynamicFlow', preset },
+      blurRadius: 10,
+      patternScale: 1.0,
+      patternOpacity: 1.0,
+    });
+    const params = resolveBackgroundShaderParams(bg, 2.5);
+    verifyColor(params.topLeftColor, `${preset}.topLeft`);
+    verifyColor(params.bottomRightColor, `${preset}.bottomRight`);
+    verifyColor(params.accentColor, `${preset}.accent`);
+    verifyColor(params.gridColor, `${preset}.grid`);
+    assert.ok([0, 1, 2, 3].includes(params.patternMode));
+    assert.equal(params.time, 2.5);
+  }
 });
