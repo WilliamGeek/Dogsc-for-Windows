@@ -26,10 +26,21 @@ import {
 } from '../src/core/ScreenProjection.ts';
 import {
   makeCompositionPoint,
+  type CompositionPoint,
   type CompositionRect,
 } from '../src/core/CompositionScene.ts';
-import type { FrameScene, FrameScreenScene, FrameBackgroundScene } from '../src/core/FrameScene.ts';
+import {
+  frameCursorSceneEffectiveClickColor,
+  type FrameScene,
+  type FrameScreenScene,
+  type FrameBackgroundScene,
+  type FrameCursorScene,
+} from '../src/core/FrameScene.ts';
 import { hexColorComponents } from '../src/core/HexColor.ts';
+import {
+  CursorRenderGeometry,
+  type CursorClickGeometryFrame,
+} from '../src/core/CursorRenderGeometry.ts';
 
 export interface RendererPlanContext {
   fps: number;
@@ -343,8 +354,112 @@ export function resolveBackgroundShaderParams(
   };
 }
 
+export interface CursorClickEffectPass {
+  tipPx: CompositionPoint;
+  clickGeo: CursorClickGeometryFrame | null;
+  clickColor: [number, number, number];
+}
+
+/**
+ * Pure function: maps cursor tip through 3D screen homography and computes click ripple geometry.
+ */
+export function computeCursorClickEffectPass(
+  cursor: FrameCursorScene,
+  screen: FrameScreenScene
+): CursorClickEffectPass {
+  const projected = projectedScreenQuadProject(
+    screen.projectedQuad,
+    cursor.layout.pointer,
+    screen.finalRect
+  );
+  const tipPx = projected ?? cursor.layout.pointer;
+
+  let clickGeo: CursorClickGeometryFrame | null = null;
+  if (cursor.clickPhase !== null) {
+    clickGeo = CursorRenderGeometry.clickGeometry(
+      cursor.clickStyle,
+      cursor.clickPhase.progress,
+      cursor.layout.clickEffectHeight,
+      cursor.clickOpacity,
+      cursor.clickScale
+    );
+  }
+
+  const rgb = hexColorComponents(frameCursorSceneEffectiveClickColor(cursor));
+  return {
+    tipPx,
+    clickGeo,
+    clickColor: [rgb.red, rgb.green, rgb.blue],
+  };
+}
+
+const ARROW_LOCAL_VERTS: ReadonlyArray<[number, number]> = [
+  [0.0, 0.0],   // A: tip
+  [0.0, 1.0],   // B: left vertical bottom
+  [0.28, 0.72], // C: left inner fold
+  [0.46, 1.08], // D: tail bottom-left
+  [0.6, 1.01],  // E: tail bottom-right
+  [0.42, 0.66], // F: right inner fold
+  [0.72, 0.66], // G: right wing tip
+];
+
+const ARROW_TRI_INDICES: ReadonlyArray<[number, number, number]> = [
+  [0, 1, 2], // A, B, C
+  [0, 2, 5], // A, C, F
+  [0, 5, 6], // A, F, G
+  [2, 3, 4], // C, D, E
+  [2, 4, 5], // C, E, F
+];
+
+/**
+ * Pure function: generates 5 triangles (15 2D vertices, 30 floats in canvas pixels)
+ * forming a sharp arrow cursor polygon with its tip anchored at `tip`.
+ */
+export function buildCursorArrowTriangles(
+  tip: CompositionPoint,
+  height: number,
+  rotationRadians: number,
+  isClicking: boolean,
+  scaleMultiplier: number = 1.0,
+  offset?: CompositionPoint
+): Float32Array {
+  const safeHeight = Number.isFinite(height) && height > 0 ? height : 32;
+  const clickFactor = isClicking ? 0.92 : 1.0;
+  const rot = Number.isFinite(rotationRadians) ? rotationRadians : 0;
+  const cosR = Math.cos(rot);
+  const sinR = Math.sin(rot);
+  const ox = offset?.x ?? 0;
+  const oy = offset?.y ?? 0;
+  const scale = Number.isFinite(scaleMultiplier) && scaleMultiplier > 0 ? scaleMultiplier : 1.0;
+
+  // Pivot around visual centroid when outlining so tip also receives outline expansion
+  const cx = 0.26;
+  const cy = 0.54;
+
+  const out = new Float32Array(30);
+  let ptr = 0;
+
+  for (const [i0, i1, i2] of ARROW_TRI_INDICES) {
+    for (const idx of [i0, i1, i2]) {
+      const [lx, ly] = ARROW_LOCAL_VERTS[idx];
+      const sx = scale === 1.0 ? lx : cx + (lx - cx) * scale;
+      const sy = scale === 1.0 ? ly : cy + (ly - cy) * scale;
+      const pxLocal = sx * safeHeight * clickFactor;
+      const pyLocal = sy * safeHeight * clickFactor;
+
+      const rx = pxLocal * cosR - pyLocal * sinR;
+      const ry = pxLocal * sinR + pyLocal * cosR;
+
+      out[ptr++] = tip.x + ox + rx;
+      out[ptr++] = tip.y + oy + ry;
+    }
+  }
+
+  return out;
+}
+
 // ---------------------------------------------------------------------------
-// Shaders (T11.4 + T11.5a/b/c Background, Shadow & Screen Shaders)
+// Shaders (T11.4 + T11.5a/b/c/d Background, Shadow, Screen, Click & Cursor)
 // ---------------------------------------------------------------------------
 
 const BG_VERTEX_SHADER = `#version 300 es
@@ -489,6 +604,89 @@ void main() {
     discard;
   }
   fragColor = vec4(u_shadowColor.rgb, alpha);
+}
+`;
+
+const CLICK_VERTEX_SHADER = `#version 300 es
+layout(location = 0) in vec2 a_pos;
+layout(location = 1) in vec2 a_localPos;
+uniform vec2 u_resolution;
+out vec2 v_localPos;
+void main() {
+  vec2 ndc = vec2(
+    (a_pos.x / u_resolution.x) * 2.0 - 1.0,
+    1.0 - (a_pos.y / u_resolution.y) * 2.0
+  );
+  gl_Position = vec4(ndc, 0.0, 1.0);
+  v_localPos = a_localPos;
+}
+`;
+
+const CLICK_FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+in vec2 v_localPos;
+uniform vec3 u_clickColor;
+uniform float u_primaryRadius;
+uniform float u_primaryLineWidth;
+uniform float u_primaryOpacity;
+uniform int u_primaryIsFilled;
+uniform float u_secondaryRadius;
+uniform float u_secondaryOpacity;
+uniform int u_secondaryIsFilled;
+out vec4 fragColor;
+
+void main() {
+  float dist = length(v_localPos);
+  float alpha = 0.0;
+
+  if (u_primaryRadius > 0.0 && u_primaryOpacity > 0.0) {
+    if (u_primaryIsFilled == 1) {
+      float fillMask = 1.0 - smoothstep(u_primaryRadius - 1.5, u_primaryRadius + 2.0, dist);
+      alpha = max(alpha, fillMask * u_primaryOpacity);
+    } else {
+      float halfW = max(u_primaryLineWidth * 0.5, 0.75);
+      float ringDist = abs(dist - u_primaryRadius);
+      float ringMask = 1.0 - smoothstep(halfW - 0.8, halfW + 0.8, ringDist);
+      alpha = max(alpha, ringMask * u_primaryOpacity);
+    }
+  }
+
+  if (u_secondaryRadius > 0.0 && u_secondaryOpacity > 0.0) {
+    if (u_secondaryIsFilled == 1) {
+      float innerMask = 1.0 - smoothstep(u_secondaryRadius - 1.0, u_secondaryRadius + 1.5, dist);
+      alpha = max(alpha, innerMask * u_secondaryOpacity);
+    } else {
+      float ringDist2 = abs(dist - u_secondaryRadius);
+      float ringMask2 = 1.0 - smoothstep(0.6, 1.8, ringDist2);
+      alpha = max(alpha, ringMask2 * u_secondaryOpacity);
+    }
+  }
+
+  if (alpha <= 0.001) {
+    discard;
+  }
+  fragColor = vec4(u_clickColor, alpha);
+}
+`;
+
+const CURSOR_VERTEX_SHADER = `#version 300 es
+layout(location = 0) in vec2 a_pos;
+uniform vec2 u_resolution;
+void main() {
+  vec2 ndc = vec2(
+    (a_pos.x / u_resolution.x) * 2.0 - 1.0,
+    1.0 - (a_pos.y / u_resolution.y) * 2.0
+  );
+  gl_Position = vec4(ndc, 0.0, 1.0);
+}
+`;
+
+const CURSOR_FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+uniform vec4 u_color;
+out vec4 fragColor;
+void main() {
+  fragColor = u_color;
 }
 `;
 
@@ -865,6 +1063,39 @@ async function bootstrapBrowser(): Promise<void> {
   const uShadowRadius = gl.getUniformLocation(shadowProgram, 'u_shadowRadius');
   const uShadowColor = gl.getUniformLocation(shadowProgram, 'u_shadowColor');
 
+  const clickProgram = createProgram(gl, CLICK_VERTEX_SHADER, CLICK_FRAGMENT_SHADER);
+  const uClickResolution = gl.getUniformLocation(clickProgram, 'u_resolution');
+  const uClickColor = gl.getUniformLocation(clickProgram, 'u_clickColor');
+  const uClickPrimaryRadius = gl.getUniformLocation(clickProgram, 'u_primaryRadius');
+  const uClickPrimaryLineWidth = gl.getUniformLocation(clickProgram, 'u_primaryLineWidth');
+  const uClickPrimaryOpacity = gl.getUniformLocation(clickProgram, 'u_primaryOpacity');
+  const uClickPrimaryIsFilled = gl.getUniformLocation(clickProgram, 'u_primaryIsFilled');
+  const uClickSecondaryRadius = gl.getUniformLocation(clickProgram, 'u_secondaryRadius');
+  const uClickSecondaryOpacity = gl.getUniformLocation(clickProgram, 'u_secondaryOpacity');
+  const uClickSecondaryIsFilled = gl.getUniformLocation(clickProgram, 'u_secondaryIsFilled');
+
+  const clickVao = gl.createVertexArray();
+  const clickVbo = gl.createBuffer();
+  gl.bindVertexArray(clickVao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, clickVbo);
+  gl.bufferData(gl.ARRAY_BUFFER, 24 * 4, gl.DYNAMIC_DRAW);
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 4 * 4, 0);
+  gl.enableVertexAttribArray(1);
+  gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 4 * 4, 2 * 4);
+
+  const cursorProgram = createProgram(gl, CURSOR_VERTEX_SHADER, CURSOR_FRAGMENT_SHADER);
+  const uCursorResolution = gl.getUniformLocation(cursorProgram, 'u_resolution');
+  const uCursorColor = gl.getUniformLocation(cursorProgram, 'u_color');
+
+  const cursorVao = gl.createVertexArray();
+  const cursorVbo = gl.createBuffer();
+  gl.bindVertexArray(cursorVao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, cursorVbo);
+  gl.bufferData(gl.ARRAY_BUFFER, 30 * 4, gl.DYNAMIC_DRAW);
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 2 * 4, 0);
+
   const vao = gl.createVertexArray();
   const vbo = gl.createBuffer();
   gl.bindVertexArray(vao);
@@ -991,6 +1222,88 @@ async function bootstrapBrowser(): Promise<void> {
     );
 
     gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+    // Cursor & click ripple pass (T11.5d)
+    if (scene.cursor && scene.cursor.assetID !== 'system.hidden') {
+      const clickPass = computeCursorClickEffectPass(scene.cursor, scene.screen);
+
+      if (clickPass.clickGeo) {
+        const geo = clickPass.clickGeo;
+        const rBound = Math.max(geo.maxFootprintDiameter * 0.65, 32);
+        const cx = clickPass.tipPx.x;
+        const cy = clickPass.tipPx.y;
+        const clickVerts = new Float32Array([
+          cx - rBound, cy - rBound, -rBound, -rBound,
+          cx + rBound, cy - rBound,  rBound, -rBound,
+          cx + rBound, cy + rBound,  rBound,  rBound,
+          cx - rBound, cy - rBound, -rBound, -rBound,
+          cx + rBound, cy + rBound,  rBound,  rBound,
+          cx - rBound, cy + rBound, -rBound,  rBound,
+        ]);
+
+        gl.useProgram(clickProgram);
+        gl.bindVertexArray(clickVao);
+        gl.bindBuffer(gl.ARRAY_BUFFER, clickVbo);
+        gl.bufferSubData(gl.ARRAY_BUFFER, 0, clickVerts);
+
+        gl.uniform2f(uClickResolution, ctx.width, ctx.height);
+        gl.uniform3f(uClickColor, ...clickPass.clickColor);
+        gl.uniform1f(uClickPrimaryRadius, geo.primaryDiameter * 0.5);
+        gl.uniform1f(uClickPrimaryLineWidth, geo.primaryLineWidth);
+        gl.uniform1f(uClickPrimaryOpacity, geo.primaryOpacity);
+        gl.uniform1i(uClickPrimaryIsFilled, geo.primaryIsFilled ? 1 : 0);
+        gl.uniform1f(uClickSecondaryRadius, geo.secondaryDiameter * 0.5);
+        gl.uniform1f(uClickSecondaryOpacity, geo.secondaryOpacity);
+        gl.uniform1i(uClickSecondaryIsFilled, geo.secondaryIsFilled ? 1 : 0);
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+      }
+
+      const cursorHeight = scene.cursor.layout.size.height;
+      gl.useProgram(cursorProgram);
+      gl.bindVertexArray(cursorVao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, cursorVbo);
+      gl.uniform2f(uCursorResolution, ctx.width, ctx.height);
+
+      // 1. Cursor drop shadow
+      if (scene.cursor.shadow && scene.cursor.shadow.opacity > 0) {
+        const sVerts = buildCursorArrowTriangles(
+          clickPass.tipPx,
+          cursorHeight,
+          scene.cursor.rotationRadians,
+          scene.cursor.isClicking,
+          1.08,
+          scene.cursor.shadow.offset
+        );
+        gl.bufferSubData(gl.ARRAY_BUFFER, 0, sVerts);
+        gl.uniform4f(uCursorColor, 0, 0, 0, scene.cursor.shadow.opacity * 0.7);
+        gl.drawArrays(gl.TRIANGLES, 0, 15);
+      }
+
+      // 2. Dark outline (scaleMultiplier = 1.12)
+      const outlineVerts = buildCursorArrowTriangles(
+        clickPass.tipPx,
+        cursorHeight,
+        scene.cursor.rotationRadians,
+        scene.cursor.isClicking,
+        1.12
+      );
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, outlineVerts);
+      gl.uniform4f(uCursorColor, 0.06, 0.08, 0.12, 0.95);
+      gl.drawArrays(gl.TRIANGLES, 0, 15);
+
+      // 3. White fill (scaleMultiplier = 1.0)
+      const fillVerts = buildCursorArrowTriangles(
+        clickPass.tipPx,
+        cursorHeight,
+        scene.cursor.rotationRadians,
+        scene.cursor.isClicking,
+        1.0
+      );
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, fillVerts);
+      gl.uniform4f(uCursorColor, 0.99, 0.99, 1.0, 1.0);
+      gl.drawArrays(gl.TRIANGLES, 0, 15);
+    }
+
     gl.finish();
   };
 

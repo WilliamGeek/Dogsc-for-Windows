@@ -61,8 +61,9 @@
 2026-11-14 20:03 | T11.5a | DONE | 屏幕SDF圆角裁剪与抗锯齿边框渲染 (computeScreenShaderUniforms 纯函数与GLSL片段着色器) | 194 pass (4 skip E2E)
 2026-11-14 20:08 | T11.5b | DONE | 屏幕3D透视圆角阴影渲染 (buildShadowQuadVertices外扩透视投影与SDF柔和衰减着色器) | 195 pass (4 skip E2E)
 2026-11-14 20:12 | T11.5c | DONE | 画布背景渐变与参数化网格图案渲染 (resolveBackgroundShaderParams全预设映射与BG片元着色器) | 196 pass (4 skip E2E)
+2026-11-14 20:21 | T11.5d | DONE | 矢量光标多边形与点击涟漪特效渲染 (shadow+outline+fill箭头三角形与SDF点击波纹，实机截图 out/t115d.png 276KB 验收完美) | 198 pass (4 skip E2E)
 
 阶段 2 验收通过
 
-下一个任务：T11.5d
+下一个任务：T11.6
 

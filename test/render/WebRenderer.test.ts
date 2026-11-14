@@ -7,6 +7,8 @@ import {
   computeScreenShaderUniforms,
   buildShadowQuadVertices,
   resolveBackgroundShaderParams,
+  buildCursorArrowTriangles,
+  computeCursorClickEffectPass,
 } from '../../web/renderer.ts';
 import { ScreenProjection } from '../../src/core/ScreenProjection.ts';
 import { makeCompositionRect, makeCompositionPoint } from '../../src/core/CompositionScene.ts';
@@ -14,6 +16,7 @@ import {
   makeFrameScreenScene,
   makeFrameShadow,
   makeFrameBackgroundScene,
+  makeFrameCursorScene,
 } from '../../src/core/FrameScene.ts';
 import {
   makeNormalizedCrop,
@@ -21,6 +24,9 @@ import {
   DynamicBackgroundPresetAllCases,
 } from '../../src/core/ProjectModel.ts';
 import { makeHexColor } from '../../src/core/HexColor.ts';
+import { makeCursorAssetMetrics, CursorRenderGeometry } from '../../src/core/CursorRenderGeometry.ts';
+import { makeNormalizedPoint } from '../../src/core/ZoomAnimation.ts';
+import { makePointerClickPhase } from '../../src/core/PointerTrack.ts';
 
 test('T11.4: buildProjectedQuadVertices produces valid homogeneous vertices for orthographic quad', () => {
   const rect = makeCompositionRect(100, 50, 1720, 980);
@@ -192,4 +198,69 @@ test('T11.5c: resolveBackgroundShaderParams produces valid colors and pattern mo
     assert.ok([0, 1, 2, 3].includes(params.patternMode));
     assert.equal(params.time, 2.5);
   }
+});
+
+test('T11.5d: buildCursorArrowTriangles produces 5 finite triangles and shrinks cleanly on click', () => {
+  const tip = makeCompositionPoint(960, 540);
+  const idle = buildCursorArrowTriangles(tip, 40, 0, false);
+  const clicking = buildCursorArrowTriangles(tip, 40, 0, true);
+
+  assert.equal(idle.length, 30);
+  assert.equal(clicking.length, 30);
+  for (let i = 0; i < 30; i++) {
+    assert.ok(Number.isFinite(idle[i]), `Idle vertex float ${i} must be finite`);
+    assert.ok(Number.isFinite(clicking[i]), `Clicking vertex float ${i} must be finite`);
+  }
+
+  // First vertex of first triangle is exact tip at (960, 540) when scaleMultiplier=1.0
+  assert.equal(idle[0], 960);
+  assert.equal(idle[1], 540);
+
+  // Second vertex of first triangle is (0, 1.0) -> (960, 540 + 40) when idle vs (960, 540 + 40*0.92) when clicking
+  assert.ok(Math.abs(idle[3] - 580) < 1e-3);
+  assert.ok(Math.abs(clicking[3] - (540 + 40 * 0.92)) < 1e-3);
+});
+
+test('T11.5d: computeCursorClickEffectPass projects cursor tip and produces valid click ripple geometry', () => {
+  const rect = makeCompositionRect(160, 90, 1600, 900);
+  const quad = ScreenProjection.project(rect, 0, 0, 0, 1);
+  const screen = makeFrameScreenScene({
+    sourceCrop: makeNormalizedCrop(),
+    fittedRect: rect,
+    baseRect: rect,
+    finalRect: rect,
+    projectedQuad: quad,
+    cornerRadius: 24,
+    borderWidth: 0,
+    borderColor: makeHexColor(0xffffff),
+    borderOpacity: 0.125,
+    shadow: null,
+  });
+
+  const pointer = makeCompositionPoint(960, 540);
+  const metrics = makeCursorAssetMetrics({
+    hotspot: { x: 0, y: 0 },
+    intrinsicSize: { width: 32, height: 32 },
+    clickColor: makeHexColor(0x38bdf8),
+  });
+  const layout = CursorRenderGeometry.layout(pointer, 1080, 1.25, metrics)!;
+  const clickPhase = makePointerClickPhase(0.25, 0.09, 0.36, 'leftClick');
+
+  const cursor = makeFrameCursorScene({
+    assetID: 'system.arrow',
+    metrics,
+    normalizedScreenPosition: makeNormalizedPoint(0.5, 0.5),
+    layout,
+    isClicking: true,
+    clickPhase,
+    clickStyle: 'ripple',
+    shadow: null,
+  });
+
+  const pass = computeCursorClickEffectPass(cursor, screen);
+  assert.ok(Math.abs(pass.tipPx.x - 960) < 1e-4);
+  assert.ok(Math.abs(pass.tipPx.y - 540) < 1e-4);
+  assert.ok(pass.clickGeo !== null);
+  assert.ok(pass.clickGeo.primaryDiameter > 0);
+  assert.ok(pass.clickGeo.primaryOpacity > 0);
 });
