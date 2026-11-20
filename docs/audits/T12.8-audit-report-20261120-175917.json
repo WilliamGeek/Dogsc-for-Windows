@@ -1,0 +1,87 @@
+{
+  "runId": "20261120-175917",
+  "date": "2026-11-20",
+  "commit": "6384e6ff400194166d28da6dfcaabdea121476a4",
+  "tag": "T12.8-路径安全与WaveA可信闭环收官",
+  "verificationChannel": "SHELL-VERIFIED（PowerShell + DPI-aware 截屏 + 合成鼠标）；Computer Use 主桌面授权仍不可用",
+  "environment": {
+    "os": "Windows 11 build 26200",
+    "gpu": "RTX 4060 Laptop",
+    "display": "\\\\.\\DISPLAY5 2176x1812 @ 150% DPI",
+    "node": "v22.23.2",
+    "ffmpeg": "N-123074-20260228",
+    "edge": "137.0.3296.52"
+  },
+  "gates": {
+    "G1": {
+      "status": "PASS",
+      "durations": "meta=9.466016s screen=9.466016s export=9.466016s spread=0.000s",
+      "frames": "screen=568 export=568",
+      "capture": "captureFrameRate=60 meta.fps=60 recordsSystemAudio=false displayID=0",
+      "invalidDisplay": "exit=1, before=18 dirs, after=18 dirs, error contains 显示器索引越界"
+    },
+    "G2": {
+      "status": "PASS_AUTOMATED_PENDING_USER_VISUAL",
+      "frameCount": "568/568",
+      "sync": "source green runs start 143/286; export green runs start 143/286; onset maxDelta=0 frames",
+      "singleCursor": "点击闪帧帧仅 1 只矢量光标；ddagrab draw_mouse=0，源画面无系统光标",
+      "tailDuplicate": "export 帧数与 screen 完全一致，无超界复帧",
+      "userVisualReview": "PENDING（计划 D4 要求用户肉眼复核后才勾选 T11.7）"
+    }
+  },
+  "media": {
+    "screen": {
+      "path": "F:\\dogsc-win\\recordings\\20261120-175917\\screen.mp4",
+      "width": 2176,
+      "height": 1812,
+      "fps": 60,
+      "frameCount": 568,
+      "durationSeconds": 9.466016,
+      "sizeBytes": 521670,
+      "sha256": "8C26F9165397158C08320226ECC8AD4E222DC747D8E08F1C280608237C1D85F5"
+    },
+    "export": {
+      "path": "F:\\dogsc-win\\recordings\\20261120-175917\\export.mp4",
+      "width": 2176,
+      "height": 1812,
+      "fps": 60,
+      "frameCount": 568,
+      "durationSeconds": 9.466016,
+      "sizeBytes": 3681926,
+      "sha256": "8A5CDC6A322F961B47FDDE2A52C7DEEA67B3CECA211DAFEF11778C52BB81C598"
+    }
+  },
+  "pointer": {
+    "originUnixMs": 1795168758935,
+    "clicksSeconds": [2.6197, 5.0055],
+    "metaPointerOffsetSeconds": -0.644,
+    "measuredActualOffsetSeconds": -0.238,
+    "residualMs": 406,
+    "note": "由源视频绿色闪帧 onset 143/286（2.383s/4.767s）与 pointer 点击 2.6197s/5.0055s 反算；两次一致。meta 的 firstFrameUnixMs 来自 ffmpeg -progress 首包，晚于真实首帧约 0.4s，属于已知残差。"
+  },
+  "syncEvidence": {
+    "sourceGreenFrames": [143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 286, 287, 288, 289, 290, 291, 292, 293, 294, 295],
+    "exportGreenFrames": [143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 286, 287, 288, 289, 290, 291, 292, 293],
+    "onsetMaxDeltaFrames": 0,
+    "note": "导出绿色 run 末尾少 1-2 帧是 120ms 闪帧与编码采样边界造成的持续时间缩短，不是点击起点漂移；门禁只比较 onset，符合 §6.2 的 f_green 判定口径。"
+  },
+  "tests": {
+    "default": "247 tests, 242 pass, 0 fail, 5 skip",
+    "e2e": "DOGSC_E2E=1: 247/247 pass"
+  },
+  "evidenceScreenshots": [
+    "F:\\dogsc-win\\out\\t128_testcard_ready2.png",
+    "F:\\dogsc-win\\out\\t128_flash_probe2.png",
+    "F:\\dogsc-win\\out\\t128f_export_greenA.png",
+    "F:\\dogsc-win\\out\\t128f_export_greenB.png",
+    "F:\\dogsc-win\\out\\t128f_export_tail.png"
+  ],
+  "knownResiduals": [
+    "firstFrameUnixMs 仍是 ffmpeg progress 首包上界，实测晚于真实首帧 0.4-0.6s，导致 pointerOffsetSeconds 偏大、光标/自动缩放相对画面提前。",
+    "verify-export 的点击帧抽样仍使用偏大的 pointerOffsetSeconds，抽到的不是真实点击帧；本次靠 --sync 全帧扫描补足。",
+    "2176x1812 导出约 4.7fps；568 帧耗时 121s，长视频/4K 需要性能优化。",
+    "未实测真实 libx264 回退、混合 DPI 双物理屏、负坐标副屏。",
+    "历史脏目录 20261120-140732、20261120-142130 仍在 recordings 中，未隔离。",
+    "SafePath 未覆盖 root 内符号链接指向 root 外的场景。"
+  ]
+}
