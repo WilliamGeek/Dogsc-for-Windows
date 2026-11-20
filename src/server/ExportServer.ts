@@ -12,9 +12,10 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { spawn, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
 import { readFileSync, existsSync, statSync, rmSync } from 'node:fs';
-import { resolve, normalize, extname, dirname } from 'node:path';
+import { resolve, extname, dirname } from 'node:path';
 import { mkdir } from 'node:fs/promises';
 import { stripTypeScriptTypes } from 'node:module';
+import { resolveSafeChildPath } from './SafePath.ts';
 import type { VideoEncoderKind } from '../capture/ScreenRecorder.ts';
 import type { PointerEventRecord } from '../core/ZoomAnimation.ts';
 
@@ -95,6 +96,15 @@ export interface ExportPlanPayload {
   pointerEvents: PointerEventRecord[];
 }
 
+/**
+ * T12.8: 2176x1812 WebGL readback + HTTP upload can exceed 500ms/frame on a
+ * laptop GPU. A 500ms/frame budget falsely killed a real 568-frame export at
+ * frame 510. The inactivity watchdog still catches genuine stalls.
+ */
+export function defaultTotalTimeoutMs(frameCount: number): number {
+  return Math.max(120_000, Math.max(1, frameCount) * 1500);
+}
+
 export interface ExportServerOptions {
   rootDir: string;
   framesDir: string;
@@ -105,7 +115,7 @@ export interface ExportServerOptions {
   ffmpegCommand?: { command: string; args: string[] };
   /** No-frame watchdog. Defaults to 30 seconds. */
   inactivityTimeoutMs?: number;
-  /** Whole-export watchdog. Defaults to max(120s, frameCount * 500ms). */
+  /** Whole-export watchdog. Defaults to max(120s, frameCount * 1.5s). */
   totalTimeoutMs?: number;
   onProgress?: (frameIndex: number, frameCount: number) => void;
 }
@@ -226,8 +236,7 @@ export async function startExportServer(o: ExportServerOptions): Promise<ExportS
   donePromise.catch(() => {});
 
   const inactivityTimeoutMs = o.inactivityTimeoutMs ?? 30_000;
-  const totalTimeoutMs =
-    o.totalTimeoutMs ?? Math.max(120_000, o.plan.frameCount * 500);
+  const totalTimeoutMs = o.totalTimeoutMs ?? defaultTotalTimeoutMs(o.plan.frameCount);
 
   let inactivityTimer: NodeJS.Timeout | null = null;
   let totalTimer: NodeJS.Timeout | null = null;
@@ -417,8 +426,8 @@ export async function startExportServer(o: ExportServerOptions): Promise<ExportS
       // 4. GET /frames/<name>
       if (decodedPath.startsWith('/frames/')) {
         const relFrame = decodedPath.slice('/frames/'.length);
-        const targetFramePath = normalize(resolve(framesDir, relFrame));
-        if (!targetFramePath.startsWith(framesDir)) {
+        const targetFramePath = resolveSafeChildPath(framesDir, relFrame);
+        if (!targetFramePath) {
           sendText(res, 403, '403 Forbidden: Path traversal prohibited');
           return;
         }
@@ -437,8 +446,8 @@ export async function startExportServer(o: ExportServerOptions): Promise<ExportS
       }
 
       // 5. Static files & .ts dynamic stripping from rootDir
-      const targetPath = normalize(resolve(rootDir, '.' + decodedPath));
-      if (!targetPath.startsWith(rootDir)) {
+      const targetPath = resolveSafeChildPath(rootDir, decodedPath);
+      if (!targetPath) {
         sendText(res, 403, '403 Forbidden: Path traversal prohibited');
         return;
       }

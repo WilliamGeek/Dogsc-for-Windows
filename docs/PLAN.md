@@ -4,7 +4,7 @@
 | 项 | 决策 | 理由 |
 |---|---|---|
 | 原项目 | `F:\dogsc`（Swift，macOS 14+，约 10 万行），只读 | 无法在 Windows 编译 |
-| 可复用部分 | `Sources/RecorderCore`（44 文件 ≈ 2.2 万行，**只依赖 Foundation**） | 纯算法：运镜规划、弹簧、3D 投影、光标平滑、时间线编辑、帧场景求值 |
+| 可复用部分 | `Sources/RecorderCore`（v0.2.0 实测 53 文件 / 14,380 行，**只依赖 Foundation**） | 纯算法：运镜规划、弹簧、3D 投影、光标平滑、时间线编辑、帧场景求值 |
 | 不可复用部分 | `Sources/DogSCApp`（ScreenCaptureKit / Metal / AVFoundation / SwiftUI） | 需按 Windows 能力重写 |
 | 语言 | **TypeScript**，Node 24 原生运行 `.ts`，零 npm 依赖 | 本机已有 Node 24 / pnpm / ffmpeg；**没有** Rust、.NET SDK、Python、CMake、MSVC |
 | 测试 | `node:test` | 内置，零依赖 |

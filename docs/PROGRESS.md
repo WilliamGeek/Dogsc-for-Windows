@@ -68,6 +68,8 @@
 
 2026-11-20 17:43 | T12.7 | DONE | ScreenRecorder 解析 `-progress pipe:1` 的 frame/out_time_us 生成 ready 与 firstFrameUnixMs；RecordingSession 等首帧后再计时并把 spawn/firstFrame 写入 meta；calibrate 增加严格双点击 evaluateCalibration；新增 tools/e2e-testcard.html、scripts/verify-export.ts 与 VerifyExport 单测。真实 8.6s 测试卡录制 20261120-173816：两个点击视频时刻 1.935s/4.182s，导出 517 帧/8.616s；verify-export 全部通过（时长差 0.000s、帧数一致、captureFrameRate 60、无音频声明、点击帧非黑可读）。默认 226 pass/5 skip；E2E 236/236。已知：导出画面顶部未出现测试卡 48px 闪帧条，闪帧≤1帧尚未通过自动/视觉门禁 | 236 pass (E2E 全绿)
 
+2026-11-20 18:20 | T12.8 | DONE | `SafePath` 以 `path.relative` 替换 DevServer/ExportServer 的 `startsWith`，同名前缀兄弟目录返回 403；补根 README / MIT LICENSE / THIRD_PARTY_NOTICES；package 0.3.1 / Node >=22.18；PLAN 修正 53 文件/14,380 行。修 T12.7 闪帧验收缺陷：自动运镜会裁掉顶部 48px 条，测试卡改为点击目标整圆同步闪绿，`verify-export --sync` 对源/导出 green run 做 onset ≤1 帧校验；导出总超时从 500ms/帧提高到 1.5s/帧。真实录制 20261120-175917：2176x1812/60fps/568 帧/9.466s，点击 2.620s/5.006s，导出 568 帧/9.466s/3,681,926B，`verify-export --sync` 退出 0（时长差 0.000s、帧数 568/568、captureFrameRate 60、recordsSystemAudio false、闪帧 source/export onset 均 143/286 帧、maxDelta 0）。T11.7 仍按 D4 等用户肉眼复核，未勾选 | 247 pass (E2E 247/247)
+
 阶段 2 验收通过
 
 下一个任务：T12.8（Wave A 第八卡：路径穿越安全修复、合规许可证与文档基线收官，并执行 Wave A 出口 G1+G2 真实闭环，详见 docs/MASTER_REFACTOR_PLAN_V2.md §4）

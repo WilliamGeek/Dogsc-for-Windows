@@ -47,11 +47,63 @@ export interface ExportVerificationReport {
   ok: boolean;
   errors: string[];
   checks: Array<{ name: string; ok: boolean; detail: string }>;
+  sync?: {
+    sourceGreenFrames: number[];
+    exportGreenFrames: number[];
+    ok: boolean;
+    maxDeltaFrames: number;
+  };
 }
 
 const DURATION_TOLERANCE_SECONDS = 0.05;
 const FRAME_SAMPLE_MAX_MEAN = 8;
 const FRAME_SAMPLE_MIN_STD = 5;
+const SYNC_SCAN_WIDTH = 272;
+const SYNC_SCAN_HEIGHT = 226;
+const SYNC_GREEN_MIN_PIXELS = 4;
+const SYNC_TOLERANCE_FRAMES = 1;
+
+/**
+ * Compare pure-green sync frames between source and export. The test card flashes
+ * its clicked target (and the top bar) for 120ms. The gate compares the ONSET of
+ * each flash run, because a browser/encoder can legitimately drop the last frame
+ * of a 7-frame flash while the visible click response still starts on time.
+ */
+export function evaluateSyncFrames(
+  sourceGreenFrames: readonly number[],
+  exportGreenFrames: readonly number[],
+  toleranceFrames: number = SYNC_TOLERANCE_FRAMES
+): NonNullable<ExportVerificationReport['sync']> {
+  const runs = (frames: readonly number[]): Array<[number, number]> => {
+    const result: Array<[number, number]> = [];
+    let start: number | null = null;
+    let previous: number | null = null;
+    for (const frame of frames) {
+      if (start === null || previous === null || frame !== previous + 1) {
+        if (start !== null && previous !== null) result.push([start, previous]);
+        start = frame;
+      }
+      previous = frame;
+    }
+    if (start !== null && previous !== null) result.push([start, previous]);
+    return result;
+  };
+
+  const sourceRuns = runs(sourceGreenFrames);
+  const exportRuns = runs(exportGreenFrames);
+  let maxDeltaFrames = 0;
+  const ok =
+    sourceRuns.length > 0 &&
+    sourceRuns.length === exportRuns.length &&
+    sourceRuns.every(([sourceStart], index) => {
+      const [exportStart] = exportRuns[index] ?? [Number.NaN];
+      const startDelta = Math.abs(sourceStart - exportStart);
+      maxDeltaFrames = Math.max(maxDeltaFrames, startDelta);
+      return startDelta <= toleranceFrames;
+    });
+
+  return { sourceGreenFrames: [...sourceGreenFrames], exportGreenFrames: [...exportGreenFrames], ok, maxDeltaFrames };
+}
 
 /**
  * Pure evaluator: accepts measured facts only, so the gate can be unit-tested
@@ -225,6 +277,53 @@ function probeHasAudio(filePath: string): Promise<boolean> {
   });
 }
 
+function scanGreenFrames(filePath: string): Promise<number[]> {
+  return new Promise((resolvePromise, reject) => {
+    const args = [
+      '-v', 'error',
+      '-i', filePath,
+      '-vf', `scale=${SYNC_SCAN_WIDTH}:${SYNC_SCAN_HEIGHT}:flags=area`,
+      '-f', 'rawvideo',
+      '-pix_fmt', 'rgb24',
+      'pipe:1',
+    ];
+    const proc = spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+    const frameBytes = SYNC_SCAN_WIDTH * SYNC_SCAN_HEIGHT * 3;
+    const greenFrames: number[] = [];
+    let pending = Buffer.alloc(0);
+    let frameIndex = 0;
+    let stderr = '';
+
+    proc.stderr?.on('data', (chunk: Buffer) => {
+      stderr = (stderr + String(chunk)).slice(-500);
+    });
+    proc.stdout?.on('data', (chunk: Buffer) => {
+      pending = Buffer.concat([pending, Buffer.from(chunk)]);
+      while (pending.length >= frameBytes) {
+        const frame = pending.subarray(0, frameBytes);
+        let greenPixels = 0;
+        for (let i = 0; i < frame.length; i += 3) {
+          if (frame[i] < 40 && frame[i + 1] > 180 && frame[i + 2] < 40) {
+            greenPixels++;
+            if (greenPixels >= SYNC_GREEN_MIN_PIXELS) break;
+          }
+        }
+        if (greenPixels >= SYNC_GREEN_MIN_PIXELS) greenFrames.push(frameIndex);
+        pending = pending.subarray(frameBytes);
+        frameIndex++;
+      }
+    });
+    proc.on('error', (err) => reject(new Error(`绿色同步帧扫描启动失败: ${err.message}`)));
+    proc.on('close', (code) => {
+      if (code !== 0) {
+        reject(new Error(`绿色同步帧扫描失败 (code ${String(code)}): ${stderr}`));
+        return;
+      }
+      resolvePromise(greenFrames);
+    });
+  });
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const dir = argsValue(args, '--dir') ?? args.find((arg) => !arg.startsWith('-')) ?? null;
@@ -273,6 +372,24 @@ async function main() {
     pointerClickTimesSeconds: clicks,
     frameSamples,
   });
+
+  if (args.includes('--sync')) {
+    const sourceGreenFrames = await scanGreenFrames(screenPath);
+    const exportGreenFrames = await scanGreenFrames(exportPath);
+    const sync = evaluateSyncFrames(sourceGreenFrames, exportGreenFrames);
+    report.sync = sync;
+    report.checks.push({
+      name: 'syncFrames',
+      ok: sync.ok,
+      detail: `source=${sourceGreenFrames.join(',') || 'none'} export=${exportGreenFrames.join(',') || 'none'} maxDelta=${sync.maxDeltaFrames}`,
+    });
+    if (!sync.ok) {
+      report.ok = false;
+      report.errors.push(
+        `同步闪帧不一致：source=[${sourceGreenFrames.join(',')}] export=[${exportGreenFrames.join(',')}]，容差 ${SYNC_TOLERANCE_FRAMES} 帧`
+      );
+    }
+  }
 
   const payload = {
     dir: recordingDir,

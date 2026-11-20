@@ -5,11 +5,31 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { get as httpGet } from 'node:http';
 import {
   buildExportFfmpegArgs,
+  defaultTotalTimeoutMs,
   startExportServer,
   type ExportServerHandle,
 } from '../../src/server/ExportServer.ts';
+
+function rawGet(port: number, rawPath: string): Promise<{ status: number; body: string }> {
+  return new Promise((resolvePromise, reject) => {
+    const req = httpGet({ hostname: '127.0.0.1', port, path: rawPath }, (res) => {
+      let body = '';
+      res.setEncoding('utf-8');
+      res.on('data', (chunk) => (body += chunk));
+      res.on('end', () => resolvePromise({ status: res.statusCode ?? 0, body }));
+    });
+    req.on('error', reject);
+  });
+}
+
+test('T12.8: default total watchdog covers 1.5s per 2176x1812 frame', () => {
+  assert.equal(defaultTotalTimeoutMs(0), 120_000);
+  assert.equal(defaultTotalTimeoutMs(568), 852_000);
+  assert.ok(defaultTotalTimeoutMs(568) > 284_000);
+});
 
 test('T11.6: buildExportFfmpegArgs constructs rawvideo RGBA vflip arguments for nvenc and libx264', () => {
   const nvenc = buildExportFfmpegArgs({
@@ -151,6 +171,49 @@ test('T12.4: /api/error aborts export immediately and surfaces browser message',
   } finally {
     if (server) await server.close();
     await fs.rm(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('T12.8: /frames blocks a same-prefix sibling escape', async () => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'dogsc-export-frames-'));
+  const siblingDir = `${tmpDir}-evil`;
+  const secret = path.join(siblingDir, 'secret.txt');
+  await fs.mkdir(siblingDir, { recursive: true });
+  await fs.writeFile(secret, 'TOP-SECRET', 'utf-8');
+
+  let server: ExportServerHandle | null = null;
+  try {
+    server = await startExportServer({
+      rootDir: path.resolve('F:\\dogsc-win'),
+      framesDir: tmpDir,
+      outFile: path.join(tmpDir, 'out.mp4'),
+      plan: {
+        fps: 60,
+        width: 4,
+        height: 2,
+        frameCount: 1,
+        sourceFrameCount: 1,
+        durationSeconds: 0.016,
+        framesBaseUrl: '/frames',
+        project: {},
+        pointerEvents: [],
+      },
+      ffmpegCommand: {
+        command: process.execPath,
+        args: ['-e', 'process.stdin.resume();'],
+      },
+    });
+
+    const res = await rawGet(
+      server.port,
+      `/frames/%2e%2e%5C${path.basename(siblingDir)}/secret.txt`
+    );
+    assert.equal(res.status, 403);
+    assert.ok(!res.body.includes('TOP-SECRET'));
+  } finally {
+    if (server) await server.close();
+    await fs.rm(tmpDir, { recursive: true, force: true });
+    await fs.rm(siblingDir, { recursive: true, force: true });
   }
 });
 

@@ -8,8 +8,9 @@
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { readFileSync, existsSync, statSync } from 'node:fs';
-import { resolve, normalize, extname } from 'node:path';
+import { resolve, extname } from 'node:path';
 import { stripTypeScriptTypes } from 'node:module';
+import { resolveSafeChildPath } from './SafePath.ts';
 
 export interface DevServerOptions {
   rootDir: string;
@@ -51,9 +52,9 @@ export function startDevServer(o: DevServerOptions): Promise<DevServerHandle> {
         const parsed = new URL(reqUrl, 'http://127.0.0.1');
         const decodedPath = decodeURIComponent(parsed.pathname);
 
-        // Security: Prevent path traversal
-        const targetPath = normalize(resolve(root, '.' + decodedPath));
-        if (!targetPath.startsWith(root)) {
+        // Security: Prevent path traversal and same-prefix sibling escapes.
+        const targetPath = resolveSafeChildPath(root, decodedPath);
+        if (!targetPath) {
           res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
           res.end('403 Forbidden: Path traversal prohibited');
           return;

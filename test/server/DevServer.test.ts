@@ -2,8 +2,22 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { resolve } from 'node:path';
+import { resolve, basename } from 'node:path';
+import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { get as httpGet } from 'node:http';
 import { startDevServer } from '../../src/server/DevServer.ts';
+
+function rawGet(port: number, rawPath: string): Promise<{ status: number; body: string }> {
+  return new Promise((resolvePromise, reject) => {
+    const req = httpGet({ hostname: '127.0.0.1', port, path: rawPath }, (res) => {
+      let body = '';
+      res.setEncoding('utf-8');
+      res.on('data', (chunk) => (body += chunk));
+      res.on('end', () => resolvePromise({ status: res.statusCode ?? 0, body }));
+    });
+    req.on('error', reject);
+  });
+}
 
 test('T11.1: DevServer starts on random port, serves stripped TypeScript and prevents traversal', async () => {
   const rootDir = resolve('.');
@@ -65,5 +79,25 @@ test('T11.1: DevServer starts on random port, serves stripped TypeScript and pre
     assert.equal(notFoundRes.status, 404);
   } finally {
     await server.close();
+  }
+});
+
+test('T12.8: DevServer blocks a same-prefix sibling directory escape', async () => {
+  const rootDir = resolve('.');
+  const siblingName = `${basename(rootDir)}-evil`;
+  const siblingDir = resolve(rootDir, '..', siblingName);
+  const secret = resolve(siblingDir, 'secret.txt');
+
+  mkdirSync(siblingDir, { recursive: true });
+  writeFileSync(secret, 'TOP-SECRET', 'utf-8');
+
+  const server = await startDevServer({ rootDir, port: 0 });
+  try {
+    const res = await rawGet(server.port, `/%2e%2e%5C${siblingName}/secret.txt`);
+    assert.equal(res.status, 403, 'same-prefix sibling must be rejected, not merely prefix-matched');
+    assert.ok(!res.body.includes('TOP-SECRET'));
+  } finally {
+    await server.close();
+    rmSync(siblingDir, { recursive: true, force: true });
   }
 });

@@ -2,7 +2,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { evaluateExportVerification, type ExportVerificationInput } from '../../scripts/verify-export.ts';
+import { evaluateExportVerification, evaluateSyncFrames, type ExportVerificationInput } from '../../scripts/verify-export.ts';
 
 function validInput(): ExportVerificationInput {
   return {
@@ -57,4 +57,24 @@ test('T12.7: VerifyExport rejects all-black or truncated click frames', () => {
   const report = evaluateExportVerification(input);
   assert.equal(report.ok, false);
   assert.ok(report.errors.some((error) => error.includes('全黑或不可读')));
+});
+
+test('T12.7/T12.8: sync frames pass when export matches source within one frame', () => {
+  const sync = evaluateSyncFrames([150, 151, 152, 290, 291], [151, 152, 153, 291, 292]);
+  assert.equal(sync.ok, true);
+  assert.equal(sync.maxDeltaFrames, 1);
+});
+
+test('T12.7/T12.8: sync frames reject a missing flash or a two-frame drift', () => {
+  const missing = evaluateSyncFrames([150, 151, 152], []);
+  assert.equal(missing.ok, false);
+
+  const drift = evaluateSyncFrames([150, 151, 152], [153, 154, 155]);
+  assert.equal(drift.ok, false);
+  assert.equal(drift.maxDeltaFrames, 3);
+});
+
+test('T12.7/T12.8: sync frames reject a different number of flash runs', () => {
+  const sync = evaluateSyncFrames([150, 151, 290, 291], [150, 151]);
+  assert.equal(sync.ok, false);
 });

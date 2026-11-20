@@ -130,6 +130,7 @@
 - [x] T11.6 导出：`src/server/ExportServer.ts`（`/api/plan`、`/api/frame/:n`、`/api/done`，严格递增顺序，长度校验）+ `web/exporter.ts`（循环渲染+POST）+ `scripts/export.ts`（启动服务→启动 Edge→等待→输出 mp4）。必测：ExportServer 对错误长度返回 400、乱序帧返回 409；用假的 ffmpeg 命令（`node -e` 吞 stdin）验证帧计数。
 - [ ] T11.7 阶段 3 验收（**需要用户在场**）：用 T10 的真实录制导出 MP4，用户肉眼确认「自动缩放跟随点击、光标平滑」。通过后 PROGRESS.md 写「阶段 3 完成」并**停止**。
   > ⚠ **2026-11-20 实测审计阻塞**：实测发现 P0-01 导出尾部复帧（wall-clock 时长偏差）、P0-02 无效显示器伪成功、P0-03 双光标（缺 `draw_mouse=0`）。**须先完成 Wave A (`T12.1`–`T12.8`) 并通过 G1+G2 复测后，方可重新勾选 `T11.7` 并写入「阶段 3 完成」**。
+  > ✅ **Wave A 自动门禁已通过 (2026-11-20)**：真实录制 `20261120-175917` + 导出 `export.mp4` 为 568 帧/9.466016s，`verify-export --sync` 退出码 0；点击帧仅 1 只矢量光标，源画面无 OS 光标；尾部帧数与源一致。**按计划 D4 仍等待用户肉眼复核后才勾选本项**。
 
 ---
 
@@ -143,7 +144,8 @@
 - [x] T12.5 显示器统一映射：新增 `src/capture/DisplayEnumeration.ts`，`tools/mousehook.ps1` 支持 `-ScreenX/Y/W/H` 与 `Per-Monitor DPI Aware V2`，同步多屏与混合 DPI 归一化（P1-03）。
 - [x] T12.6 真实会话配置：删除 `ProjectMediaModel` 重复英文默认模型，统一 `CaptureConfiguration` rawValue 并兼容旧英文解码，`recordSession` 写入真实 fps/codec/audio/displayID（P1-04）。
 - [x] T12.7 首帧时钟与闪帧测试：解析 `-progress pipe:1` 计算 `firstFrameUnixMs`，`scripts/calibrate.ts` 严格双点击断言，新增 `tools/e2e-testcard.html` 闪帧卡与 `scripts/verify-export.ts`（P1-05, P1-06, P3-03）。
-- [ ] T12.8 路径安全与 Wave A 收官：新增 `src/server/SafePath.ts` 替换 `DevServer`/`ExportServer` 的 `startsWith`，补根 `README.md` / MIT `LICENSE` / `THIRD_PARTY_NOTICES.md`，修正 `PLAN.md`/`package.json`，并运行 Wave A 门禁 G1+G2（P1-07, P2-14, P3-01~06）。
+- [x] T12.8 路径安全与 Wave A 收官：新增 `src/server/SafePath.ts` 替换 `DevServer`/`ExportServer` 的 `startsWith`，补根 `README.md` / MIT `LICENSE` / `THIRD_PARTY_NOTICES.md`，修正 `PLAN.md`/`package.json`，并运行 Wave A 门禁 G1+G2（P1-07, P2-14, P3-01~06）。
+  > **2026-11-20 自动门禁已完成**：`SafePath` 与同名前缀兄弟目录 403 已落地；`tools/e2e-testcard.html` 增加点击目标整圆闪绿（解决自动运镜把 48px 顶部闪帧条裁出画面后无法验收的问题）；`scripts/verify-export.ts --sync` 对源/导出绿色闪帧 run 做 onset ≤1 帧校验；`ExportServer` 总超时从 500ms/帧提高到 1.5s/帧，避免 2176×1812 长导出被误杀。真实录制 `20261120-175917`：568 帧/9.466s、两次点击、`verify-export --sync` 全绿（时长差 0.000s、帧数 568/568、captureFrameRate 60、前后闪帧 onset 0 帧）。`T11.7` 仍需用户按 D4 肉眼复核后勾选。
 
 ### Wave B：上游 `v0.2.0` 算法补齐与 Schema v28 双向兼容（P0-04，需先克隆只读 `F:\dogsc-v0.2.0`）
 - [ ] T13.1 上游 `v0.2.0` 只读源码差异审计，输出 `docs/V020_DIFF_MAP.md`（53 文件与 v28 字段对照）。

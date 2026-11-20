@@ -17,6 +17,7 @@
     }
     #syncBar.flash { background: #00ff00; color: #000000; }
     #syncBar .hint { font-size: 13px; font-weight: 500; opacity: 0.75; }
+    .target.flash { background: #00ff00 !important; border-color: #00ff00 !important; }
     #stage { position: absolute; inset: 48px 0 0 0; }
     .target {
       position: absolute; width: 190px; height: 190px; border-radius: 50%;
@@ -71,6 +72,8 @@
       const coordB = document.getElementById('coordB');
       const viewportInfo = document.getElementById('viewportInfo');
       const clickLog = document.getElementById('clickLog');
+      const targetA = document.getElementById('targetA');
+      const targetB = document.getElementById('targetB');
       let clickSeq = 0;
       let flashTimer = null;
 
@@ -101,6 +104,8 @@
       const flash = (event) => {
         clickSeq += 1;
         bar.classList.add('flash');
+        const clicked = event.target instanceof Element ? event.target.closest('.target') : null;
+        for (const el of [targetA, targetB]) el.classList.toggle('flash', el === clicked);
         const px = Math.round(event.clientX * dpr());
         const py = Math.round(event.clientY * dpr());
         flashLabel.textContent = `FLASH #${clickSeq} · ${Date.now()}ms · 物理像素 (${px}, ${py})`;
@@ -108,6 +113,7 @@
         if (flashTimer) clearTimeout(flashTimer);
         flashTimer = setTimeout(() => {
           bar.classList.remove('flash');
+          for (const el of [targetA, targetB]) el.classList.remove('flash');
           flashLabel.textContent = 'SYNC FLASH BAR · 48px · 平常 #000000 / 点击 #00FF00 120ms';
         }, 120);
       };
