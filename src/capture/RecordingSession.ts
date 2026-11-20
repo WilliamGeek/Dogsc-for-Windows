@@ -17,6 +17,11 @@ import {
 import { resolve } from 'node:path';
 import { finished } from 'node:stream/promises';
 import {
+  type CaptureConfiguration,
+  makeCaptureConfiguration,
+  type OutputFrameRate,
+} from '../core/CaptureConfiguration.ts';
+import {
   makeRecorderProject,
   encodeRecorderProject,
   type RecorderProject,
@@ -130,7 +135,8 @@ export function buildMeta(i: RecordingMetaInput): RecordingMeta {
 export function buildProjectFromRecording(
   events: readonly PointerEventRecord[],
   offsetSeconds: number,
-  durationSeconds: number
+  durationSeconds: number,
+  captureOptions?: Partial<CaptureConfiguration>
 ): RecorderProject {
   // Shift event timestamp onto video timeline (CONTRACTS §3)
   const alignedEvents: PointerEventRecord[] = events.map((e) =>
@@ -154,6 +160,7 @@ export function buildProjectFromRecording(
   });
 
   const project = makeRecorderProject({
+    capture: makeCaptureConfiguration(captureOptions),
     timeline,
     zoomAnimations: zoomClips,
   });
@@ -319,7 +326,17 @@ export async function recordSession(o: RecordSessionOptions): Promise<string> {
     const project = buildProjectFromRecording(
       parsed.events,
       meta.pointerOffsetSeconds,
-      probed.durationSeconds
+      probed.durationSeconds,
+      {
+        source: '整块屏幕',
+        displayID: outputIdx,
+        displayName: display.deviceName,
+        captureFrameRate: fps as OutputFrameRate,
+        captureCodec: 'H.264',
+        recordsSystemAudio: false,
+        recordsMicrophone: false,
+        recordsCamera: false,
+      }
     );
     writeFileSync(projectJsonPath, encodeRecorderProject(project), 'utf-8');
 

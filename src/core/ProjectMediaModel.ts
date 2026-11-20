@@ -2,6 +2,14 @@
 
 import { min, max, newUUID } from './swift.ts';
 import {
+  type CaptureConfiguration,
+  makeCaptureConfiguration,
+} from './CaptureConfiguration.ts';
+export {
+  type CaptureConfiguration,
+  makeCaptureConfiguration,
+} from './CaptureConfiguration.ts';
+import {
   type MediaSyncAnchor,
   makeMediaSyncAnchor,
   type ProjectMediaReference,
@@ -39,67 +47,6 @@ import {
   type ZoomAnimationClip,
   makeZoomAnimationClip,
 } from './ZoomAnimation.ts';
-
-// MARK: - CaptureConfiguration forward interface (full implementation in CaptureConfiguration.ts)
-
-export interface CaptureConfiguration {
-  source?: string;
-  displayID?: number | null;
-  displayName?: string | null;
-  windowID?: number | null;
-  windowName?: string | null;
-  selectedApplicationBundleIdentifier?: string | null;
-  selectedApplicationName?: string | null;
-  area?: any;
-  deviceID?: string | null;
-  deviceName?: string | null;
-  captureFrameRate?: any;
-  captureResolutionLimit?: any;
-  captureCodec?: any;
-  hidesDesktopFiles?: boolean;
-  hidesDock?: boolean;
-  recordsSystemAudio?: boolean;
-  systemAudioScope?: any;
-  recordsMicrophone?: boolean;
-  microphoneDeviceID?: string | null;
-  microphoneDeviceName?: string | null;
-  recordsCamera?: boolean;
-  cameraDeviceID?: string | null;
-  cameraDeviceName?: string | null;
-  cameraCaptureResolution?: any;
-}
-
-export function makeCaptureConfiguration(
-  options?: Partial<CaptureConfiguration>
-): CaptureConfiguration {
-  return {
-    source: options?.source ?? 'display',
-    displayID: options?.displayID ?? null,
-    displayName: options?.displayName ?? null,
-    windowID: options?.windowID ?? null,
-    windowName: options?.windowName ?? null,
-    selectedApplicationBundleIdentifier:
-      options?.selectedApplicationBundleIdentifier ?? null,
-    selectedApplicationName: options?.selectedApplicationName ?? null,
-    area: options?.area ?? null,
-    deviceID: options?.deviceID ?? null,
-    deviceName: options?.deviceName ?? null,
-    captureFrameRate: options?.captureFrameRate ?? 60,
-    captureResolutionLimit: options?.captureResolutionLimit ?? 'native',
-    captureCodec: options?.captureCodec ?? 'hevc',
-    hidesDesktopFiles: options?.hidesDesktopFiles ?? false,
-    hidesDock: options?.hidesDock ?? false,
-    recordsSystemAudio: options?.recordsSystemAudio ?? true,
-    systemAudioScope: options?.systemAudioScope ?? 'all',
-    recordsMicrophone: options?.recordsMicrophone ?? false,
-    microphoneDeviceID: options?.microphoneDeviceID ?? null,
-    microphoneDeviceName: options?.microphoneDeviceName ?? null,
-    recordsCamera: options?.recordsCamera ?? false,
-    cameraDeviceID: options?.cameraDeviceID ?? null,
-    cameraDeviceName: options?.cameraDeviceName ?? null,
-    cameraCaptureResolution: options?.cameraCaptureResolution ?? null,
-  };
-}
 
 // MARK: - ProjectMediaManifest
 
@@ -234,6 +181,58 @@ export function encodeRecorderProject(project: RecorderProject): string {
   });
 }
 
+/**
+ * Normalizes legacy English capture values from older project JSON before
+ * makeCaptureConfiguration applies defaults and clamps.
+ */
+function normalizeCaptureForDecoding(raw: Record<string, any>): Partial<CaptureConfiguration> {
+  const sourceMap: Record<string, string> = {
+    display: '整块屏幕',
+    window: '单个窗口',
+    area: '自选区域',
+    device: 'iOS 设备',
+  };
+  const codecMap: Record<string, string> = {
+    hevc: 'HEVC',
+    h264: 'H.264',
+    proRes422: 'ProRes 422',
+  };
+  const resolutionMap: Record<string, string> = {
+    native: '原始分辨率',
+    uhd: '最高 4K',
+    fullHD: '最高 1080p',
+  };
+  const audioScopeMap: Record<string, string> = {
+    all: '全部系统声音',
+    selectedApplication: '所选窗口 App',
+  };
+
+  const normalized: Record<string, any> = { ...raw };
+  if (typeof raw.source === 'string' && sourceMap[raw.source]) {
+    normalized.source = sourceMap[raw.source];
+  }
+  if (typeof raw.captureCodec === 'string' && codecMap[raw.captureCodec]) {
+    normalized.captureCodec = codecMap[raw.captureCodec];
+  }
+  if (
+    typeof raw.captureResolutionLimit === 'string' &&
+    resolutionMap[raw.captureResolutionLimit]
+  ) {
+    normalized.captureResolutionLimit = resolutionMap[raw.captureResolutionLimit];
+  }
+  if (typeof raw.systemAudioScope === 'string' && audioScopeMap[raw.systemAudioScope]) {
+    normalized.systemAudioScope = audioScopeMap[raw.systemAudioScope];
+  }
+  if (raw.captureFrameRate !== undefined) {
+    const rate = Number(raw.captureFrameRate);
+    if (rate === 30 || rate === 60 || rate === 90 || rate === 120) {
+      normalized.captureFrameRate = rate;
+    }
+  }
+
+  return normalized as Partial<CaptureConfiguration>;
+}
+
 export function decodeRecorderProject(json: string | Record<string, any>): RecorderProject {
   const container = typeof json === 'string' ? JSON.parse(json) : json;
   const decodedVersion = container.version ?? 1;
@@ -267,7 +266,9 @@ export function decodeRecorderProject(json: string | Record<string, any>): Recor
 
   const title = container.title ?? '未命名录制';
   const createdAt = container.createdAt ? new Date(container.createdAt) : new Date();
-  const capture = container.capture ? makeCaptureConfiguration(container.capture) : makeCaptureConfiguration();
+  const capture = container.capture
+    ? makeCaptureConfiguration(normalizeCaptureForDecoding(container.capture))
+    : makeCaptureConfiguration();
   const canvas = container.canvas ? makeCanvasStyle(container.canvas) : makeCanvasStyle();
   const camera = container.camera ? makeCameraStyle(container.camera) : makeCameraStyle();
   const audio = container.audio ? makeAudioStyle(container.audio) : makeAudioStyle();

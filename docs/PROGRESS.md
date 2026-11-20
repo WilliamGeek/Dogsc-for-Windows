@@ -64,9 +64,9 @@
 2026-11-14 20:21 | T11.5d | DONE | 矢量光标多边形与点击涟漪特效渲染 (shadow+outline+fill箭头三角形与SDF点击波纹，实机截图 out/t115d.png 276KB 验收完美) | 198 pass (4 skip E2E)
 2026-11-14 20:27 | T11.6 | DONE | 无头浏览器批量导出引擎 (ExportServer顺序帧长度/序号严格校验与ffmpeg流式管道、web/exporter.ts、scripts/export.ts、200单测全绿) | 200 pass (4 skip E2E)
 2026-11-14 22:35 | T11.7 | NEED-USER-E2E | 实机录制导出 export.mp4 完成 (518帧/1920x1080/60fps/8.63s/6.13MB/h264_nvenc，首张放大抽检帧 out/t117_check.png 已验证正立/背景/圆角阴影/1.8x缩放/矢量光标与点击涟漪，待用户肉眼验收) | 200 pass (4 skip E2E)
-2026-11-20 17:13 | T12.5 | DONE | 新增 DisplayEnumeration（Per-Monitor V2 DPI + 负坐标/主屏排序/显式 index），mousehook 支持 -ScreenX/Y/W/H 并优先 SetProcessDpiAwarenessContext(-4)，RecordingSession 枚举显示器、索引越界前置报错并把 displayDescriptor 写入 meta。实机录制 20261120-171216：DISPLAY5 2176×1812，pointer 表头与 screen.mp4 分辨率一致，125 帧/2.083s；默认测试 222 pass/5 skip | 222 pass (5 skip 默认)
+2026-11-20 17:16 | T12.6 | DONE | ProjectMediaModel 删除重复 CaptureConfiguration 与英文假默认值，改为导入统一中文 rawValue 模型；decodeRecorderProject 兼容旧英文 source/codec/resolution/systemAudioScope 并归一化 frameRate；buildProjectFromRecording 接收真实 captureOptions，recordSession 写入 source/displayID/displayName/真实 fps/H.264/三项音频与摄像头 false。真实 30fps 录制 20261120-171556 的 project.capture 为 30fps/H.264/recordsSystemAudio=false/displayID=0；默认测试 224 pass/5 skip | 224 pass (5 skip 默认)
 
 阶段 2 验收通过
 
-下一个任务：T12.6（Wave A 第六卡：统一 CaptureConfiguration/Codec 字符串并真实写入 project.json，消除 30fps 录制仍写 60fps 与 captureCodec=hevc 谎言，详见 docs/MASTER_REFACTOR_PLAN_V2.md §4）
+下一个任务：T12.7（Wave A 第七卡：首帧时钟精准对齐、严格双点击校准与闪帧同步测试卡，统一 pointerOffsetSeconds 与视频首帧 PTS，详见 docs/MASTER_REFACTOR_PLAN_V2.md §4）
 

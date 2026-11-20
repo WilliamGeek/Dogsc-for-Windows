@@ -12,6 +12,7 @@ import {
 import { ProjectSchema } from '../../src/core/ProjectModel.ts';
 import { makeZoomAnimationClip, makeNormalizedPoint } from '../../src/core/ZoomAnimation.ts';
 import { makeRecordingMarker } from '../../src/core/RecordingMarker.ts';
+import { ProjectValidator } from '../../src/core/ProjectValidator.ts';
 
 test('T7.3: makeRecorderProject defaults match current project schema', () => {
   const project = makeRecorderProject();
@@ -77,6 +78,52 @@ test('T7.3: RecorderProject encode and decode round trip', () => {
   assert.equal(decoded.recordingMarkers[0].sourceTime, 2.5);
   assert.equal(decoded.timeline.zoomClips.length, 1);
   assert.equal(decoded.timeline.zoomClips[0].scale, 2.5);
+});
+
+test('T12.6: legacy English capture values normalize and pass ProjectValidator', () => {
+  const legacy = {
+    version: ProjectSchema.currentVersion,
+    capture: {
+      source: 'display',
+      displayID: 0,
+      displayName: '\\\\.\\DISPLAY1',
+      captureFrameRate: 30,
+      captureCodec: 'h264',
+      captureResolutionLimit: 'native',
+      systemAudioScope: 'all',
+      recordsSystemAudio: true,
+    },
+  };
+
+  const decoded = decodeRecorderProject(legacy);
+  assert.equal(decoded.capture.source, '整块屏幕');
+  assert.equal(decoded.capture.captureCodec, 'H.264');
+  assert.equal(decoded.capture.captureResolutionLimit, '原始分辨率');
+  assert.equal(decoded.capture.systemAudioScope, '全部系统声音');
+  assert.equal(decoded.capture.captureFrameRate, 30);
+  assert.equal(decoded.capture.displayID, 0);
+
+  assert.doesNotThrow(() => ProjectValidator.validate(decoded));
+});
+
+test('T12.6: buildProjectFromRecording preserves real capture configuration', async () => {
+  const { buildProjectFromRecording } = await import('../../src/capture/RecordingSession.ts');
+  const project = buildProjectFromRecording([], 0, 2, {
+    source: '整块屏幕',
+    displayID: 1,
+    displayName: '\\\\.\\DISPLAY2',
+    captureFrameRate: 30,
+    captureCodec: 'H.264',
+    recordsSystemAudio: false,
+    recordsMicrophone: false,
+    recordsCamera: false,
+  });
+
+  assert.equal(project.capture.captureFrameRate, 30);
+  assert.equal(project.capture.captureCodec, 'H.264');
+  assert.equal(project.capture.recordsSystemAudio, false);
+  assert.equal(project.capture.displayID, 1);
+  assert.equal(project.capture.displayName, '\\\\.\\DISPLAY2');
 });
 
 test('T7.3: decodeRecorderProject handles project with media manifest', () => {
