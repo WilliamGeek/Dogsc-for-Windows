@@ -138,7 +138,7 @@
 ### Wave A：P0/P1 真实性止血、安全加固与自动验收基建（先做，做完复测 T11.7）
 - [x] T12.1 真实时长口径：新增 `src/capture/MediaProbe.ts`，`RecordingSession` / `scripts/export.ts` 改用 `ffprobe` 真实时长与帧数，`FramePlan` 消除导出尾部复帧（P0-01）。
 - [x] T12.2 失败即失败：校验 `ScreenRecorder` ffmpeg 退出码与 stderr、早期崩溃 `Promise.race` 中止、失败清理脏目录、`allocateUniqueSessionDir` 与 `await finished(jsonlStream)`（P0-02, P3-04）。
-- [ ] T12.3 单光标与编码探活：`ddagrab` 默认追加 `:draw_mouse=0` 消除双光标，升级 `detectEncoder()` 做 1 帧 NVENC 真机探活并自动回退 `libx264`（P0-03, P2-13）。
+- [x] T12.3 单光标与编码探活：`ddagrab` 默认追加 `:draw_mouse=0` 消除双光标，升级 `detectEncoder()` 做 1 帧 NVENC 真机探活并自动回退 `libx264`（P0-03, P2-13）。
 - [ ] T12.4 导出稳健性：`ExportServer` 30s 无帧看门狗、`/api/done` 总帧数强校验（少帧 409 删残片）、`/api/error` 秒报、`web/exporter.ts` 超时重试、`scripts/export.ts` `taskkill /F /T` 清进程树（P1-01, P1-02）。
 - [ ] T12.5 显示器统一映射：新增 `src/capture/DisplayEnumeration.ts`，`tools/mousehook.ps1` 支持 `-ScreenX/Y/W/H` 与 `Per-Monitor DPI Aware V2`，同步多屏与混合 DPI 归一化（P1-03）。
 - [ ] T12.6 真实会话配置：删除 `ProjectMediaModel` 重复英文默认模型，统一 `CaptureConfiguration` rawValue 并兼容旧英文解码，`recordSession` 写入真实 fps/codec/audio/displayID（P1-04）。

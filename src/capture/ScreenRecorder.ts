@@ -26,6 +26,8 @@ export interface FfmpegArgsOptions {
   fps: number;
   encoder: VideoEncoderKind;
   outputIdx?: number;
+  /** Draw the OS cursor into the capture. Defaults to false (T12.3). */
+  drawMouse?: boolean;
 }
 
 export interface ScreenRecorderOptions {
@@ -33,6 +35,8 @@ export interface ScreenRecorderOptions {
   fps?: number;
   outputIdx?: number;
   encoder?: VideoEncoderKind;
+  /** Draw the OS cursor into the capture. Defaults to false (T12.3). */
+  drawMouse?: boolean;
   /** ffmpeg binary; test seam for a fake command. Defaults to `ffmpeg`. */
   ffmpegBin?: string;
   /** Leading args before ffmpeg args; test seam only. */
@@ -71,13 +75,14 @@ function formatExitError(result: ScreenRecorderExit, timedOut: boolean): string 
 export function buildFfmpegArgs(o: FfmpegArgsOptions): string[] {
   const outputIdx = o.outputIdx ?? 0;
   const fps = o.fps > 0 ? o.fps : 60;
+  const drawMouse = o.drawMouse ?? false;
 
   const baseArgs: string[] = [
     '-y',
     '-f',
     'lavfi',
     '-i',
-    `ddagrab=output_idx=${outputIdx}:framerate=${fps}`,
+    `ddagrab=output_idx=${outputIdx}:framerate=${fps}:draw_mouse=${drawMouse ? 1 : 0}`,
     '-vf',
     'hwdownload,format=bgra,format=yuv420p',
   ];
@@ -125,17 +130,51 @@ export function buildFfmpegArgs(o: FfmpegArgsOptions): string[] {
 
 /**
  * Detects whether hardware-accelerated h264_nvenc is supported by the installed ffmpeg.
+ *
+ * Listing the encoder is not enough: a GPU/driver mismatch can make the
+ * encoder visible but unusable. T12.3 performs a one-frame null-output
+ * probe and falls back to libx264 on any failure.
  */
-export async function detectEncoder(): Promise<VideoEncoderKind> {
+export async function detectEncoder(
+  options: { ffmpegBin?: string; ffmpegArgsPrefix?: string[] } = {}
+): Promise<VideoEncoderKind> {
+  const bin = options.ffmpegBin ?? 'ffmpeg';
+  const prefix = options.ffmpegArgsPrefix ?? [];
+
   try {
-    const { stdout } = await execFileAsync('ffmpeg', ['-hide_banner', '-encoders']);
-    if (stdout.includes('h264_nvenc')) {
-      return 'h264_nvenc';
+    const { stdout } = await execFileAsync(bin, [...prefix, '-hide_banner', '-encoders'], {
+      timeout: 5000,
+    });
+    if (!stdout.includes('h264_nvenc')) {
+      return 'libx264';
     }
+
+    await execFileAsync(
+      bin,
+      [
+        ...prefix,
+        '-hide_banner',
+        '-loglevel',
+        'error',
+        '-f',
+        'lavfi',
+        '-i',
+        'color=c=black:s=256x256:d=0.04',
+        '-frames:v',
+        '1',
+        '-c:v',
+        'h264_nvenc',
+        '-f',
+        'null',
+        '-',
+      ],
+      { timeout: 3000 }
+    );
+    return 'h264_nvenc';
   } catch {
-    // If detection fails or ffmpeg is missing, fallback to libx264
+    // Missing ffmpeg, missing NVENC, or a real GPU probe failure all fall back.
+    return 'libx264';
   }
-  return 'libx264';
 }
 
 /**
@@ -154,6 +193,7 @@ export function startScreenRecording(o: ScreenRecorderOptions): ScreenRecorderHa
     fps,
     encoder,
     outputIdx,
+    drawMouse: o.drawMouse,
   });
 
   // Contract §3: screenStartUnixMs is sampled immediately before spawning ffmpeg.

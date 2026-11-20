@@ -24,7 +24,7 @@ test('T10.3: buildFfmpegArgs for h264_nvenc contains near-lossless parameters an
 
   assert.ok(args.includes('-i'));
   const inputArg = args[args.indexOf('-i') + 1];
-  assert.equal(inputArg, 'ddagrab=output_idx=1:framerate=60');
+  assert.equal(inputArg, 'ddagrab=output_idx=1:framerate=60:draw_mouse=0');
 
   assert.ok(args.includes('-c:v'));
   assert.equal(args[args.indexOf('-c:v') + 1], 'h264_nvenc');
@@ -59,7 +59,7 @@ test('T10.3: buildFfmpegArgs for libx264 contains quality CRF and preset', () =>
   });
 
   assert.ok(args.includes('-i'));
-  assert.equal(args[args.indexOf('-i') + 1], 'ddagrab=output_idx=0:framerate=30');
+  assert.equal(args[args.indexOf('-i') + 1], 'ddagrab=output_idx=0:framerate=30:draw_mouse=0');
 
   assert.ok(args.includes('-c:v'));
   assert.equal(args[args.indexOf('-c:v') + 1], 'libx264');
@@ -77,6 +77,44 @@ test('T10.3: buildFfmpegArgs for libx264 contains quality CRF and preset', () =>
   assert.equal(args[args.indexOf('-fps_mode') + 1], 'cfr');
 
   assert.equal(args[args.length - 1], 'backup.mp4');
+});
+
+test('T12.3: buildFfmpegArgs drawMouse true preserves the OS cursor, default omits it', () => {
+  const hidden = buildFfmpegArgs({
+    outFile: 'hidden.mp4',
+    fps: 60,
+    encoder: 'libx264',
+    drawMouse: false,
+  });
+  assert.equal(
+    hidden[hidden.indexOf('-i') + 1],
+    'ddagrab=output_idx=0:framerate=60:draw_mouse=0'
+  );
+
+  const visible = buildFfmpegArgs({
+    outFile: 'visible.mp4',
+    fps: 60,
+    encoder: 'libx264',
+    drawMouse: true,
+  });
+  assert.equal(
+    visible[visible.indexOf('-i') + 1],
+    'ddagrab=output_idx=0:framerate=60:draw_mouse=1'
+  );
+});
+
+test('T12.3: detectEncoder falls back to libx264 when the NVENC probe fails', async () => {
+  const script = [
+    "const args = process.argv.slice(2);",
+    "if (args.includes('-encoders')) { console.log('h264_nvenc'); process.exit(0); }",
+    "console.error('NVENC probe failed'); process.exit(1);",
+  ].join(' ');
+
+  const encoder = await detectEncoder({
+    ffmpegBin: process.execPath,
+    ffmpegArgsPrefix: ['-e', script, '--'],
+  });
+  assert.equal(encoder, 'libx264');
 });
 
 test('T10.3: detectEncoder identifies available video encoder', async () => {
