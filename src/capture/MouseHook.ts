@@ -11,6 +11,18 @@ import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
+export interface MouseHookScreenBounds {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface MouseHookOptions {
+  scriptPath?: string;
+  screenBounds?: MouseHookScreenBounds;
+}
+
 export interface MouseHookHandle {
   process: ChildProcess;
   lines: AsyncIterable<string>;
@@ -29,20 +41,43 @@ export function getDefaultMouseHookScriptPath(): string {
 /**
  * Pure function: constructs the command and arguments for spawning the mouse hook.
  * Strictly adheres to CONTRACTS §5: NEVER includes ExecutionPolicy Bypass or bypass arguments.
+ *
+ * Accepts either the legacy string script path or a MouseHookOptions object.
  */
-export function buildMouseHookCommand(scriptPath?: string): { command: string; args: string[] } {
-  const resolvedPath = scriptPath ?? getDefaultMouseHookScriptPath();
+export function buildMouseHookCommand(scriptPath?: string): { command: string; args: string[] };
+export function buildMouseHookCommand(options?: MouseHookOptions): { command: string; args: string[] };
+export function buildMouseHookCommand(
+  arg?: string | MouseHookOptions
+): { command: string; args: string[] } {
+  const options: MouseHookOptions = typeof arg === 'string' ? { scriptPath: arg } : arg ?? {};
+  const resolvedPath = options.scriptPath ?? getDefaultMouseHookScriptPath();
+
+  const args = ['-NoProfile', '-File', resolvedPath];
+  const bounds = options.screenBounds;
+  if (bounds) {
+    args.push(
+      '-ScreenX',
+      String(bounds.x),
+      '-ScreenY',
+      String(bounds.y),
+      '-ScreenW',
+      String(bounds.w),
+      '-ScreenH',
+      String(bounds.h)
+    );
+  }
+
   return {
     command: 'powershell.exe',
-    args: ['-NoProfile', '-File', resolvedPath],
+    args,
   };
 }
 
 /**
  * Spawns the PowerShell mouse hook process and returns an asynchronous line reader and stop handle.
  */
-export function startMouseHook(options: { scriptPath?: string } = {}): MouseHookHandle {
-  const { command, args } = buildMouseHookCommand(options.scriptPath);
+export function startMouseHook(options: MouseHookOptions = {}): MouseHookHandle {
+  const { command, args } = buildMouseHookCommand(options);
 
   const proc = spawn(command, args, {
     stdio: ['pipe', 'pipe', 'pipe'],

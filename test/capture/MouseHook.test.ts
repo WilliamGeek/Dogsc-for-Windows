@@ -8,6 +8,24 @@ import {
   startMouseHook,
 } from '../../src/capture/MouseHook.ts';
 
+test('T12.5: buildMouseHookCommand carries physical negative screen bounds without Bypass', () => {
+  const cmd = buildMouseHookCommand({
+    screenBounds: { x: -1920, y: 0, w: 1920, h: 1080 },
+  });
+
+  assert.deepEqual(
+    cmd.args.slice(-8),
+    ['-ScreenX', '-1920', '-ScreenY', '0', '-ScreenW', '1920', '-ScreenH', '1080']
+  );
+  for (const arg of cmd.args) {
+    assert.ok(!arg.toLowerCase().includes('bypass'), `Argument must not contain bypass: ${arg}`);
+    assert.ok(
+      !arg.toLowerCase().includes('executionpolicy'),
+      `Argument must not alter execution policy: ${arg}`
+    );
+  }
+});
+
 test('T10.2: buildMouseHookCommand constructs safe command without Bypass', () => {
   const cmdDefault = buildMouseHookCommand();
   assert.equal(cmdDefault.command, 'powershell.exe');

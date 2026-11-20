@@ -106,6 +106,27 @@ test('T12.2: allocateUniqueSessionDir avoids same-second collisions', () => {
   }
 });
 
+test('T12.5: recordSession rejects an injected out-of-range display before creating a session', async () => {
+  const base = resolve('out', `t125-bad-display-${process.pid}-${Date.now()}`);
+  const displays = [
+    {
+      index: 0,
+      deviceName: '\\\\.\\DISPLAY1',
+      isPrimary: true,
+      x: 0,
+      y: 0,
+      width: 1920,
+      height: 1080,
+    },
+  ];
+
+  await assert.rejects(
+    recordSession({ seconds: 1, outputIdx: 9, displays, baseDir: base }),
+    /显示器索引越界/
+  );
+  assert.equal(existsSync(base), false, 'invalid display must fail before mkdir');
+});
+
 test(
   'T12.2: E2E invalid display rejects and removes the partial session directory',
   { skip: !process.env.DOGSC_E2E },
@@ -116,7 +137,7 @@ test(
     try {
       await assert.rejects(
         recordSession({ seconds: 1, fps: 30, outputIdx: 9, baseDir: base }),
-        /ffmpeg|DXGI|ddagrab|display/i
+        /ffmpeg|DXGI|ddagrab|display|显示器|索引/i
       );
       assert.deepEqual(readdirSync(base), [], 'failed session directory must be removed');
     } finally {

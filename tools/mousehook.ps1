@@ -2,6 +2,13 @@
 # Low-level Windows Mouse Hook (WH_MOUSE_LL) emitting JSONL events to stdout.
 # Conforms strictly to docs/CONTRACTS.md §2.
 
+param(
+    [int]$ScreenX = 0,
+    [int]$ScreenY = 0,
+    [int]$ScreenW = 0,
+    [int]$ScreenH = 0
+)
+
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -ReferencedAssemblies System.Windows.Forms, System.Drawing @"
 using System;
@@ -54,21 +61,32 @@ public static class DogSCMouseHook
     [DllImport("user32.dll")]
     private static extern bool SetProcessDPIAware();
 
+    [DllImport("user32.dll")]
+    private static extern bool SetProcessDpiAwarenessContext(IntPtr value);
+
     private static IntPtr _hookID = IntPtr.Zero;
     private static LowLevelMouseProc _proc;
     private static Stopwatch _stopwatch;
     private static double _lastMoveTime = -1.0;
     private static readonly object _syncLock = new object();
 
-    public static void Run()
+    public static void Run(int sx, int sy, int sw, int sh)
     {
         try
         {
-            SetProcessDPIAware();
+            if (!SetProcessDpiAwarenessContext(new IntPtr(-4)))
+            {
+                SetProcessDPIAware();
+            }
         }
-        catch { }
+        catch
+        {
+            try { SetProcessDPIAware(); } catch { }
+        }
 
-        var screen = Screen.PrimaryScreen.Bounds;
+        var screen = (sw > 0 && sh > 0)
+            ? new System.Drawing.Rectangle(sx, sy, sw, sh)
+            : Screen.PrimaryScreen.Bounds;
         long originUnixMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
         _stopwatch = Stopwatch.StartNew();
@@ -188,4 +206,4 @@ public static class DogSCMouseHook
 }
 "@
 
-[DogSCMouseHook]::Run()
+[DogSCMouseHook]::Run($ScreenX, $ScreenY, $ScreenW, $ScreenH)

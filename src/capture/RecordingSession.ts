@@ -34,6 +34,7 @@ import { parsePointerJsonl } from './PointerJsonl.ts';
 import { startMouseHook } from './MouseHook.ts';
 import { startScreenRecording, detectEncoder, type VideoEncoderKind } from './ScreenRecorder.ts';
 import { probeMediaFile } from './MediaProbe.ts';
+import { enumerateDisplays, type DisplayDescriptor } from './DisplayEnumeration.ts';
 
 export interface RecordingMetaInput {
   id: string;
@@ -45,6 +46,7 @@ export interface RecordingMetaInput {
   encoder: string;
   durationSeconds: number;
   frameCount?: number;
+  displayDescriptor?: DisplayDescriptor;
 }
 
 export interface RecordingMeta {
@@ -58,6 +60,7 @@ export interface RecordingMeta {
   encoder: string;
   durationSeconds: number;
   frameCount?: number;
+  displayDescriptor?: DisplayDescriptor;
 }
 
 export interface RecordSessionOptions {
@@ -66,6 +69,8 @@ export interface RecordSessionOptions {
   outputIdx?: number;
   encoder?: VideoEncoderKind;
   baseDir?: string;
+  /** Injected descriptors for deterministic tests; production enumerates WMI. */
+  displays?: DisplayDescriptor[];
 }
 
 export function formatSessionId(d: Date = new Date()): string {
@@ -114,6 +119,7 @@ export function buildMeta(i: RecordingMetaInput): RecordingMeta {
     encoder: i.encoder,
     durationSeconds: i.durationSeconds,
     frameCount: i.frameCount,
+    displayDescriptor: i.displayDescriptor,
   };
 }
 
@@ -176,6 +182,15 @@ export async function recordSession(o: RecordSessionOptions): Promise<string> {
   const fps = o.fps ?? 60;
   const outputIdx = o.outputIdx ?? 0;
   const encoder = o.encoder ?? (await detectEncoder());
+
+  const displays = o.displays ?? (await enumerateDisplays());
+  const display = displays.find((d) => d.index === outputIdx);
+  if (!display) {
+    throw new Error(
+      `显示器索引越界: ${outputIdx}；可用索引: ${displays.map((d) => d.index).join(', ') || '无'}`
+    );
+  }
+
   const id = formatSessionId();
   const baseDir = resolve(o.baseDir ?? 'recordings');
 
@@ -198,8 +213,16 @@ export async function recordSession(o: RecordSessionOptions): Promise<string> {
     jsonlStream = createWriteStream(pointerJsonlPath, { encoding: 'utf-8' });
     const rawLines: string[] = [];
 
-    // Step 1: Start mouse hook and wait for header.
-    hook = startMouseHook();
+    // Step 1: Start mouse hook and wait for header. The hook and ffmpeg share
+    // the same physical pixel rectangle, including negative-coordinate screens.
+    hook = startMouseHook({
+      screenBounds: {
+        x: display.x,
+        y: display.y,
+        w: display.width,
+        h: display.height,
+      },
+    });
     const lineIterator = hook.lines[Symbol.asyncIterator]();
 
     const firstLineResult = await lineIterator.next();
@@ -286,6 +309,7 @@ export async function recordSession(o: RecordSessionOptions): Promise<string> {
       encoder,
       durationSeconds: probed.durationSeconds,
       frameCount: probed.frameCount,
+      displayDescriptor: display,
     });
     writeFileSync(metaJsonPath, JSON.stringify(meta, null, 2), 'utf-8');
 
