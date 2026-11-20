@@ -11,7 +11,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
-import { readFileSync, existsSync, statSync } from 'node:fs';
+import { readFileSync, existsSync, statSync, rmSync } from 'node:fs';
 import { resolve, normalize, extname, dirname } from 'node:path';
 import { mkdir } from 'node:fs/promises';
 import { stripTypeScriptTypes } from 'node:module';
@@ -103,6 +103,10 @@ export interface ExportServerOptions {
   encoder?: VideoEncoderKind;
   port?: number;
   ffmpegCommand?: { command: string; args: string[] };
+  /** No-frame watchdog. Defaults to 30 seconds. */
+  inactivityTimeoutMs?: number;
+  /** Whole-export watchdog. Defaults to max(120s, frameCount * 500ms). */
+  totalTimeoutMs?: number;
   onProgress?: (frameIndex: number, frameCount: number) => void;
 }
 
@@ -187,6 +191,7 @@ export async function startExportServer(o: ExportServerOptions): Promise<ExportS
   let stdinError: Error | null = null;
   proc.stdin?.on('error', (err) => {
     stdinError = err;
+    failExport(new Error(`Encoder stdin error: ${err.message}`));
   });
 
   let procExited = false;
@@ -195,16 +200,21 @@ export async function startExportServer(o: ExportServerOptions): Promise<ExportS
     proc.on('error', (err) => {
       procExited = true;
       rejectExit(err);
+      failExport(new Error(`Encoder failed to start: ${err.message}`));
     });
     proc.on('close', (code) => {
       procExited = true;
       procExitCode = code;
       resolveExit(code);
+      if (code !== 0 && !doneCalled) {
+        failExport(new Error(`Encoder exited unexpectedly with code ${code}:\n${stderr}`));
+      }
     });
   });
 
   let expectedFrame = 0;
   let doneCalled = false;
+  let doneSettled = false;
 
   let resolveDone!: (value: { receivedFrames: number }) => void;
   let rejectDone!: (reason?: unknown) => void;
@@ -214,6 +224,77 @@ export async function startExportServer(o: ExportServerOptions): Promise<ExportS
   });
   // Prevent unhandled rejection if caller closes server early without waiting
   donePromise.catch(() => {});
+
+  const inactivityTimeoutMs = o.inactivityTimeoutMs ?? 30_000;
+  const totalTimeoutMs =
+    o.totalTimeoutMs ?? Math.max(120_000, o.plan.frameCount * 500);
+
+  let inactivityTimer: NodeJS.Timeout | null = null;
+  let totalTimer: NodeJS.Timeout | null = null;
+
+  function clearWatchdogs(): void {
+    if (inactivityTimer) {
+      clearTimeout(inactivityTimer);
+      inactivityTimer = null;
+    }
+    if (totalTimer) {
+      clearTimeout(totalTimer);
+      totalTimer = null;
+    }
+  }
+
+  function removePartialOutput(): void {
+    // A fake encoder is a test seam and may deliberately not create outFile.
+    if (o.ffmpegCommand) return;
+    try {
+      rmSync(o.outFile, { force: true });
+    } catch {
+      // Best-effort cleanup only.
+    }
+  }
+
+  function failExport(error: Error): void {
+    clearWatchdogs();
+    doneCalled = true;
+    if (doneSettled) return;
+    doneSettled = true;
+
+    try {
+      proc.kill('SIGKILL');
+    } catch {
+      // Already exited.
+    }
+    removePartialOutput();
+    rejectDone(error);
+  }
+
+  function armInactivity(): void {
+    if (inactivityTimer) clearTimeout(inactivityTimer);
+    if (doneSettled) return;
+    inactivityTimer = setTimeout(() => {
+      failExport(
+        new Error(
+          `Export inactivity timeout: no valid frame received within ${inactivityTimeoutMs}ms`
+        )
+      );
+    }, inactivityTimeoutMs);
+  }
+
+  function startWatchdogs(): void {
+    clearWatchdogs();
+
+    totalTimer = setTimeout(() => {
+      failExport(
+        new Error(
+          `Export total timeout: export did not finish within ${totalTimeoutMs}ms`
+        )
+      );
+    }, totalTimeoutMs);
+
+    armInactivity();
+  }
+
+  startWatchdogs();
 
   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     try {
@@ -270,13 +351,49 @@ export async function startExportServer(o: ExportServerOptions): Promise<ExportS
           await once(proc.stdin, 'drain');
         }
 
+        // A valid frame proves the browser/renderer is still alive.
+        armInactivity();
         o.onProgress?.(expectedFrame, o.plan.frameCount);
         sendJson(res, 200, { ok: true, frame: frameIndex });
         return;
       }
 
-      // 3. POST /api/done
+      // 3. POST /api/error — browser-side fatal error (WebGL context lost, etc.)
+      if (req.method === 'POST' && decodedPath === '/api/error') {
+        const body = await readRequestBody(req);
+        let message = 'Browser reported an unknown export error';
+        let frameIndex: number | null = null;
+        try {
+          const parsedError = JSON.parse(body.toString('utf8'));
+          if (typeof parsedError?.message === 'string' && parsedError.message.length > 0) {
+            message = parsedError.message;
+          }
+          if (Number.isFinite(parsedError?.frameIndex)) {
+            frameIndex = Number(parsedError.frameIndex);
+          }
+        } catch {
+          // Keep the generic message for malformed JSON, but still abort.
+        }
+
+        const error = new Error(
+          `${message}${frameIndex === null ? '' : ` (frame ${frameIndex})`}`
+        );
+        failExport(error);
+        sendJson(res, 200, { ok: true, error: error.message });
+        return;
+      }
+
+      // 4. POST /api/done
       if (req.method === 'POST' && decodedPath === '/api/done') {
+        if (expectedFrame !== o.plan.frameCount) {
+          const err = new Error(
+            `Incomplete export: expected ${o.plan.frameCount} frames, received ${expectedFrame}`
+          );
+          failExport(err);
+          sendText(res, 409, err.message);
+          return;
+        }
+
         if (!doneCalled) {
           doneCalled = true;
           proc.stdin?.end();
@@ -284,13 +401,16 @@ export async function startExportServer(o: ExportServerOptions): Promise<ExportS
         const code = await procExitPromise;
         if (code !== 0) {
           const err = new Error(`Encoder exited with code ${code}:\n${stderr}`);
-          rejectDone(err);
+          failExport(err);
           sendText(res, 500, err.message);
           return;
         }
-        const result = { receivedFrames: expectedFrame };
-        resolveDone(result);
-        sendJson(res, 200, { ok: true, ...result });
+        clearWatchdogs();
+        if (!doneSettled) {
+          doneSettled = true;
+          resolveDone({ receivedFrames: expectedFrame });
+        }
+        sendJson(res, 200, { ok: true, receivedFrames: expectedFrame });
         return;
       }
 
@@ -354,7 +474,10 @@ export async function startExportServer(o: ExportServerOptions): Promise<ExportS
   });
 
   return new Promise<ExportServerHandle>((resolveServer, rejectServer) => {
-    server.once('error', (err) => rejectServer(err));
+    server.once('error', (err) => {
+      clearWatchdogs();
+      rejectServer(err);
+    });
 
     server.listen(o.port ?? 0, '127.0.0.1', () => {
       const address = server.address();
@@ -365,6 +488,7 @@ export async function startExportServer(o: ExportServerOptions): Promise<ExportS
         receivedFrames: () => expectedFrame,
         waitForDone: () => donePromise,
         close: async () => {
+          clearWatchdogs();
           if (!procExited) {
             try {
               proc.stdin?.end();

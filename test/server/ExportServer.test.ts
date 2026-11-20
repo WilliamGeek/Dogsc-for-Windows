@@ -38,6 +38,122 @@ test('T11.6: buildExportFfmpegArgs constructs rawvideo RGBA vflip arguments for 
   assert.ok(x264.includes('vflip'));
 });
 
+test('T12.4: /api/done rejects incomplete exports with 409 and removes the partial file', async () => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'dogsc-export-incomplete-'));
+  const outFile = path.join(tmpDir, 'partial.mp4');
+  let server: ExportServerHandle | null = null;
+
+  try {
+    server = await startExportServer({
+      rootDir: path.resolve('F:\\dogsc-win'),
+      framesDir: tmpDir,
+      outFile,
+      plan: {
+        fps: 60,
+        width: 4,
+        height: 2,
+        frameCount: 3,
+        sourceFrameCount: 3,
+        durationSeconds: 0.05,
+        framesBaseUrl: '/frames',
+        project: {},
+        pointerEvents: [],
+      },
+      ffmpegCommand: {
+        command: process.execPath,
+        args: ['-e', 'process.stdin.resume(); process.stdin.on("end", () => process.exit(0));'],
+      },
+    });
+
+    const doneRes = await fetch(`http://127.0.0.1:${server.port}/api/done`, {
+      method: 'POST',
+      headers: { Connection: 'close' },
+    });
+    assert.equal(doneRes.status, 409);
+    await assert.rejects(server.waitForDone(), /Incomplete export: expected 3 frames, received 0/i);
+    await assert.rejects(fs.stat(outFile), /ENOENT/);
+  } finally {
+    if (server) await server.close();
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('T12.4: inactivity watchdog rejects within 500ms when no frames arrive', async () => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'dogsc-export-idle-'));
+  let server: ExportServerHandle | null = null;
+
+  try {
+    server = await startExportServer({
+      rootDir: path.resolve('F:\\dogsc-win'),
+      framesDir: tmpDir,
+      outFile: path.join(tmpDir, 'idle.mp4'),
+      plan: {
+        fps: 60,
+        width: 4,
+        height: 2,
+        frameCount: 3,
+        sourceFrameCount: 3,
+        durationSeconds: 0.05,
+        framesBaseUrl: '/frames',
+        project: {},
+        pointerEvents: [],
+      },
+      inactivityTimeoutMs: 150,
+      totalTimeoutMs: 10_000,
+      ffmpegCommand: {
+        command: process.execPath,
+        args: ['-e', 'process.stdin.resume(); process.stdin.on("end", () => process.exit(0));'],
+      },
+    });
+
+    const startedAt = Date.now();
+    await assert.rejects(server.waitForDone(), /inactivity timeout/i);
+    assert.ok(Date.now() - startedAt < 500, 'inactivity watchdog should reject within 500ms');
+  } finally {
+    if (server) await server.close();
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test('T12.4: /api/error aborts export immediately and surfaces browser message', async () => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'dogsc-export-error-'));
+  let server: ExportServerHandle | null = null;
+
+  try {
+    server = await startExportServer({
+      rootDir: path.resolve('F:\\dogsc-win'),
+      framesDir: tmpDir,
+      outFile: path.join(tmpDir, 'error.mp4'),
+      plan: {
+        fps: 60,
+        width: 4,
+        height: 2,
+        frameCount: 3,
+        sourceFrameCount: 3,
+        durationSeconds: 0.05,
+        framesBaseUrl: '/frames',
+        project: {},
+        pointerEvents: [],
+      },
+      ffmpegCommand: {
+        command: process.execPath,
+        args: ['-e', 'process.stdin.resume(); process.stdin.on("end", () => process.exit(0));'],
+      },
+    });
+
+    const errorRes = await fetch(`http://127.0.0.1:${server.port}/api/error`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Connection: 'close' },
+      body: JSON.stringify({ message: 'WebGL context lost', frameIndex: 2 }),
+    });
+    assert.equal(errorRes.status, 200);
+    await assert.rejects(server.waitForDone(), /WebGL context lost/i);
+  } finally {
+    if (server) await server.close();
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  }
+});
+
 test('T11.6: ExportServer enforces frame byte length (400), strict sequence (409), and counts frames through fake ffmpeg stdin', async () => {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'dogsc-export-srv-'));
   let server: ExportServerHandle | null = null;

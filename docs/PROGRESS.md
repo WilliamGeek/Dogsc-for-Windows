@@ -64,9 +64,9 @@
 2026-11-14 20:21 | T11.5d | DONE | 矢量光标多边形与点击涟漪特效渲染 (shadow+outline+fill箭头三角形与SDF点击波纹，实机截图 out/t115d.png 276KB 验收完美) | 198 pass (4 skip E2E)
 2026-11-14 20:27 | T11.6 | DONE | 无头浏览器批量导出引擎 (ExportServer顺序帧长度/序号严格校验与ffmpeg流式管道、web/exporter.ts、scripts/export.ts、200单测全绿) | 200 pass (4 skip E2E)
 2026-11-14 22:35 | T11.7 | NEED-USER-E2E | 实机录制导出 export.mp4 完成 (518帧/1920x1080/60fps/8.63s/6.13MB/h264_nvenc，首张放大抽检帧 out/t117_check.png 已验证正立/背景/圆角阴影/1.8x缩放/矢量光标与点击涟漪，待用户肉眼验收) | 200 pass (4 skip E2E)
-2026-11-20 17:03 | T12.3 | DONE | ddagrab 默认 draw_mouse=0，WebGL 矢量光标成为唯一光标；detectEncoder 增加 1 帧 h264_nvenc 真机探活与 libx264 回退。实机 4 秒录制 `20261120-170249` 为 249 帧/4.150s，源帧 `out/t123_source_2_5.png` 无系统光标烘焙；E2E 218/218 全绿 | 218 pass (0 skip E2E)
+2026-11-20 17:09 | T12.4 | DONE | ExportServer 增加 inactivity(30s)/total 双看门狗、`/api/error` 秒报、`/api/done` 总帧数强校验与半成品删除；web/exporter 单帧 AbortController 超时重试且失败上报；scripts/export Windows 下 taskkill Edge 进程树。真实导出 20261120-140843 全量 588 帧/9.800s，耗时 62.91s，无 headless Edge 残留；E2E 221/221 全绿 | 221 pass (0 skip E2E)
 
 阶段 2 验收通过
 
-下一个任务：T12.4（Wave A 第四卡：ExportServer 30s 无帧看门狗、done 总帧数强校验、浏览器 /api/error 秒报与 Edge 进程树清理，详见 docs/MASTER_REFACTOR_PLAN_V2.md §4）
+下一个任务：T12.5（Wave A 第五卡：WMI 统一显示器描述符、`--display` 编号前缀校验与混合 DPI 单屏鼠标/边框映射，详见 docs/MASTER_REFACTOR_PLAN_V2.md §4）
 

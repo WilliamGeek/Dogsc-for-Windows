@@ -9,7 +9,7 @@
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 import { parsePointerJsonl } from '../src/capture/PointerJsonl.ts';
 import { extractFrames } from '../src/capture/FrameExtractor.ts';
@@ -180,6 +180,13 @@ async function main(): Promise<void> {
     try {
       if (!edge.killed) {
         edge.kill('SIGKILL');
+      }
+      // Edge spawns child renderer/GPU processes. Kill the whole tree on
+      // Windows so a failed export cannot leave orphaned headless browsers.
+      if (process.platform === 'win32' && edge.pid) {
+        spawnSync('taskkill', ['/F', '/T', '/PID', String(edge.pid)], {
+          stdio: 'ignore',
+        });
       }
     } catch {
       // ignore
