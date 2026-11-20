@@ -44,9 +44,11 @@ export interface FramePlanResult {
 export function makeFramePlan(i: FramePlanInput): FramePlanResult {
   const safeFps = i.fps > 0 ? i.fps : 60;
   const safeDuration = Number.isFinite(i.durationSeconds) && i.durationSeconds > 0 ? i.durationSeconds : 0.001;
-  const schedule = makeOutputFrameSchedule(safeDuration, safeFps as OutputFrameRate);
+  const maxSourceDuration = i.sourceFrameCount > 0 ? i.sourceFrameCount / safeFps : safeDuration;
+  const effectiveDuration = Math.min(safeDuration, maxSourceDuration);
+  const schedule = makeOutputFrameSchedule(effectiveDuration, safeFps as OutputFrameRate);
 
-  const timelineMap = new TimelineMap(i.project.timeline.sourceSequence, safeDuration);
+  const timelineMap = new TimelineMap(i.project.timeline.sourceSequence, effectiveDuration);
   const pointerTrack = new ProjectPointerTrack(timelineMap, i.pointerEvents);
   const canvasSize = makeCompositionSize(i.canvas.width, i.canvas.height);
   const sourceAspectRatio = i.canvas.width / (i.canvas.height > 0 ? i.canvas.height : 1);
@@ -71,7 +73,7 @@ export function makeFramePlan(i: FramePlanInput): FramePlanResult {
       const scene = FrameSceneEvaluator.scene(
         i.project,
         tOut,
-        safeDuration,
+        effectiveDuration,
         canvasSize,
         sourceAspectRatio,
         null, // cameraSourceSize

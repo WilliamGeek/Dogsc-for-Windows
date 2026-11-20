@@ -14,6 +14,7 @@ import { parseArgs } from 'node:util';
 import { parsePointerJsonl } from '../src/capture/PointerJsonl.ts';
 import { extractFrames } from '../src/capture/FrameExtractor.ts';
 import { detectEncoder } from '../src/capture/ScreenRecorder.ts';
+import { probeMediaFile } from '../src/capture/MediaProbe.ts';
 import { makeOutputFrameSchedule } from '../src/core/OutputFrameSchedule.ts';
 import { makePointerEventRecord } from '../src/core/ZoomAnimation.ts';
 import { startExportServer } from '../src/server/ExportServer.ts';
@@ -86,14 +87,24 @@ async function main(): Promise<void> {
   }
 
   const fps = Number(meta.fps) || 60;
-  const width = Number(meta.width) || 1920;
-  const height = Number(meta.height) || 1080;
-  const durationSeconds = Number(meta.durationSeconds) || 1;
-  const schedule = makeOutputFrameSchedule(durationSeconds, fps as OutputFrameRate);
+  const probed = await probeMediaFile(path.join(recDir, 'screen.mp4'));
+  const width = probed.width > 0 ? probed.width : (Number(meta.width) || 1920);
+  const height = probed.height > 0 ? probed.height : (Number(meta.height) || 1080);
+  const trueDuration = Math.min(
+    probed.durationSeconds,
+    sourceFrameCount > 0 ? sourceFrameCount / fps : probed.durationSeconds
+  );
+  const schedule = makeOutputFrameSchedule(trueDuration, fps as OutputFrameRate);
   let frameCount = schedule.frameCount;
   if (Number.isFinite(maxFrames) && maxFrames > 0) {
     frameCount = Math.min(frameCount, maxFrames);
   }
+
+  console.log(
+    `[Export] 媒体真相: ${probed.width}x${probed.height} @ ${probed.fps}fps, ` +
+    `${probed.frameCount} 帧 / ${probed.durationSeconds.toFixed(3)}s; ` +
+    `导出时间轴 ${trueDuration.toFixed(3)}s`
+  );
 
   const encoder = await detectEncoder();
   console.log(`[Export] 输出规格: ${width}x${height} @ ${fps}fps, 共 ${frameCount} 帧, 编码器: ${encoder}`);
@@ -109,7 +120,7 @@ async function main(): Promise<void> {
       height,
       frameCount,
       sourceFrameCount,
-      durationSeconds,
+      durationSeconds: trueDuration,
       framesBaseUrl: '/frames',
       project: projectJson,
       pointerEvents,

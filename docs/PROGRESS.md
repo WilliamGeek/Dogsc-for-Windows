@@ -64,9 +64,9 @@
 2026-11-14 20:21 | T11.5d | DONE | 矢量光标多边形与点击涟漪特效渲染 (shadow+outline+fill箭头三角形与SDF点击波纹，实机截图 out/t115d.png 276KB 验收完美) | 198 pass (4 skip E2E)
 2026-11-14 20:27 | T11.6 | DONE | 无头浏览器批量导出引擎 (ExportServer顺序帧长度/序号严格校验与ffmpeg流式管道、web/exporter.ts、scripts/export.ts、200单测全绿) | 200 pass (4 skip E2E)
 2026-11-14 22:35 | T11.7 | NEED-USER-E2E | 实机录制导出 export.mp4 完成 (518帧/1920x1080/60fps/8.63s/6.13MB/h264_nvenc，首张放大抽检帧 out/t117_check.png 已验证正立/背景/圆角阴影/1.8x缩放/矢量光标与点击涟漪，待用户肉眼验收) | 200 pass (4 skip E2E)
-2026-11-20 15:43 | PLAN-V2 | DONE | 基于 2026-11-20 实测对齐审计报告完成宏微观全栈重构总计划 V2 (新增 docs/MASTER_REFACTOR_PLAN_V2.md，升级 AGENTS/CONTRACTS/TASKS 共34张原子卡 T12.1~T17.4 与 G1~G6 / Computer Use 审核手册)；暂停 T11.7 验收，优先执行 Wave A 止血修复 P0-01~03 与 P1-01~07 | 200 pass (4 skip E2E)
+2026-11-20 16:56 | T12.1 | DONE | MediaProbe 以 ffprobe 建立真实媒体真相；RecordingSession 写入真实 duration/frameCount/width/height；export 与 FramePlan 改用真实源时长。实机复导出 20261120-140843 为 588 帧/9.800s（旧成片 743 帧/12.383s），尾部复帧消除；`DOGSC_E2E=1 npm test` 213/213 全绿 | 213 pass (0 skip E2E)
 
 阶段 2 验收通过
 
-下一个任务：T12.1（Wave A 止血首卡：使用 ffprobe 真实视频时长与帧数消除导出尾部复帧，详见 docs/MASTER_REFACTOR_PLAN_V2.md §4）
+下一个任务：T12.2（Wave A 第二卡：采集失败即失败、早期崩溃熔断与失败目录原子清理，详见 docs/MASTER_REFACTOR_PLAN_V2.md §4）
 

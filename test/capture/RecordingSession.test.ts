@@ -2,13 +2,14 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import {
   buildMeta,
   buildProjectFromRecording,
   recordSession,
   formatSessionId,
 } from '../../src/capture/RecordingSession.ts';
+import { probeMediaFile } from '../../src/capture/MediaProbe.ts';
 import {
   makePointerEventRecord,
   makeNormalizedPoint,
@@ -26,6 +27,7 @@ test('T10.4: buildMeta correctly calculates pointerOffsetSeconds and preserves f
     pointerOriginUnixMs: 1762000000250, // Hook started 250ms after screen recording
     encoder: 'h264_nvenc',
     durationSeconds: 10.5,
+    frameCount: 630,
   });
 
   assert.equal(meta.id, '20261102-120000');
@@ -37,6 +39,7 @@ test('T10.4: buildMeta correctly calculates pointerOffsetSeconds and preserves f
   assert.equal(meta.pointerOffsetSeconds, 0.25);
   assert.equal(meta.encoder, 'h264_nvenc');
   assert.equal(meta.durationSeconds, 10.5);
+  assert.equal(meta.frameCount, 630);
 });
 
 test('T10.4: buildProjectFromRecording offsets event times and generates valid RecorderProject with 3 zoom clips', () => {
@@ -90,6 +93,16 @@ test(
       assert.ok(existsSync(`${sessionDir}/pointer.jsonl`), 'pointer.jsonl exists');
       assert.ok(existsSync(`${sessionDir}/meta.json`), 'meta.json exists');
       assert.ok(existsSync(`${sessionDir}/project.json`), 'project.json exists');
+
+      const meta = JSON.parse(readFileSync(`${sessionDir}/meta.json`, 'utf-8'));
+      const probed = await probeMediaFile(`${sessionDir}/screen.mp4`);
+      assert.ok(
+        Math.abs(meta.durationSeconds - probed.durationSeconds) <= 0.05,
+        `meta duration ${meta.durationSeconds}s should match ffprobe ${probed.durationSeconds}s`
+      );
+      assert.equal(meta.frameCount, probed.frameCount, 'meta frameCount should match ffprobe');
+      assert.equal(meta.width, probed.width, 'meta width should match ffprobe');
+      assert.equal(meta.height, probed.height, 'meta height should match ffprobe');
     } finally {
       if (sessionDir && existsSync(sessionDir)) {
         rmSync(sessionDir, { recursive: true, force: true });

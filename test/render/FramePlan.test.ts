@@ -26,6 +26,28 @@ function assertNoNaN(obj: unknown, path: string = 'root'): void {
   }
 }
 
+test('T12.1: authoritative source frame count wins over stale meta duration and removes tail freeze', () => {
+  const timeline = makeProjectTimeline({});
+  const project = makeRecorderProject({ timeline, zoomAnimations: [] });
+
+  const plan = makeFramePlan({
+    project,
+    pointerEvents: [],
+    fps: 60,
+    durationSeconds: 12.377,
+    sourceFrameCount: 588,
+    canvas: { width: 1920, height: 1080 },
+  });
+
+  assert.equal(plan.frameCount, 588);
+  const lastFrame = plan.frameAt(587);
+  assert.equal(lastFrame.sourceFrameFile, 588);
+  assert.ok(
+    lastFrame.scene.time < 9.800001,
+    `last presentation time ${lastFrame.scene.time}s must stay inside 9.8s source`
+  );
+});
+
 test('T11.2: makeFramePlan satisfies CONTRACTS §4 mapping and idempotency', () => {
   const zoomClip = makeZoomAnimationClip({
     id: 'z1',

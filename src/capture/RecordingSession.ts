@@ -25,6 +25,7 @@ import { AutoZoomPlanner } from '../core/AutoZoomPlanner.ts';
 import { parsePointerJsonl } from './PointerJsonl.ts';
 import { startMouseHook } from './MouseHook.ts';
 import { startScreenRecording, detectEncoder, type VideoEncoderKind } from './ScreenRecorder.ts';
+import { probeMediaFile } from './MediaProbe.ts';
 
 export interface RecordingMetaInput {
   id: string;
@@ -35,6 +36,7 @@ export interface RecordingMetaInput {
   pointerOriginUnixMs: number;
   encoder: string;
   durationSeconds: number;
+  frameCount?: number;
 }
 
 export interface RecordingMeta {
@@ -47,6 +49,7 @@ export interface RecordingMeta {
   pointerOffsetSeconds: number;
   encoder: string;
   durationSeconds: number;
+  frameCount?: number;
 }
 
 export interface RecordSessionOptions {
@@ -84,6 +87,7 @@ export function buildMeta(i: RecordingMetaInput): RecordingMeta {
     pointerOffsetSeconds,
     encoder: i.encoder,
     durationSeconds: i.durationSeconds,
+    frameCount: i.frameCount,
   };
 }
 
@@ -173,7 +177,6 @@ export async function recordSession(o: RecordSessionOptions): Promise<string> {
   }
 
   const pointerOriginUnixMs = headerData.originUnixMs;
-  const screenBounds = headerData.screen ?? { x: 0, y: 0, w: 1920, h: 1080 };
 
   // Continuously pump remaining mouse events to file and memory
   let isPumping = true;
@@ -211,24 +214,27 @@ export async function recordSession(o: RecordSessionOptions): Promise<string> {
 
   jsonlStream.end();
 
-  // Step 5: Save metadata and project
-  const durationSeconds = (Date.now() - recorder.screenStartUnixMs) / 1000;
+  // Step 5: Save metadata and project using ffprobe's real media truth.
+  // Never fall back to wall-clock duration here: ffmpeg startup/finalization
+  // and hook shutdown are not part of the recorded video timeline.
+  const probed = await probeMediaFile(screenMp4Path);
   const meta = buildMeta({
     id,
     fps,
-    width: screenBounds.w,
-    height: screenBounds.h,
+    width: probed.width,
+    height: probed.height,
     screenStartUnixMs: recorder.screenStartUnixMs,
     pointerOriginUnixMs,
     encoder,
-    durationSeconds,
+    durationSeconds: probed.durationSeconds,
+    frameCount: probed.frameCount,
   });
   writeFileSync(metaJsonPath, JSON.stringify(meta, null, 2), 'utf-8');
 
   // Parse pointer events and generate project
   const fullJsonlText = rawLines.join('\n');
   const parsed = parsePointerJsonl(fullJsonlText);
-  const project = buildProjectFromRecording(parsed.events, meta.pointerOffsetSeconds, durationSeconds);
+  const project = buildProjectFromRecording(parsed.events, meta.pointerOffsetSeconds, probed.durationSeconds);
   writeFileSync(projectJsonPath, encodeRecorderProject(project), 'utf-8');
 
   return sessionDir;

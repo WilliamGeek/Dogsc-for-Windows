@@ -136,7 +136,7 @@
 ## 重构迭代 V2 任务卡清单（详细规格见 `docs/MASTER_REFACTOR_PLAN_V2.md` §4，一卡一提交一中文标签）
 
 ### Wave A：P0/P1 真实性止血、安全加固与自动验收基建（先做，做完复测 T11.7）
-- [ ] T12.1 真实时长口径：新增 `src/capture/MediaProbe.ts`，`RecordingSession` / `scripts/export.ts` 改用 `ffprobe` 真实时长与帧数，`FramePlan` 消除导出尾部复帧（P0-01）。
+- [x] T12.1 真实时长口径：新增 `src/capture/MediaProbe.ts`，`RecordingSession` / `scripts/export.ts` 改用 `ffprobe` 真实时长与帧数，`FramePlan` 消除导出尾部复帧（P0-01）。
 - [ ] T12.2 失败即失败：校验 `ScreenRecorder` ffmpeg 退出码与 stderr、早期崩溃 `Promise.race` 中止、失败清理脏目录、`allocateUniqueSessionDir` 与 `await finished(jsonlStream)`（P0-02, P3-04）。
 - [ ] T12.3 单光标与编码探活：`ddagrab` 默认追加 `:draw_mouse=0` 消除双光标，升级 `detectEncoder()` 做 1 帧 NVENC 真机探活并自动回退 `libx264`（P0-03, P2-13）。
 - [ ] T12.4 导出稳健性：`ExportServer` 30s 无帧看门狗、`/api/done` 总帧数强校验（少帧 409 删残片）、`/api/error` 秒报、`web/exporter.ts` 超时重试、`scripts/export.ts` `taskkill /F /T` 清进程树（P1-01, P1-02）。
