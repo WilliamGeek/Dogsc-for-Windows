@@ -117,6 +117,30 @@ test('T12.3: detectEncoder falls back to libx264 when the NVENC probe fails', as
   assert.equal(encoder, 'libx264');
 });
 
+test('T12.7: parses -progress pipe:1 and derives firstFrameUnixMs from out_time_us', async () => {
+  const script = [
+    "console.log('frame=1');",
+    "console.log('out_time_us=50000');",
+    "console.log('progress=continue');",
+    'setTimeout(() => process.exit(0), 100);',
+  ].join(' ');
+
+  const recorder = startScreenRecording({
+    outFile: 'out/t127_fake.mp4',
+    fps: 30,
+    encoder: 'libx264',
+    ffmpegBin: process.execPath,
+    ffmpegArgsPrefix: ['-e', script, '--'],
+  });
+
+  const firstFrame = await recorder.ready;
+  const observedAt = Date.now();
+  assert.ok(firstFrame <= observedAt, 'first frame must not be in the future');
+  const age = observedAt - firstFrame;
+  assert.ok(age >= 20 && age <= 300, `firstFrame age should reflect 50ms out_time_us, got ${age}ms`);
+  await recorder.stop();
+});
+
 test('T10.3: detectEncoder identifies available video encoder', async () => {
   const encoder = await detectEncoder();
   assert.ok(

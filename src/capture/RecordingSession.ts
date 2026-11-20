@@ -47,6 +47,8 @@ export interface RecordingMetaInput {
   width: number;
   height: number;
   screenStartUnixMs: number;
+  spawnUnixMs?: number;
+  firstFrameUnixMs?: number;
   pointerOriginUnixMs: number;
   encoder: string;
   durationSeconds: number;
@@ -60,6 +62,8 @@ export interface RecordingMeta {
   width: number;
   height: number;
   screenStartUnixMs: number;
+  spawnUnixMs?: number;
+  firstFrameUnixMs?: number;
   pointerOriginUnixMs: number;
   pointerOffsetSeconds: number;
   encoder: string;
@@ -109,16 +113,21 @@ export function allocateUniqueSessionDir(baseDir: string, id: string): string {
 
 /**
  * Pure function: constructs the metadata object with precise pointerOffsetSeconds.
- * Formula per CONTRACTS.md §3: pointerOffsetSeconds = (pointerOriginUnixMs - screenStartUnixMs) / 1000
+ * Formula per CONTRACTS.md §3: pointerOffsetSeconds is measured from the first
+ * captured frame (not process spawn), because ffmpeg startup latency is not
+ * part of the video timeline.
  */
 export function buildMeta(i: RecordingMetaInput): RecordingMeta {
-  const pointerOffsetSeconds = (i.pointerOriginUnixMs - i.screenStartUnixMs) / 1000;
+  const videoStartUnixMs = i.firstFrameUnixMs ?? i.screenStartUnixMs;
+  const pointerOffsetSeconds = (i.pointerOriginUnixMs - videoStartUnixMs) / 1000;
   return {
     id: i.id,
     fps: i.fps,
     width: i.width,
     height: i.height,
     screenStartUnixMs: i.screenStartUnixMs,
+    spawnUnixMs: i.spawnUnixMs,
+    firstFrameUnixMs: i.firstFrameUnixMs,
     pointerOriginUnixMs: i.pointerOriginUnixMs,
     pointerOffsetSeconds,
     encoder: i.encoder,
@@ -273,7 +282,20 @@ export async function recordSession(o: RecordSessionOptions): Promise<string> {
       encoder,
     });
 
-    // Step 3: Wait for requested duration. If ffmpeg dies early (invalid
+    // Step 3: Wait for the first captured frame, then start the requested
+    // duration clock. Spawn-to-first-frame latency must not count as content.
+    const firstFrameUnixMs = await Promise.race([
+      recorder.ready,
+      recorder.exited.then((result) => {
+        const tail = result.stderr.trim().slice(-300);
+        const reason = result.spawnError
+          ? `ffmpeg 启动失败: ${result.spawnError.message}`
+          : `ffmpeg 在首帧前退出 (code ${String(result.code)})`;
+        throw new Error(tail ? `${reason}: ${tail}` : reason);
+      }),
+    ]);
+
+    // Step 4: Wait for requested duration. If ffmpeg dies early (invalid
     // display, encoder unavailable, permission error), fail immediately
     // instead of sleeping through the entire requested duration.
     const requestedWait = sleep(Math.max(o.seconds, 0.5) * 1000);
@@ -287,7 +309,10 @@ export async function recordSession(o: RecordSessionOptions): Promise<string> {
           `ffmpeg 提前退出 (code ${String(result.code)})${tail ? `: ${tail}` : ''}`
         );
       }
-      throw new Error('ffmpeg 在录制结束前提前退出 (code 0)');
+      const tail0 = result.stderr.trim().slice(-500);
+      throw new Error(
+        `ffmpeg 在录制结束前提前退出 (code 0)${tail0 ? `: ${tail0}` : ''}`
+      );
     });
     await Promise.race([requestedWait, earlyExit]);
 
@@ -312,6 +337,8 @@ export async function recordSession(o: RecordSessionOptions): Promise<string> {
       width: probed.width,
       height: probed.height,
       screenStartUnixMs: recorder.screenStartUnixMs,
+      spawnUnixMs: recorder.screenStartUnixMs,
+      firstFrameUnixMs,
       pointerOriginUnixMs,
       encoder,
       durationSeconds: probed.durationSeconds,

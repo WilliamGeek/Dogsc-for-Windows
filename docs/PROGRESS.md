@@ -66,7 +66,9 @@
 2026-11-14 22:35 | T11.7 | NEED-USER-E2E | 实机录制导出 export.mp4 完成 (518帧/1920x1080/60fps/8.63s/6.13MB/h264_nvenc，首张放大抽检帧 out/t117_check.png 已验证正立/背景/圆角阴影/1.8x缩放/矢量光标与点击涟漪，待用户肉眼验收) | 200 pass (4 skip E2E)
 2026-11-20 17:16 | T12.6 | DONE | ProjectMediaModel 删除重复 CaptureConfiguration 与英文假默认值，改为导入统一中文 rawValue 模型；decodeRecorderProject 兼容旧英文 source/codec/resolution/systemAudioScope 并归一化 frameRate；buildProjectFromRecording 接收真实 captureOptions，recordSession 写入 source/displayID/displayName/真实 fps/H.264/三项音频与摄像头 false。真实 30fps 录制 20261120-171556 的 project.capture 为 30fps/H.264/recordsSystemAudio=false/displayID=0；默认测试 224 pass/5 skip | 224 pass (5 skip 默认)
 
+2026-11-20 17:43 | T12.7 | DONE | ScreenRecorder 解析 `-progress pipe:1` 的 frame/out_time_us 生成 ready 与 firstFrameUnixMs；RecordingSession 等首帧后再计时并把 spawn/firstFrame 写入 meta；calibrate 增加严格双点击 evaluateCalibration；新增 tools/e2e-testcard.html、scripts/verify-export.ts 与 VerifyExport 单测。真实 8.6s 测试卡录制 20261120-173816：两个点击视频时刻 1.935s/4.182s，导出 517 帧/8.616s；verify-export 全部通过（时长差 0.000s、帧数一致、captureFrameRate 60、无音频声明、点击帧非黑可读）。默认 226 pass/5 skip；E2E 236/236。已知：导出画面顶部未出现测试卡 48px 闪帧条，闪帧≤1帧尚未通过自动/视觉门禁 | 236 pass (E2E 全绿)
+
 阶段 2 验收通过
 
-下一个任务：T12.7（Wave A 第七卡：首帧时钟精准对齐、严格双点击校准与闪帧同步测试卡，统一 pointerOffsetSeconds 与视频首帧 PTS，详见 docs/MASTER_REFACTOR_PLAN_V2.md §4）
+下一个任务：T12.8（Wave A 第八卡：路径穿越安全修复、合规许可证与文档基线收官，并执行 Wave A 出口 G1+G2 真实闭环，详见 docs/MASTER_REFACTOR_PLAN_V2.md §4）
 

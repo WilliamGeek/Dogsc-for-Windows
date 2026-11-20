@@ -142,7 +142,7 @@
 - [x] T12.4 导出稳健性：`ExportServer` 30s 无帧看门狗、`/api/done` 总帧数强校验（少帧 409 删残片）、`/api/error` 秒报、`web/exporter.ts` 超时重试、`scripts/export.ts` `taskkill /F /T` 清进程树（P1-01, P1-02）。
 - [x] T12.5 显示器统一映射：新增 `src/capture/DisplayEnumeration.ts`，`tools/mousehook.ps1` 支持 `-ScreenX/Y/W/H` 与 `Per-Monitor DPI Aware V2`，同步多屏与混合 DPI 归一化（P1-03）。
 - [x] T12.6 真实会话配置：删除 `ProjectMediaModel` 重复英文默认模型，统一 `CaptureConfiguration` rawValue 并兼容旧英文解码，`recordSession` 写入真实 fps/codec/audio/displayID（P1-04）。
-- [ ] T12.7 首帧时钟与闪帧测试：解析 `-progress pipe:1` 计算 `firstFrameUnixMs`，`scripts/calibrate.ts` 严格双点击断言，新增 `tools/e2e-testcard.html` 闪帧卡与 `scripts/verify-export.ts`（P1-05, P1-06, P3-03）。
+- [x] T12.7 首帧时钟与闪帧测试：解析 `-progress pipe:1` 计算 `firstFrameUnixMs`，`scripts/calibrate.ts` 严格双点击断言，新增 `tools/e2e-testcard.html` 闪帧卡与 `scripts/verify-export.ts`（P1-05, P1-06, P3-03）。
 - [ ] T12.8 路径安全与 Wave A 收官：新增 `src/server/SafePath.ts` 替换 `DevServer`/`ExportServer` 的 `startsWith`，补根 `README.md` / MIT `LICENSE` / `THIRD_PARTY_NOTICES.md`，修正 `PLAN.md`/`package.json`，并运行 Wave A 门禁 G1+G2（P1-07, P2-14, P3-01~06）。
 
 ### Wave B：上游 `v0.2.0` 算法补齐与 Schema v28 双向兼容（P0-04，需先克隆只读 `F:\dogsc-v0.2.0`）

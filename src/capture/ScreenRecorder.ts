@@ -53,7 +53,11 @@ export interface ScreenRecorderExit {
 
 export interface ScreenRecorderHandle {
   screenStartUnixMs: number;
+  /** Unix ms of the first captured frame, derived from ffmpeg -progress. */
+  firstFrameUnixMs: number | null;
   process: ChildProcess;
+  /** Resolves with firstFrameUnixMs when ffmpeg emits its first frame. */
+  ready: Promise<number>;
   /** Resolves when ffmpeg closes; never rejects. */
   exited: Promise<ScreenRecorderExit>;
   stop(): Promise<void>;
@@ -79,6 +83,10 @@ export function buildFfmpegArgs(o: FfmpegArgsOptions): string[] {
 
   const baseArgs: string[] = [
     '-y',
+    '-progress',
+    'pipe:1',
+    '-stats_period',
+    '0.05',
     '-f',
     'lavfi',
     '-i',
@@ -214,9 +222,62 @@ export function startScreenRecording(o: ScreenRecorderOptions): ScreenRecorderHa
     resolveExited = resolve;
   });
 
+  let firstFrameUnixMs: number | null = null;
+  let progressFrame = 0;
+  let progressOutTimeUs = 0;
+  let hasProgressOutTime = false;
+  let stdoutBuffer = '';
+  let resolveReady!: (value: number) => void;
+  let rejectReady!: (err: Error) => void;
+
+  const ready = new Promise<number>((resolve, reject) => {
+    resolveReady = resolve;
+    rejectReady = reject;
+  });
+  // ready is raced with exited in callers; make sure a late rejection from an
+  // early ffmpeg failure never becomes an unhandled rejection.
+  ready.catch(() => {});
+
+  const tryResolveReady = () => {
+    if (firstFrameUnixMs !== null || progressFrame < 1 || !hasProgressOutTime) return;
+    firstFrameUnixMs = Math.round(Date.now() - progressOutTimeUs / 1000);
+    resolveReady(firstFrameUnixMs);
+  };
+
+  const parseProgressLine = (line: string) => {
+    const eq = line.indexOf('=');
+    if (eq < 0) return;
+    const key = line.slice(0, eq).trim();
+    const value = line.slice(eq + 1).trim();
+    if (key === 'frame') {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) progressFrame = parsed;
+      tryResolveReady();
+      return;
+    }
+    if (key === 'out_time_us') {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed) && parsed >= 0) {
+        progressOutTimeUs = parsed;
+        hasProgressOutTime = true;
+        tryResolveReady();
+      }
+    }
+  };
+
+  proc.stdout?.on('data', (chunk: Buffer | string) => {
+    stdoutBuffer += String(chunk);
+    const lines = stdoutBuffer.split(/\r?\n/);
+    stdoutBuffer = lines.pop() ?? '';
+    for (const line of lines) parseProgressLine(line);
+  });
+
   const finalizeExit = (result: ScreenRecorderExit) => {
     if (closeResult) return;
     closeResult = result;
+    if (firstFrameUnixMs === null) {
+      rejectReady(new Error(formatExitError(result, false)));
+    }
     resolveExited(result);
   };
 
@@ -329,6 +390,10 @@ export function startScreenRecording(o: ScreenRecorderOptions): ScreenRecorderHa
 
   return {
     screenStartUnixMs,
+    get firstFrameUnixMs() {
+      return firstFrameUnixMs;
+    },
+    ready,
     process: proc,
     exited,
     stop,

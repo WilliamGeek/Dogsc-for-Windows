@@ -44,6 +44,26 @@ test('T10.4: buildMeta correctly calculates pointerOffsetSeconds and preserves f
   assert.equal(meta.frameCount, 630);
 });
 
+test('T12.7: buildMeta measures pointer offset from first captured frame', () => {
+  const meta = buildMeta({
+    id: '20261120-180000',
+    fps: 60,
+    width: 1920,
+    height: 1080,
+    screenStartUnixMs: 1762000000000,
+    spawnUnixMs: 1762000000000,
+    firstFrameUnixMs: 1762000000180,
+    pointerOriginUnixMs: 1762000000250,
+    encoder: 'h264_nvenc',
+    durationSeconds: 5,
+    frameCount: 300,
+  });
+
+  assert.equal(meta.firstFrameUnixMs, 1762000000180);
+  assert.equal(meta.spawnUnixMs, 1762000000000);
+  assert.equal(meta.pointerOffsetSeconds, 0.07);
+});
+
 test('T10.4: buildProjectFromRecording offsets event times and generates valid RecorderProject with 3 zoom clips', () => {
   const events: PointerEventRecord[] = [
     // Click 1 at t = 1.0

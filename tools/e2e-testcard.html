@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DogSC E2E Testcard · Sync Flash</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #11151c; }
+    body { font-family: "Segoe UI", "Microsoft YaHei", sans-serif; color: #e8edf5; user-select: none; }
+    #syncBar {
+      position: fixed; inset: 0 0 auto 0; height: 48px; z-index: 20;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 22px; background: #000000; color: #ffffff;
+      font-size: 16px; font-weight: 700; letter-spacing: 0.5px;
+      transition: background-color 60ms linear;
+    }
+    #syncBar.flash { background: #00ff00; color: #000000; }
+    #syncBar .hint { font-size: 13px; font-weight: 500; opacity: 0.75; }
+    #stage { position: absolute; inset: 48px 0 0 0; }
+    .target {
+      position: absolute; width: 190px; height: 190px; border-radius: 50%;
+      border: 4px solid rgba(255,255,255,0.85); display: flex; flex-direction: column;
+      align-items: center; justify-content: center; cursor: crosshair;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.5) inset, 0 12px 50px rgba(0,0,0,0.35);
+      transition: transform 80ms ease, border-color 80ms ease;
+    }
+    .target:active { transform: scale(0.96); border-color: #00ff00; }
+    .target.a { left: 18%; top: 42%; background: #1b5f9e; }
+    .target.b { right: 18%; top: 42%; background: #9e3b2f; }
+    .target .letter { font-size: 42px; font-weight: 800; line-height: 1; }
+    .target .coord { margin-top: 9px; font-size: 12px; font-family: Consolas, monospace; opacity: 0.95; text-align: center; line-height: 1.5; }
+    #info {
+      position: absolute; left: 50%; bottom: 34px; transform: translateX(-50%);
+      min-width: 430px; padding: 14px 20px; border-radius: 12px;
+      background: rgba(2, 8, 16, 0.78); border: 1px solid rgba(255,255,255,0.16);
+      font-family: Consolas, monospace; font-size: 13px; line-height: 1.8; text-align: center;
+    }
+    #info b { color: #7dc4ff; font-family: "Segoe UI", sans-serif; }
+    #clickLog { color: #a9ffb0; white-space: pre-wrap; min-height: 23px; }
+  </style>
+</head>
+<body>
+  <div id="syncBar">
+    <span id="flashLabel">SYNC FLASH BAR · 48px · 平常 #000000 / 点击 #00FF00 120ms</span>
+    <span class="hint">点击 A / B 两个圆心的像素坐标由 DOM 实时计算</span>
+  </div>
+
+  <div id="stage">
+    <div class="target a" id="targetA">
+      <span class="letter">A</span>
+      <span class="coord" id="coordA">A 圆心：计算中…</span>
+    </div>
+    <div class="target b" id="targetB">
+      <span class="letter">B</span>
+      <span class="coord" id="coordB">B 圆心：计算中…</span>
+    </div>
+
+    <div id="info">
+      <div><b>视口</b> <span id="viewportInfo">—</span></div>
+      <div><b>点击序号 / 物理像素坐标</b></div>
+      <div id="clickLog">等待 pointerdown…</div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const bar = document.getElementById('syncBar');
+      const flashLabel = document.getElementById('flashLabel');
+      const coordA = document.getElementById('coordA');
+      const coordB = document.getElementById('coordB');
+      const viewportInfo = document.getElementById('viewportInfo');
+      const clickLog = document.getElementById('clickLog');
+      let clickSeq = 0;
+      let flashTimer = null;
+
+      const dpr = () => window.devicePixelRatio || 1;
+      const center = (el) => {
+        const r = el.getBoundingClientRect();
+        return {
+          cssX: r.left + r.width / 2,
+          cssY: r.top + r.height / 2,
+          pxX: Math.round((r.left + r.width / 2) * dpr()),
+          pxY: Math.round((r.top + r.height / 2) * dpr()),
+          w: Math.round(r.width),
+          h: Math.round(r.height),
+        };
+      };
+
+      const updateCoords = () => {
+        const a = center(document.getElementById('targetA'));
+        const b = center(document.getElementById('targetB'));
+        coordA.textContent =
+          `CSS (${a.cssX.toFixed(1)}, ${a.cssY.toFixed(1)}) · 物理像素 (${a.pxX}, ${a.pxY}) · Ø${a.w}px`;
+        coordB.textContent =
+          `CSS (${b.cssX.toFixed(1)}, ${b.cssY.toFixed(1)}) · 物理像素 (${b.pxX}, ${b.pxY}) · Ø${b.w}px`;
+        viewportInfo.textContent =
+          `${window.innerWidth}×${window.innerHeight} CSS · ${Math.round(window.innerWidth * dpr())}×${Math.round(window.innerHeight * dpr())} 物理 · DPR ${dpr()}`;
+      };
+
+      const flash = (event) => {
+        clickSeq += 1;
+        bar.classList.add('flash');
+        const px = Math.round(event.clientX * dpr());
+        const py = Math.round(event.clientY * dpr());
+        flashLabel.textContent = `FLASH #${clickSeq} · ${Date.now()}ms · 物理像素 (${px}, ${py})`;
+        clickLog.textContent = `#${clickSeq}  pointerdown @ CSS (${event.clientX.toFixed(1)}, ${event.clientY.toFixed(1)}) · 物理像素 (${px}, ${py})`;
+        if (flashTimer) clearTimeout(flashTimer);
+        flashTimer = setTimeout(() => {
+          bar.classList.remove('flash');
+          flashLabel.textContent = 'SYNC FLASH BAR · 48px · 平常 #000000 / 点击 #00FF00 120ms';
+        }, 120);
+      };
+
+      window.addEventListener('pointerdown', flash, true);
+      window.addEventListener('resize', updateCoords);
+      window.addEventListener('load', updateCoords);
+      setInterval(updateCoords, 500);
+      updateCoords();
+    })();
+  </script>
+</body>
+</html>

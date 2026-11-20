@@ -8,8 +8,53 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { recordSession } from '../src/capture/RecordingSession.ts';
 import { parsePointerJsonl } from '../src/capture/PointerJsonl.ts';
+
+export interface CalibrationClickLike {
+  time: number;
+  kind?: string;
+}
+
+export interface CalibrationResult {
+  ok: boolean;
+  failures: string[];
+}
+
+/**
+ * Strict two-click calibration assertion. A passing run must contain exactly
+ * two clicks: #1 at 2s and #2 at 4s, each within toleranceSeconds.
+ */
+export function evaluateCalibration(
+  clicks: readonly CalibrationClickLike[],
+  durationSeconds: number,
+  toleranceSeconds = 0.6
+): CalibrationResult {
+  const failures: string[] = [];
+  if (clicks.length !== 2) {
+    failures.push(`点击数应为 2 次，实际为 ${clicks.length} 次`);
+  }
+
+  const expected = [2, 4];
+  for (let i = 0; i < expected.length; i++) {
+    const click = clicks[i];
+    if (!click) continue;
+    const min = expected[i] - toleranceSeconds;
+    const max = expected[i] + toleranceSeconds;
+    if (click.time < min || click.time > max) {
+      failures.push(
+        `第 ${i + 1} 次点击应落在 ${min.toFixed(2)}s ~ ${max.toFixed(2)}s，实际为 ${click.time.toFixed(3)}s`
+      );
+    }
+  }
+
+  if (!Number.isFinite(durationSeconds) || durationSeconds < 6 - toleranceSeconds) {
+    failures.push(`录制时长应至少覆盖 6 秒校准窗口，实际为 ${durationSeconds.toFixed(3)}s`);
+  }
+
+  return { ok: failures.length === 0, failures };
+}
 
 async function main() {
   console.log('='.repeat(65));
@@ -68,8 +113,10 @@ async function main() {
   const pointerPath = resolve(sessionDir, 'pointer.jsonl');
   const screenPath = resolve(sessionDir, 'screen.mp4');
 
+  let durationSeconds = 0;
   if (existsSync(metaPath)) {
     const meta = JSON.parse(readFileSync(metaPath, 'utf-8'));
+    durationSeconds = meta.durationSeconds;
     console.log('【时钟对齐诊断】');
     console.log(`- 编码器: ${meta.encoder}`);
     console.log(`- 屏幕尺寸: ${meta.width} x ${meta.height}`);
@@ -96,6 +143,16 @@ async function main() {
         `  [点击 #${idx + 1}] 时刻: ${c.time.toFixed(3)}s, 归一化位置: (${c.location.x.toFixed(3)}, ${c.location.y.toFixed(3)}), 类型: ${c.kind}`
       );
     });
+
+    const calibration = evaluateCalibration(clicks, durationSeconds);
+    if (!calibration.ok) {
+      console.error('\n✖ 严格校准验收失败:');
+      for (const reason of calibration.failures) {
+        console.error(`  - ${reason}`);
+      }
+      process.exit(1);
+    }
+    console.log('\n✔ 严格校准验收通过：2 次点击均落在 2s/4s ±0.6s 窗口内。');
   }
 
   console.log('\n【用户手动验收检查项】');
@@ -104,4 +161,10 @@ async function main() {
   console.log('='.repeat(65));
 }
 
-main();
+const invokedPath = process.argv[1];
+if (invokedPath && resolve(invokedPath) === fileURLToPath(import.meta.url)) {
+  main().catch((err: any) => {
+    console.error('\n✖ 校准执行失败:', err?.message || err);
+    process.exit(1);
+  });
+}
