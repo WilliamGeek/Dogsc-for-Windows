@@ -129,9 +129,58 @@
 - [x] T11.5 渲染增强（一个效果一次提交，可拆 T11.5a~e）：a 圆角+边框；b 阴影；c 背景（纯色/渐变，读 `scene.background`）；d 光标（画 `scene.cursor.layout`，先用简单箭头多边形，不加载素材）+ 点击涟漪；e 摄像头/贴纸**跳过**（阶段 3 不做）。
 - [x] T11.6 导出：`src/server/ExportServer.ts`（`/api/plan`、`/api/frame/:n`、`/api/done`，严格递增顺序，长度校验）+ `web/exporter.ts`（循环渲染+POST）+ `scripts/export.ts`（启动服务→启动 Edge→等待→输出 mp4）。必测：ExportServer 对错误长度返回 400、乱序帧返回 409；用假的 ffmpeg 命令（`node -e` 吞 stdin）验证帧计数。
 - [ ] T11.7 阶段 3 验收（**需要用户在场**）：用 T10 的真实录制导出 MP4，用户肉眼确认「自动缩放跟随点击、光标平滑」。通过后 PROGRESS.md 写「阶段 3 完成」并**停止**。
+  > ⚠ **2026-11-20 实测审计阻塞**：实测发现 P0-01 导出尾部复帧（wall-clock 时长偏差）、P0-02 无效显示器伪成功、P0-03 双光标（缺 `draw_mouse=0`）。**须先完成 Wave A (`T12.1`–`T12.8`) 并通过 G1+G2 复测后，方可重新勾选 `T11.7` 并写入「阶段 3 完成」**。
 
-## 阶段 4 编辑器（粗粒度，阶段 3 完成后由高阶 AI 细化成卡）
-预览页（拖时间线预览）→ 缩放片段拖拽（用 `EditorTimeline.ts`）→ 剪切/变速（用 `ProjectTimelineEditing.ts`）→ 保存 `project.json`。
+---
 
-## 阶段 5 打包（需用户决策 Electron/Tauri/纯脚本启动器）
+## 重构迭代 V2 任务卡清单（详细规格见 `docs/MASTER_REFACTOR_PLAN_V2.md` §4，一卡一提交一中文标签）
+
+### Wave A：P0/P1 真实性止血、安全加固与自动验收基建（先做，做完复测 T11.7）
+- [ ] T12.1 真实时长口径：新增 `src/capture/MediaProbe.ts`，`RecordingSession` / `scripts/export.ts` 改用 `ffprobe` 真实时长与帧数，`FramePlan` 消除导出尾部复帧（P0-01）。
+- [ ] T12.2 失败即失败：校验 `ScreenRecorder` ffmpeg 退出码与 stderr、早期崩溃 `Promise.race` 中止、失败清理脏目录、`allocateUniqueSessionDir` 与 `await finished(jsonlStream)`（P0-02, P3-04）。
+- [ ] T12.3 单光标与编码探活：`ddagrab` 默认追加 `:draw_mouse=0` 消除双光标，升级 `detectEncoder()` 做 1 帧 NVENC 真机探活并自动回退 `libx264`（P0-03, P2-13）。
+- [ ] T12.4 导出稳健性：`ExportServer` 30s 无帧看门狗、`/api/done` 总帧数强校验（少帧 409 删残片）、`/api/error` 秒报、`web/exporter.ts` 超时重试、`scripts/export.ts` `taskkill /F /T` 清进程树（P1-01, P1-02）。
+- [ ] T12.5 显示器统一映射：新增 `src/capture/DisplayEnumeration.ts`，`tools/mousehook.ps1` 支持 `-ScreenX/Y/W/H` 与 `Per-Monitor DPI Aware V2`，同步多屏与混合 DPI 归一化（P1-03）。
+- [ ] T12.6 真实会话配置：删除 `ProjectMediaModel` 重复英文默认模型，统一 `CaptureConfiguration` rawValue 并兼容旧英文解码，`recordSession` 写入真实 fps/codec/audio/displayID（P1-04）。
+- [ ] T12.7 首帧时钟与闪帧测试：解析 `-progress pipe:1` 计算 `firstFrameUnixMs`，`scripts/calibrate.ts` 严格双点击断言，新增 `tools/e2e-testcard.html` 闪帧卡与 `scripts/verify-export.ts`（P1-05, P1-06, P3-03）。
+- [ ] T12.8 路径安全与 Wave A 收官：新增 `src/server/SafePath.ts` 替换 `DevServer`/`ExportServer` 的 `startsWith`，补根 `README.md` / MIT `LICENSE` / `THIRD_PARTY_NOTICES.md`，修正 `PLAN.md`/`package.json`，并运行 Wave A 门禁 G1+G2（P1-07, P2-14, P3-01~06）。
+
+### Wave B：上游 `v0.2.0` 算法补齐与 Schema v28 双向兼容（P0-04，需先克隆只读 `F:\dogsc-v0.2.0`）
+- [ ] T13.1 上游 `v0.2.0` 只读源码差异审计，输出 `docs/V020_DIFF_MAP.md`（53 文件与 v28 字段对照）。
+- [ ] T13.2 按 `PORTING_RULES.md` 移植 `CameraBeauty`、`ScreenCardAppearance`、`SegmentSceneStyle` 及单测。
+- [ ] T13.3 移植 `RecordingSource`、`RecordingSourceEditing`、`RecordingAspectTransitions` 及单测。
+- [ ] T13.4 移植 `PostProductionModel`、`VisualTrackTransfer`、`RecordingProjectImport` 及单测（44→53 模块）。
+- [ ] T13.5 同步原有 44 模块在 `v0.1.8..v0.2.0` 的增量改动，`ProjectSchema.currentVersion` 升至 28，支持 v27 自动迁移与未知字段无损保留。
+- [ ] T13.6 构建上游 v27/v28 双向 Golden Fixture 与 `test/core/SchemaInterop.test.ts`（通过门禁 G3）。
+
+### Wave C：WebGL2 全通道视觉渲染补齐（P1-08, P2-10，零假开关前置条件）
+- [ ] T14.1 模块化拆分 `web/passes/{background,screen,cursor}.ts`，按 `scene.layerOrder` 动态调度渲染。
+- [ ] T14.2 摄像头画中画通道 `web/passes/camera.ts`（镜像/AspectFill/圆角圆形遮罩/阴影边框/缩放避让/出场）。
+- [ ] T14.3 马赛克像素化/模糊与聚光灯通道 `web/passes/spotlight.ts` 及对应屏幕遮罩。
+- [ ] T14.4 贴纸图层与防穿帮背景模糊接力通道 `web/passes/stickers.ts`。
+- [ ] T14.5 窗口/浏览器/手机平板设备外框 Chrome、聚焦外围虚化 FBO 与开场 3D 序列视觉校验。
+- [ ] T14.6 光标素材样式、速度倾斜、闲置渐隐与 4 种点击动效（ripple/ring/dot/combo）全量对齐。
+
+### Wave D：Windows 全源采集、零依赖音视频多轨与暂停标记（P2-01~03）
+- [ ] T15.1 支持自选区域（`ddagrab` GPU `offset_x/y + video_size` 偶对齐）与单个窗口（`gdigrab -draw_mouse 0` + 窗口枚举）。
+- [ ] T15.2 零依赖系统音频回环采集 `tools/wasapi-loopback.ps1` + `src/capture/SystemAudioRecorder.ts`。
+- [ ] T15.3 DirectShow 音视频设备枚举 `src/capture/MediaDevices.ts` 与麦克风录制 `src/capture/MicRecorder.ts`。
+- [ ] T15.4 DirectShow 摄像头同步录制 `src/capture/CameraRecorder.ts` + 同步锚点 + `camera_frames/` 预解码。
+- [ ] T15.5 导出多音轨按时间线与音量/静音过滤混音进 MP4，并支持 `--format m4a` 纯音频导出。
+- [ ] T15.6 录制中分段暂停/恢复无损拼接与热键实时打点 `RecordingMarker`。
+
+### Wave E：交互式 Web 编辑器与多规格产品级导出（P2-04, P2-08, P2-09）
+- [ ] T16.1 新增 `src/server/StudioServer.ts` 与 `scripts/studio.ts`（Edge `--app` 无地址栏窗口模式）。
+- [ ] T16.2 实现 `web/studio.html` 与 `web/studio/player.ts`（实时 WebGL2 播放预览画布与录制列表）。
+- [ ] T16.3 实现 `web/studio/timeline.ts`（基于 `EditorTimeline`/`ProjectTimelineEditing` 的多轨交互时间线 + Undo/Redo）。
+- [ ] T16.4 实现 `web/studio/inspector.ts`（画布/圆角/背景/外框/摄像头/光标/音频全参数实时检查器，严格零假开关）。
+- [ ] T16.5 实现交互式导出面板与 CLI 多规格导出（1080p/1440p/4K、30/60fps、多比例、M4A、可取消）。
+- [ ] T16.6 按 `MASTER_REFACTOR_PLAN_V2.md` §6.3 SOP 完成编辑器 Browser MCP / Computer Use 全链路端到端验收。
+
+### Wave F：桌面外壳打包、硬件设备矩阵与正式发布（开工前须用户决策 D2）
+- [ ] T17.1 桌面应用外壳集成（`NEED-DECISION`：由用户选定 WebView2 / Electron / Tauri）。
+- [ ] T17.2 Windows x64 安装包构建、FFmpeg 分发合规声明与明确签名状态标注。
+- [ ] T17.3 运行 Win10/11、NVENC/libx264、多屏/混合 DPI、4K/60fps、音视频外设矩阵验证并输出 `docs/DEVICE_MATRIX_REPORT.md`。
+- [ ] T17.4 全量门禁 G1–G6 归档与发布 `v1.0.0-windows`。
+
 
