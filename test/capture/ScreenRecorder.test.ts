@@ -87,6 +87,26 @@ test('T10.3: detectEncoder identifies available video encoder', async () => {
   );
 });
 
+test('T12.2: stop rejects with ffmpeg stderr when the process exits non-zero', async () => {
+  const recorder = startScreenRecording({
+    outFile: 'out/t122_fake.mp4',
+    fps: 30,
+    encoder: 'libx264',
+    ffmpegBin: process.execPath,
+    ffmpegArgsPrefix: [
+      '-e',
+      "console.error('Failed to enumerate DXGI output 9'); process.exit(1)",
+      '--',
+    ],
+  });
+
+  const exit = await recorder.exited;
+  assert.equal(exit.code, 1, 'fake ffmpeg should close with code 1');
+  await assert.rejects(recorder.stop(), (err: Error) =>
+    err.message.includes('Failed to enumerate DXGI output 9')
+  );
+});
+
 test(
   'T10.3: E2E startScreenRecording records real screen for 2s and produces valid MP4',
   { skip: !process.env.DOGSC_E2E },

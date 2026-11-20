@@ -2,12 +2,14 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { resolve } from 'node:path';
 import {
   buildMeta,
   buildProjectFromRecording,
   recordSession,
   formatSessionId,
+  allocateUniqueSessionDir,
 } from '../../src/capture/RecordingSession.ts';
 import { probeMediaFile } from '../../src/capture/MediaProbe.ts';
 import {
@@ -80,6 +82,48 @@ test('T10.4: formatSessionId produces YYYYMMDD-HHmmss format', () => {
   const d = new Date(2026, 10, 2, 9, 5, 8); // month 10 = Nov
   assert.equal(formatSessionId(d), '20261102-090508');
 });
+
+test('T12.2: allocateUniqueSessionDir avoids same-second collisions', () => {
+  const base = resolve('out', `t122-unique-${process.pid}-${Date.now()}`);
+  mkdirSync(base, { recursive: true });
+
+  try {
+    assert.equal(allocateUniqueSessionDir(base, '20261102-120000'), resolve(base, '20261102-120000'));
+
+    mkdirSync(resolve(base, '20261102-120000'));
+    assert.equal(
+      allocateUniqueSessionDir(base, '20261102-120000'),
+      resolve(base, '20261102-120000-01')
+    );
+
+    mkdirSync(resolve(base, '20261102-120000-01'));
+    assert.equal(
+      allocateUniqueSessionDir(base, '20261102-120000'),
+      resolve(base, '20261102-120000-02')
+    );
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test(
+  'T12.2: E2E invalid display rejects and removes the partial session directory',
+  { skip: !process.env.DOGSC_E2E },
+  async () => {
+    const base = resolve('out', `t122-invalid-${process.pid}-${Date.now()}`);
+    mkdirSync(base, { recursive: true });
+
+    try {
+      await assert.rejects(
+        recordSession({ seconds: 1, fps: 30, outputIdx: 9, baseDir: base }),
+        /ffmpeg|DXGI|ddagrab|display/i
+      );
+      assert.deepEqual(readdirSync(base), [], 'failed session directory must be removed');
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
+  }
+);
 
 test(
   'T10.4: E2E recordSession creates directory with all 4 artifacts',

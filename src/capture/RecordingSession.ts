@@ -6,8 +6,16 @@
  * Adheres strictly to docs/CONTRACTS.md §3 and §5.
  */
 
-import { writeFileSync, mkdirSync, createWriteStream } from 'node:fs';
+import {
+  writeFileSync,
+  mkdirSync,
+  createWriteStream,
+  existsSync,
+  rmSync,
+  type WriteStream,
+} from 'node:fs';
 import { resolve } from 'node:path';
+import { finished } from 'node:stream/promises';
 import {
   makeRecorderProject,
   encodeRecorderProject,
@@ -72,6 +80,24 @@ export function formatSessionId(d: Date = new Date()): string {
 }
 
 /**
+ * Allocates a directory path that does not collide with an existing session.
+ * Same-second sessions become `${id}-01` .. `${id}-99`; allocation is not
+ * creation, so the caller still owns the final mkdir.
+ */
+export function allocateUniqueSessionDir(baseDir: string, id: string): string {
+  const base = resolve(baseDir);
+  const first = resolve(base, id);
+  if (!existsSync(first)) return first;
+
+  for (let suffix = 1; suffix <= 99; suffix++) {
+    const candidate = resolve(base, `${id}-${String(suffix).padStart(2, '0')}`);
+    if (!existsSync(candidate)) return candidate;
+  }
+
+  throw new Error(`无法分配唯一录制目录：${first} 及其 -01..-99 后缀均已存在`);
+}
+
+/**
  * Pure function: constructs the metadata object with precise pointerOffsetSeconds.
  * Formula per CONTRACTS.md §3: pointerOffsetSeconds = (pointerOriginUnixMs - screenStartUnixMs) / 1000
  */
@@ -129,13 +155,20 @@ export function buildProjectFromRecording(
   return project;
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolvePromise) => setTimeout(resolvePromise, ms));
+}
+
 /**
  * Orchestrates a complete recording session:
  * 1. Launches mouse hook and waits for header.
  * 2. Launches screen recording (ddagrab).
- * 3. Waits for the requested duration.
+ * 3. Waits for the requested duration, racing against early ffmpeg failure.
  * 4. Gracefully stops screen recording and mouse hook.
  * 5. Saves pointer.jsonl, meta.json, and project.json.
+ *
+ * Any failure after the session directory exists removes that directory, so
+ * a failed session can never masquerade as a successful recording.
  *
  * @returns The absolute path to the session directory.
  */
@@ -144,8 +177,10 @@ export async function recordSession(o: RecordSessionOptions): Promise<string> {
   const outputIdx = o.outputIdx ?? 0;
   const encoder = o.encoder ?? (await detectEncoder());
   const id = formatSessionId();
-  const sessionDir = resolve(o.baseDir ?? 'recordings', id);
+  const baseDir = resolve(o.baseDir ?? 'recordings');
 
+  mkdirSync(baseDir, { recursive: true });
+  const sessionDir = allocateUniqueSessionDir(baseDir, id);
   mkdirSync(sessionDir, { recursive: true });
 
   const screenMp4Path = resolve(sessionDir, 'screen.mp4');
@@ -153,89 +188,144 @@ export async function recordSession(o: RecordSessionOptions): Promise<string> {
   const metaJsonPath = resolve(sessionDir, 'meta.json');
   const projectJsonPath = resolve(sessionDir, 'project.json');
 
-  const jsonlStream = createWriteStream(pointerJsonlPath, { encoding: 'utf-8' });
-  const rawLines: string[] = [];
+  let jsonlStream: WriteStream | null = null;
+  let hook: ReturnType<typeof startMouseHook> | null = null;
+  let recorder: ReturnType<typeof startScreenRecording> | null = null;
+  let isPumping = false;
+  let pumpPromise: Promise<void> | null = null;
 
-  // Step 1: Start mouse hook and wait for header
-  const hook = startMouseHook();
-  const lineIterator = hook.lines[Symbol.asyncIterator]();
+  try {
+    jsonlStream = createWriteStream(pointerJsonlPath, { encoding: 'utf-8' });
+    const rawLines: string[] = [];
 
-  const firstLineResult = await lineIterator.next();
-  if (firstLineResult.done || !firstLineResult.value) {
-    await hook.stop();
-    throw new Error('未能从鼠标钩子获取表头');
-  }
+    // Step 1: Start mouse hook and wait for header.
+    hook = startMouseHook();
+    const lineIterator = hook.lines[Symbol.asyncIterator]();
 
-  const headerLine = firstLineResult.value;
-  rawLines.push(headerLine);
-  jsonlStream.write(headerLine + '\n');
-
-  const headerData = JSON.parse(headerLine);
-  if (headerData.hdr !== 1 || typeof headerData.originUnixMs !== 'number') {
-    await hook.stop();
-    throw new Error('鼠标钩子表头无效');
-  }
-
-  const pointerOriginUnixMs = headerData.originUnixMs;
-
-  // Continuously pump remaining mouse events to file and memory
-  let isPumping = true;
-  const pumpPromise = (async () => {
-    try {
-      while (isPumping) {
-        const next = await lineIterator.next();
-        if (next.done) break;
-        if (next.value) {
-          rawLines.push(next.value);
-          jsonlStream.write(next.value + '\n');
-        }
-      }
-    } catch {
-      // Stream ending
+    const firstLineResult = await lineIterator.next();
+    if (firstLineResult.done || !firstLineResult.value) {
+      throw new Error('未能从鼠标钩子获取表头');
     }
-  })();
 
-  // Step 2: Start screen recording
-  const recorder = startScreenRecording({
-    outFile: screenMp4Path,
-    fps,
-    outputIdx,
-    encoder,
-  });
+    const headerLine = firstLineResult.value;
+    rawLines.push(headerLine);
+    jsonlStream.write(headerLine + '\n');
 
-  // Step 3: Wait for requested duration
-  await new Promise((r) => setTimeout(r, Math.max(o.seconds, 0.5) * 1000));
+    const headerData = JSON.parse(headerLine);
+    if (headerData.hdr !== 1 || typeof headerData.originUnixMs !== 'number') {
+      throw new Error('鼠标钩子表头无效');
+    }
 
-  // Step 4: Stop screen recorder and hook
-  await recorder.stop();
-  isPumping = false;
-  await hook.stop();
-  await pumpPromise;
+    const pointerOriginUnixMs = headerData.originUnixMs;
 
-  jsonlStream.end();
+    // Continuously pump remaining mouse events to file and memory.
+    isPumping = true;
+    pumpPromise = (async () => {
+      try {
+        while (isPumping) {
+          const next = await lineIterator.next();
+          if (next.done) break;
+          if (next.value) {
+            rawLines.push(next.value);
+            jsonlStream?.write(next.value + '\n');
+          }
+        }
+      } catch {
+        // Stream ending.
+      }
+    })();
 
-  // Step 5: Save metadata and project using ffprobe's real media truth.
-  // Never fall back to wall-clock duration here: ffmpeg startup/finalization
-  // and hook shutdown are not part of the recorded video timeline.
-  const probed = await probeMediaFile(screenMp4Path);
-  const meta = buildMeta({
-    id,
-    fps,
-    width: probed.width,
-    height: probed.height,
-    screenStartUnixMs: recorder.screenStartUnixMs,
-    pointerOriginUnixMs,
-    encoder,
-    durationSeconds: probed.durationSeconds,
-    frameCount: probed.frameCount,
-  });
-  writeFileSync(metaJsonPath, JSON.stringify(meta, null, 2), 'utf-8');
+    // Step 2: Start screen recording.
+    recorder = startScreenRecording({
+      outFile: screenMp4Path,
+      fps,
+      outputIdx,
+      encoder,
+    });
 
-  // Parse pointer events and generate project
-  const fullJsonlText = rawLines.join('\n');
-  const parsed = parsePointerJsonl(fullJsonlText);
-  const project = buildProjectFromRecording(parsed.events, meta.pointerOffsetSeconds, probed.durationSeconds);
-  writeFileSync(projectJsonPath, encodeRecorderProject(project), 'utf-8');
+    // Step 3: Wait for requested duration. If ffmpeg dies early (invalid
+    // display, encoder unavailable, permission error), fail immediately
+    // instead of sleeping through the entire requested duration.
+    const requestedWait = sleep(Math.max(o.seconds, 0.5) * 1000);
+    const earlyExit = recorder.exited.then((result) => {
+      if (result.spawnError) {
+        throw new Error(`ffmpeg 启动失败: ${result.spawnError.message}`);
+      }
+      if (result.code !== 0) {
+        const tail = result.stderr.trim().slice(-500);
+        throw new Error(
+          `ffmpeg 提前退出 (code ${String(result.code)})${tail ? `: ${tail}` : ''}`
+        );
+      }
+      throw new Error('ffmpeg 在录制结束前提前退出 (code 0)');
+    });
+    await Promise.race([requestedWait, earlyExit]);
 
-  return sessionDir;
+    // Step 4: Stop screen recorder and hook.
+    await recorder.stop();
+    isPumping = false;
+    await hook.stop();
+    await pumpPromise;
+    pumpPromise = null;
+
+    jsonlStream.end();
+    await finished(jsonlStream);
+    jsonlStream = null;
+
+    // Step 5: Save metadata and project using ffprobe's real media truth.
+    // Never fall back to wall-clock duration here: ffmpeg startup/finalization
+    // and hook shutdown are not part of the recorded video timeline.
+    const probed = await probeMediaFile(screenMp4Path);
+    const meta = buildMeta({
+      id,
+      fps,
+      width: probed.width,
+      height: probed.height,
+      screenStartUnixMs: recorder.screenStartUnixMs,
+      pointerOriginUnixMs,
+      encoder,
+      durationSeconds: probed.durationSeconds,
+      frameCount: probed.frameCount,
+    });
+    writeFileSync(metaJsonPath, JSON.stringify(meta, null, 2), 'utf-8');
+
+    // Parse pointer events and generate project.
+    const fullJsonlText = rawLines.join('\n');
+    const parsed = parsePointerJsonl(fullJsonlText);
+    const project = buildProjectFromRecording(
+      parsed.events,
+      meta.pointerOffsetSeconds,
+      probed.durationSeconds
+    );
+    writeFileSync(projectJsonPath, encodeRecorderProject(project), 'utf-8');
+
+    return sessionDir;
+  } catch (err) {
+    // Failure is not a recording. Stop both producers, close the JSONL
+    // stream, and remove the partial session directory before surfacing the
+    // original error.
+    isPumping = false;
+
+    if (hook) {
+      await hook.stop().catch(() => {});
+    }
+
+    if (pumpPromise) {
+      await pumpPromise.catch(() => {});
+      pumpPromise = null;
+    }
+
+    if (recorder) {
+      await recorder.stop().catch(() => {});
+    }
+
+    if (jsonlStream) {
+      jsonlStream.destroy();
+      await finished(jsonlStream).catch(() => {});
+      jsonlStream = null;
+    }
+
+    rmSync(sessionDir, { recursive: true, force: true });
+    throw err;
+  }
 }
