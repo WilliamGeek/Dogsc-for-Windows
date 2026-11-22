@@ -153,7 +153,7 @@
 - [x] T13.1 上游 `v0.2.0` 只读源码差异审计，输出 `docs/V020_DIFF_MAP.md`（53 文件与 v28 字段对照）。
 - [x] T13.2 按 `PORTING_RULES.md` 移植 `CameraBeauty`、`ScreenCardAppearance`（L1-86 核心模型）、`SegmentSceneStyle` 及单测（`RecorderProject` 多源扩展待 `T13.5` 接入）。
 - [x] T13.3 移植 `RecordingSource`、`RecordingSourceEditing`、`RecordingAspectTransitions` 及单测。
-- [ ] T13.4 移植 `PostProductionModel`、`VisualTrackTransfer`、`RecordingProjectImport` 及单测（44→53 模块）。
+- [x] T13.4 移植 `PostProductionModel`、`VisualTrackTransfer`、`RecordingProjectImport` 及单测（44→53 模块）。
 - [ ] T13.5 同步原有 44 模块在 `v0.1.8..v0.2.0` 的增量改动，`ProjectSchema.currentVersion` 升至 28，支持 v27 自动迁移与未知字段无损保留。
 - [x] T13.6 构建上游 v27/v28 双向 Golden Fixture 与 `test/core/SchemaInterop.test.ts`（通过门禁 G3）。
 
