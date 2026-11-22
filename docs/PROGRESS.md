@@ -92,8 +92,9 @@
 2026-11-23 03:24 | T13.5b-2a | DONE | 同步 CameraMotion（baseSample/transitionSample）、ScreenCardAppearance（cameraAppearanceTransitionSample/cameraMotionBase）、ZoomAnimation/ZoomTransitionResolution（transitionIntentVersion 0->1 修复与子帧片段过滤/微隙桥接）、AutoZoomPlanner（makeAnimationsInTimelineMap 多源隔离规划）、CursorRenderGeometry（80ms+180ms pressScale 曲线）、PointerTrack（零相位前后双向弹簧与 pressScale）、ProjectPointerTrack & TimelineMediaPlan（多源 eventsBySource 与同源相机区间限制），新增 6 项单测且 zero node:* 校验通过 | 296 pass (5 skip E2E)
 2026-11-23 03:35 | T13.5 | DONE | 同步 CompositionScene（3.6%/4.6% 设备边框、cameraEdgeInset 安全边距与 cameraMotionBase，并修复 evaluateCameraWithAspect 误传位置参数调用 makeCameraMotionState 改用 makeCameraMotionStateFromBase）与 FrameScene（多源 sourceContentRect / beauty / pressScale / insertedMedia / post 音字动轨 / layerOrder 与 refreshingCursor），完成上游 v0.2.0 全部 53/53 RecorderCore 模块对齐并收官 Wave B；新增 2 项单测，zero node:* 与 53/53 文件存在性校验通过 | 298 pass / 303 total (0 fail, 5 skip E2E)
 2026-11-23 03:36 | ARCH-DAG-WaveB | DONE | 刷新 docs/ARCHITECTURE_DAG.json 并通过 cli.py validate --strict 与 render --strict（24 节点 / 35 路径 / 0 警告）重建 docs/WORKFLOW.html（488.4 KB）与 docs/WORKFLOW.md；同步点亮 M_CoreV20（✓ 53模块 v28）、e_probe_v20/e_v20_plan、G_MediaProbe（T12.9 showinfo）、X_CapFail（T12.10）、G_Verify（G1-G3），保持 Wave C-F 与 T11.7 虚化（opacity 0.65） | cli.py --strict 0 warnings
+2026-11-23 03:57 | T14.1 | DONE | 将 web/renderer.ts 单体着色器拆分为 web/passes/{glUtils,background,screen,cursor}.ts，新增 resolveLayerRenderOrder/dispatchSceneLayers 按 scene.layerOrder 动态调度、computeEffectiveScreenOpacity 抑制计算及 OffscreenRenderTarget FBO 基础设施；保持 renderer.ts 向后兼容导出并新增 5 项单测，zero node:* 与 stripTypeScriptTypes 全过 | 303 pass / 308 total (0 fail, 5 skip E2E)
 
-下一个任务：T14.1（Wave C WebGL2 多通道渲染 Pass 拆解与扩展）
+下一个任务：T14.2（实现摄像头画中画 WebGL2 通道 web/passes/camera.ts）
 
 
 

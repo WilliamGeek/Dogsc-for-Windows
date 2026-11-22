@@ -158,7 +158,7 @@
 - [x] T13.6 构建上游 v27/v28 双向 Golden Fixture 与 `test/core/SchemaInterop.test.ts`（通过门禁 G3）。
 
 ### Wave C：WebGL2 全通道视觉渲染补齐（P1-08, P2-10，零假开关前置条件）
-- [ ] T14.1 模块化拆分 `web/passes/{background,screen,cursor}.ts`，按 `scene.layerOrder` 动态调度渲染。
+- [x] T14.1 模块化拆分 `web/passes/{background,screen,cursor}.ts`，按 `scene.layerOrder` 动态调度渲染。
 - [ ] T14.2 摄像头画中画通道 `web/passes/camera.ts`（镜像/AspectFill/圆角圆形遮罩/阴影边框/缩放避让/出场）。
 - [ ] T14.3 马赛克像素化/模糊与聚光灯通道 `web/passes/spotlight.ts` 及对应屏幕遮罩。
 - [ ] T14.4 贴纸图层与防穿帮背景模糊接力通道 `web/passes/stickers.ts`。
