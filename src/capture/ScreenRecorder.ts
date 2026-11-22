@@ -74,6 +74,21 @@ function formatExitError(result: ScreenRecorderExit, timedOut: boolean): string 
 }
 
 /**
+ * Pure function: parses a line from ffmpeg's `showinfo` filter output on stderr
+ * and returns pts_time (seconds) when frame `n: 0` is observed, or null otherwise.
+ */
+export function parseShowinfoFirstFramePts(line: string): number | null {
+  if (!line.includes('showinfo')) return null;
+  if (!/\bn:\s*0\b/.test(line)) return null;
+  const ptsMatch = /\bpts_time:([0-9.+-]+)/.exec(line);
+  if (ptsMatch) {
+    const val = Number(ptsMatch[1]);
+    return Number.isFinite(val) ? val : 0;
+  }
+  return 0;
+}
+
+/**
  * Pure function: constructs the command-line argument list for ffmpeg screen recording.
  */
 export function buildFfmpegArgs(o: FfmpegArgsOptions): string[] {
@@ -92,7 +107,7 @@ export function buildFfmpegArgs(o: FfmpegArgsOptions): string[] {
     '-i',
     `ddagrab=output_idx=${outputIdx}:framerate=${fps}:draw_mouse=${drawMouse ? 1 : 0}`,
     '-vf',
-    'hwdownload,format=bgra,format=yuv420p',
+    'hwdownload,format=bgra,showinfo,format=yuv420p',
   ];
 
   if (o.encoder === 'h264_nvenc') {
@@ -107,6 +122,10 @@ export function buildFfmpegArgs(o: FfmpegArgsOptions): string[] {
       '-cq',
       '23',
       '-b:v',
+      '0',
+      '-bf',
+      '0',
+      '-rc-lookahead',
       '0',
       '-pix_fmt',
       'yuv420p',
@@ -214,6 +233,7 @@ export function startScreenRecording(o: ScreenRecorderOptions): ScreenRecorderHa
   });
 
   let stderrTail = '';
+  let stderrLineBuffer = '';
   let spawnError: Error | null = null;
   let closeResult: ScreenRecorderExit | null = null;
   let resolveExited!: (result: ScreenRecorderExit) => void;
@@ -241,6 +261,14 @@ export function startScreenRecording(o: ScreenRecorderOptions): ScreenRecorderHa
   const tryResolveReady = () => {
     if (firstFrameUnixMs !== null || progressFrame < 1 || !hasProgressOutTime) return;
     firstFrameUnixMs = Math.round(Date.now() - progressOutTimeUs / 1000);
+    resolveReady(firstFrameUnixMs);
+  };
+
+  const tryResolveFromShowinfo = (line: string) => {
+    if (firstFrameUnixMs !== null) return;
+    const pts = parseShowinfoFirstFramePts(line);
+    if (pts === null) return;
+    firstFrameUnixMs = Date.now();
     resolveReady(firstFrameUnixMs);
   };
 
@@ -282,7 +310,12 @@ export function startScreenRecording(o: ScreenRecorderOptions): ScreenRecorderHa
   };
 
   proc.stderr?.on('data', (chunk: Buffer | string) => {
-    stderrTail = (stderrTail + String(chunk)).slice(-STDERR_TAIL_LIMIT);
+    const text = String(chunk);
+    stderrTail = (stderrTail + text).slice(-STDERR_TAIL_LIMIT);
+    stderrLineBuffer += text;
+    const lines = stderrLineBuffer.split(/\r?\n/);
+    stderrLineBuffer = lines.pop() ?? '';
+    for (const line of lines) tryResolveFromShowinfo(line);
   });
 
   proc.on('error', (err: Error) => {

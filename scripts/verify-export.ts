@@ -9,8 +9,8 @@
  */
 
 import { execFile } from 'node:child_process';
-import { readFileSync, existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { probeMediaFile } from '../src/capture/MediaProbe.ts';
@@ -43,6 +43,21 @@ export interface ExportVerificationInput {
   frameSamples?: readonly VerificationFrameSample[];
 }
 
+export interface PointerFlashSyncPair {
+  clickIndex: number;
+  clickTimeSeconds: number;
+  expectedFrame: number;
+  sourceFlashOnsetFrame: number | null;
+  deltaFrames: number | null;
+}
+
+export interface PointerFlashSyncResult {
+  ok: boolean;
+  maxDeltaFrames: number;
+  toleranceFrames: number;
+  pairs: PointerFlashSyncPair[];
+}
+
 export interface ExportVerificationReport {
   ok: boolean;
   errors: string[];
@@ -53,44 +68,98 @@ export interface ExportVerificationReport {
     ok: boolean;
     maxDeltaFrames: number;
   };
+  timingSync?: PointerFlashSyncResult;
 }
 
 const DURATION_TOLERANCE_SECONDS = 0.05;
-const FRAME_SAMPLE_MAX_MEAN = 8;
+const FRAME_SAMPLE_MIN_MEAN = 8;
 const FRAME_SAMPLE_MIN_STD = 5;
 const SYNC_SCAN_WIDTH = 272;
 const SYNC_SCAN_HEIGHT = 226;
 const SYNC_GREEN_MIN_PIXELS = 4;
 const SYNC_TOLERANCE_FRAMES = 1;
+const FFMPEG_SUBPROCESS_TIMEOUT_MS = 30_000;
+
+function extractFrameRuns(frames: readonly number[]): Array<[number, number]> {
+  const result: Array<[number, number]> = [];
+  let start: number | null = null;
+  let previous: number | null = null;
+  for (const frame of frames) {
+    if (start === null || previous === null || frame !== previous + 1) {
+      if (start !== null && previous !== null) result.push([start, previous]);
+      start = frame;
+    }
+    previous = frame;
+  }
+  if (start !== null && previous !== null) result.push([start, previous]);
+  return result;
+}
 
 /**
- * Compare pure-green sync frames between source and export. The test card flashes
- * its clicked target (and the top bar) for 120ms. The gate compares the ONSET of
- * each flash run, because a browser/encoder can legitimately drop the last frame
- * of a 7-frame flash while the visible click response still starts on time.
+ * Pure timing validator: compares source green-flash run onsets against
+ * pointer.jsonl click timestamps mapped onto the video timeline.
+ * Catches first-frame clock residual drift (e.g. 24-frame / 406ms offset).
+ */
+export function evaluatePointerToFlashSync(
+  sourceGreenFrames: readonly number[],
+  pointerClickTimesSeconds: readonly number[],
+  fps: number,
+  toleranceFrames: number = 2
+): PointerFlashSyncResult {
+  const safeFps = fps > 0 ? fps : 60;
+  const sourceRuns = extractFrameRuns(sourceGreenFrames);
+  const pairs: PointerFlashSyncPair[] = [];
+  let maxDeltaFrames = 0;
+
+  for (let i = 0; i < pointerClickTimesSeconds.length; i++) {
+    const clickTime = pointerClickTimesSeconds[i];
+    const expectedFrame = Math.round(clickTime * safeFps);
+    const run = sourceRuns[i];
+    if (!run) {
+      pairs.push({
+        clickIndex: i + 1,
+        clickTimeSeconds: clickTime,
+        expectedFrame,
+        sourceFlashOnsetFrame: null,
+        deltaFrames: null,
+      });
+      continue;
+    }
+    const onset = run[0];
+    const delta = Math.abs(onset - expectedFrame);
+    maxDeltaFrames = Math.max(maxDeltaFrames, delta);
+    pairs.push({
+      clickIndex: i + 1,
+      clickTimeSeconds: clickTime,
+      expectedFrame,
+      sourceFlashOnsetFrame: onset,
+      deltaFrames: delta,
+    });
+  }
+
+  const ok =
+    pointerClickTimesSeconds.length > 0 &&
+    sourceRuns.length === pointerClickTimesSeconds.length &&
+    pairs.every((p) => p.deltaFrames !== null && p.deltaFrames <= toleranceFrames);
+
+  return {
+    ok,
+    maxDeltaFrames,
+    toleranceFrames,
+    pairs,
+  };
+}
+
+/**
+ * Compare pure-green sync frames between source and export (structural check).
  */
 export function evaluateSyncFrames(
   sourceGreenFrames: readonly number[],
   exportGreenFrames: readonly number[],
   toleranceFrames: number = SYNC_TOLERANCE_FRAMES
 ): NonNullable<ExportVerificationReport['sync']> {
-  const runs = (frames: readonly number[]): Array<[number, number]> => {
-    const result: Array<[number, number]> = [];
-    let start: number | null = null;
-    let previous: number | null = null;
-    for (const frame of frames) {
-      if (start === null || previous === null || frame !== previous + 1) {
-        if (start !== null && previous !== null) result.push([start, previous]);
-        start = frame;
-      }
-      previous = frame;
-    }
-    if (start !== null && previous !== null) result.push([start, previous]);
-    return result;
-  };
-
-  const sourceRuns = runs(sourceGreenFrames);
-  const exportRuns = runs(exportGreenFrames);
+  const sourceRuns = extractFrameRuns(sourceGreenFrames);
+  const exportRuns = extractFrameRuns(exportGreenFrames);
   let maxDeltaFrames = 0;
   const ok =
     sourceRuns.length > 0 &&
@@ -195,7 +264,7 @@ export function evaluateExportVerification(input: ExportVerificationInput): Expo
     for (let i = 0; i < input.frameSamples.length; i++) {
       const sample = input.frameSamples[i];
       const sizeOk = sample.byteLength === sample.expectedBytes && sample.expectedBytes > 0;
-      const readableOk = sample.byteLength > 0 && sample.mean > FRAME_SAMPLE_MAX_MEAN && sample.std > FRAME_SAMPLE_MIN_STD;
+      const readableOk = sample.byteLength > 0 && sample.mean > FRAME_SAMPLE_MIN_MEAN && sample.std > FRAME_SAMPLE_MIN_STD;
       const ok = sizeOk && readableOk;
       checks.push({
         name: `frameSample#${i + 1}`,
@@ -240,12 +309,29 @@ function runFfmpegRawFrame(
     const proc = spawn('ffmpeg', args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
     const chunks: Buffer[] = [];
     let stderr = '';
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      try {
+        proc.kill('SIGKILL');
+      } catch {
+        // ignore
+      }
+      reject(new Error(`ffmpeg 抽帧超时 (${FFMPEG_SUBPROCESS_TIMEOUT_MS}ms)`));
+    }, FFMPEG_SUBPROCESS_TIMEOUT_MS);
+    if (typeof timer.unref === 'function') timer.unref();
+
     proc.stdout?.on('data', (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
     proc.stderr?.on('data', (chunk: Buffer) => {
       stderr = (stderr + String(chunk)).slice(-500);
     });
-    proc.on('error', (err) => reject(new Error(`ffmpeg 抽帧启动失败: ${err.message}`)));
+    proc.on('error', (err) => {
+      clearTimeout(timer);
+      if (!timedOut) reject(new Error(`ffmpeg 抽帧启动失败: ${err.message}`));
+    });
     proc.on('close', (code) => {
+      clearTimeout(timer);
+      if (timedOut) return;
       if (code !== 0) {
         reject(new Error(`ffmpeg 抽帧失败 (${timeSeconds}s, code ${String(code)}): ${stderr}`));
         return;
@@ -293,6 +379,18 @@ function scanGreenFrames(filePath: string): Promise<number[]> {
     let pending = Buffer.alloc(0);
     let frameIndex = 0;
     let stderr = '';
+    let timedOut = false;
+
+    const timer = setTimeout(() => {
+      timedOut = true;
+      try {
+        proc.kill('SIGKILL');
+      } catch {
+        // ignore
+      }
+      reject(new Error(`绿色同步帧扫描超时 (${FFMPEG_SUBPROCESS_TIMEOUT_MS}ms)`));
+    }, FFMPEG_SUBPROCESS_TIMEOUT_MS);
+    if (typeof timer.unref === 'function') timer.unref();
 
     proc.stderr?.on('data', (chunk: Buffer) => {
       stderr = (stderr + String(chunk)).slice(-500);
@@ -313,8 +411,13 @@ function scanGreenFrames(filePath: string): Promise<number[]> {
         frameIndex++;
       }
     });
-    proc.on('error', (err) => reject(new Error(`绿色同步帧扫描启动失败: ${err.message}`)));
+    proc.on('error', (err) => {
+      clearTimeout(timer);
+      if (!timedOut) reject(new Error(`绿色同步帧扫描启动失败: ${err.message}`));
+    });
     proc.on('close', (code) => {
+      clearTimeout(timer);
+      if (timedOut) return;
       if (code !== 0) {
         reject(new Error(`绿色同步帧扫描失败 (code ${String(code)}): ${stderr}`));
         return;
@@ -327,8 +430,9 @@ function scanGreenFrames(filePath: string): Promise<number[]> {
 async function main() {
   const args = process.argv.slice(2);
   const dir = argsValue(args, '--dir') ?? args.find((arg) => !arg.startsWith('-')) ?? null;
+  const reportOutPath = argsValue(args, '--report');
   if (!dir) {
-    console.error('用法: node scripts/verify-export.ts --dir <recordingDir>');
+    console.error('用法: node scripts/verify-export.ts --dir <recordingDir> [--sync] [--report <path>]');
     process.exit(2);
   }
 
@@ -339,9 +443,9 @@ async function main() {
   const screenPath = resolve(recordingDir, 'screen.mp4');
   const exportPath = resolve(recordingDir, 'export.mp4');
 
-  for (const path of [metaPath, projectPath, pointerPath, screenPath, exportPath]) {
-    if (!existsSync(path)) {
-      console.error(JSON.stringify({ ok: false, errors: [`缺少文件: ${path}`] }, null, 2));
+  for (const p of [metaPath, projectPath, pointerPath, screenPath, exportPath]) {
+    if (!existsSync(p)) {
+      console.error(JSON.stringify({ ok: false, errors: [`缺少文件: ${p}`] }, null, 2));
       process.exit(1);
     }
   }
@@ -376,17 +480,32 @@ async function main() {
   if (args.includes('--sync')) {
     const sourceGreenFrames = await scanGreenFrames(screenPath);
     const exportGreenFrames = await scanGreenFrames(exportPath);
-    const sync = evaluateSyncFrames(sourceGreenFrames, exportGreenFrames);
-    report.sync = sync;
+    const structuralSync = evaluateSyncFrames(sourceGreenFrames, exportGreenFrames);
+    const timingSync = evaluatePointerToFlashSync(sourceGreenFrames, clicks, Number(meta.fps) || screen.fps);
+    report.sync = structuralSync;
+    report.timingSync = timingSync;
+
     report.checks.push({
-      name: 'syncFrames',
-      ok: sync.ok,
-      detail: `source=${sourceGreenFrames.join(',') || 'none'} export=${exportGreenFrames.join(',') || 'none'} maxDelta=${sync.maxDeltaFrames}`,
+      name: 'structuralSyncFrames',
+      ok: structuralSync.ok,
+      detail: `source=${sourceGreenFrames.join(',') || 'none'} export=${exportGreenFrames.join(',') || 'none'} maxDelta=${structuralSync.maxDeltaFrames}`,
     });
-    if (!sync.ok) {
+    if (!structuralSync.ok) {
       report.ok = false;
       report.errors.push(
-        `同步闪帧不一致：source=[${sourceGreenFrames.join(',')}] export=[${exportGreenFrames.join(',')}]，容差 ${SYNC_TOLERANCE_FRAMES} 帧`
+        `源/导出闪帧不一致：source=[${sourceGreenFrames.join(',')}] export=[${exportGreenFrames.join(',')}]，容差 ${SYNC_TOLERANCE_FRAMES} 帧`
+      );
+    }
+
+    report.checks.push({
+      name: 'pointerTimingSync',
+      ok: timingSync.ok,
+      detail: `maxDelta=${timingSync.maxDeltaFrames} pairs=${JSON.stringify(timingSync.pairs)}`,
+    });
+    if (!timingSync.ok) {
+      report.ok = false;
+      report.errors.push(
+        `指针点击时刻与源视频绿色闪帧偏差过大：maxDelta=${timingSync.maxDeltaFrames} 帧 (容差 ${timingSync.toleranceFrames} 帧)`
       );
     }
   }
@@ -396,6 +515,8 @@ async function main() {
     ok: report.ok,
     errors: report.errors,
     checks: report.checks,
+    structuralSync: report.sync ?? null,
+    timingSync: report.timingSync ?? null,
     measured: {
       metaDurationSeconds: meta.durationSeconds,
       screen,
@@ -404,6 +525,11 @@ async function main() {
       clicks,
     },
   };
+  if (reportOutPath) {
+    const resolvedReport = resolve(reportOutPath);
+    mkdirSync(dirname(resolvedReport), { recursive: true });
+    writeFileSync(resolvedReport, JSON.stringify(payload, null, 2), 'utf-8');
+  }
   console.log(JSON.stringify(payload, null, 2));
   process.exit(report.ok ? 0 : 1);
 }

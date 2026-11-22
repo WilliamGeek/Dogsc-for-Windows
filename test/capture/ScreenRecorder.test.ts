@@ -9,6 +9,7 @@ import { resolve } from 'node:path';
 import {
   buildFfmpegArgs,
   detectEncoder,
+  parseShowinfoFirstFramePts,
   startScreenRecording,
 } from '../../src/capture/ScreenRecorder.ts';
 
@@ -115,6 +116,52 @@ test('T12.3: detectEncoder falls back to libx264 when the NVENC probe fails', as
     ffmpegArgsPrefix: ['-e', script, '--'],
   });
   assert.equal(encoder, 'libx264');
+});
+
+test('T12.9: parseShowinfoFirstFramePts parses n: 0 and ignores n >= 1 or non-showinfo lines', () => {
+  assert.equal(
+    parseShowinfoFirstFramePts('[Parsed_showinfo_2 @ 000001] n:   0 pts:      0 pts_time:0.0166667 fmt:bgra'),
+    0.0166667
+  );
+  assert.equal(
+    parseShowinfoFirstFramePts('[Parsed_showinfo_2 @ 000001] n:   1 pts:    512 pts_time:0.0333333 fmt:bgra'),
+    null
+  );
+  assert.equal(parseShowinfoFirstFramePts('frame=1 out_time_us=0'), null);
+});
+
+test('T12.9: buildFfmpegArgs includes showinfo and zero-lookahead NVENC flags', () => {
+  const nvenc = buildFfmpegArgs({
+    outFile: 'out.mp4',
+    fps: 60,
+    encoder: 'h264_nvenc',
+    outputIdx: 0,
+  });
+  assert.ok(nvenc[nvenc.indexOf('-vf') + 1].includes('showinfo'));
+  assert.equal(nvenc[nvenc.indexOf('-bf') + 1], '0');
+  assert.equal(nvenc[nvenc.indexOf('-rc-lookahead') + 1], '0');
+});
+
+test('T12.9: showinfo n: 0 on stderr resolves ready BEFORE delayed -progress pipe:1', async () => {
+  const script = [
+    "console.error('[Parsed_showinfo_2 @ 0x1] n:   0 pts:      0 pts_time:0');",
+    "setTimeout(() => { console.log('frame=1'); console.log('out_time_us=50000'); }, 350);",
+    "setTimeout(() => process.exit(0), 420);",
+  ].join(' ');
+
+  const startedAt = Date.now();
+  const recorder = startScreenRecording({
+    outFile: 'out/t129_showinfo.mp4',
+    fps: 60,
+    encoder: 'h264_nvenc',
+    ffmpegBin: process.execPath,
+    ffmpegArgsPrefix: ['-e', script, '--'],
+  });
+
+  const firstFrameUnixMs = await recorder.ready;
+  const elapsedMs = firstFrameUnixMs - startedAt;
+  assert.ok(elapsedMs < 250, `Expected showinfo n:0 to resolve immediately (<250ms), took ${elapsedMs}ms`);
+  await recorder.stop();
 });
 
 test('T12.7: parses -progress pipe:1 and derives firstFrameUnixMs from out_time_us', async () => {

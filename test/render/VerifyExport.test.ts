@@ -2,7 +2,12 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { evaluateExportVerification, evaluateSyncFrames, type ExportVerificationInput } from '../../scripts/verify-export.ts';
+import {
+  evaluateExportVerification,
+  evaluatePointerToFlashSync,
+  evaluateSyncFrames,
+  type ExportVerificationInput,
+} from '../../scripts/verify-export.ts';
 
 function validInput(): ExportVerificationInput {
   return {
@@ -77,4 +82,24 @@ test('T12.7/T12.8: sync frames reject a missing flash or a two-frame drift', () 
 test('T12.7/T12.8: sync frames reject a different number of flash runs', () => {
   const sync = evaluateSyncFrames([150, 151, 290, 291], [150, 151]);
   assert.equal(sync.ok, false);
+});
+
+test('T12.9: pointer-to-flash timing sync catches 24-frame (406ms) residual drift', () => {
+  const drifted = evaluatePointerToFlashSync(
+    [143, 144, 145, 286, 287, 288],
+    [1.9757, 4.3615],
+    60
+  );
+  assert.equal(drifted.ok, false);
+  assert.equal(drifted.maxDeltaFrames, 24);
+});
+
+test('T12.9: pointer-to-flash timing sync passes when click times align within tolerance', () => {
+  const aligned = evaluatePointerToFlashSync(
+    [143, 144, 145, 286, 287, 288],
+    [2.383, 4.767],
+    60
+  );
+  assert.equal(aligned.ok, true);
+  assert.equal(aligned.maxDeltaFrames, 0);
 });
