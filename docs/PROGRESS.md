@@ -95,8 +95,9 @@
 2026-11-23 03:57 | T14.1 | DONE | 将 web/renderer.ts 单体着色器拆分为 web/passes/{glUtils,background,screen,cursor}.ts，新增 resolveLayerRenderOrder/dispatchSceneLayers 按 scene.layerOrder 动态调度、computeEffectiveScreenOpacity 抑制计算及 OffscreenRenderTarget FBO 基础设施；保持 renderer.ts 向后兼容导出并新增 5 项单测，zero node:* 与 stripTypeScriptTypes 全过 | 303 pass / 308 total (0 fail, 5 skip E2E)
 2026-11-23 03:59 | T14.2 | DONE | 新增 web/passes/camera.ts（CameraPass + computeCameraShaderUniforms/sampleCameraUV/buildCameraQuadVertices/buildCameraShadowVertices），实现水平镜像、AspectFill uvRect 裁剪、SDF 圆角/圆形遮罩、柔和阴影与边框、缩放避让、贴纸 cameraSuppression/不透明度淡出与保边磨皮美白；接入 renderer.ts 调度并新增 2 项单测 | 305 pass / 310 total (0 fail, 5 skip E2E)
 2026-11-23 04:03 | T14.3 | DONE | 新增 web/passes/spotlight.ts（SpotlightPass / computeBlurMosaicUniforms / computeSpotlightPassUniforms / evaluateSpotlightOutsideMask）并扩展 web/passes/screen.ts 片元着色器实现截屏矩形圆角模糊+像素化马赛克（防跨界采样泄露）与 3D 透视对齐多区域聚光灯并集遮罩（共享至 glUtils.ts 保持无环依赖）；接入 renderer.ts 并新增 2 项单测 | 307 pass / 312 total (0 fail, 5 skip E2E)
+2026-11-23 04:10 | T14.4 | DONE | 新增 web/passes/stickers.ts（StickerPass + BackdropBlurRelay + computeStickerRenderPlan + buildRotatedQuadVertices），实现 9-tap 可分离高斯模糊 FBO 两段接力（beforeCamera / beforeStickers 防转场背景透穿帮）、layerIndex 排序与贴纸旋转/圆角/边框/软阴影渲染；接入 renderer.ts 并新增 1 项单测 | 308 pass / 313 total (0 fail, 5 skip E2E)
 
-下一个任务：T14.4（实现贴纸图层与防穿帮背景模糊接力通道 web/passes/stickers.ts）
+下一个任务：T14.5（实现设备与窗口外框 Chrome、聚焦外围虚化 FBO 与开场 3D 序列视觉校验）
 
 
 

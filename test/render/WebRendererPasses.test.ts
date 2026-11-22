@@ -36,6 +36,10 @@ import {
   computeSpotlightPassUniforms,
   evaluateSpotlightOutsideMask,
 } from '../../web/passes/spotlight.ts';
+import {
+  computeStickerRenderPlan,
+  buildRotatedQuadVertices,
+} from '../../web/passes/stickers.ts';
 import * as rendererExports from '../../web/renderer.ts';
 import {
   makeCompositionRect,
@@ -46,6 +50,7 @@ import {
   makeFrameScreenScene,
   makeFrameCameraScene,
   makeFrameMosaicScene,
+  makeFrameStickerScene,
   makeFrameShadow,
 } from '../../src/core/FrameScene.ts';
 import { CameraContentFill } from '../../src/core/CameraContentFill.ts';
@@ -53,7 +58,14 @@ import { makeCameraBeautySettings } from '../../src/core/CameraBeauty.ts';
 import { makeNormalizedCrop, makeCameraStyle } from '../../src/core/ProjectModel.ts';
 import { makeHexColor } from '../../src/core/HexColor.ts';
 import { ScreenProjection } from '../../src/core/ScreenProjection.ts';
-import { makeFrameStickerBackdropScene } from '../../src/core/StickerTransition.ts';
+import {
+  makeFrameStickerBackdropScene,
+  StickerTransitionTrack,
+} from '../../src/core/StickerTransition.ts';
+import {
+  makeStickerClip,
+  makeOverlayTiming,
+} from '../../src/core/OverlayTimeline.ts';
 
 test('T14.1: resolveLayerRenderOrder preserves deduplicated order and falls back when empty', () => {
   assert.deepEqual(
@@ -169,6 +181,8 @@ test('T14.1: web/renderer.ts preserves exact re-exports from modular passes', ()
   assert.equal(rendererExports.computeBlurMosaicUniforms, computeBlurMosaicUniforms);
   assert.equal(rendererExports.computeSpotlightPassUniforms, computeSpotlightPassUniforms);
   assert.equal(rendererExports.evaluateSpotlightOutsideMask, evaluateSpotlightOutsideMask);
+  assert.equal(rendererExports.computeStickerRenderPlan, computeStickerRenderPlan);
+  assert.equal(rendererExports.buildRotatedQuadVertices, buildRotatedQuadVertices);
 });
 
 test('T14.2: computeCameraShaderUniforms enforces circle mask clamping, AspectFill uvRect, beauty, and suppression', () => {
@@ -422,4 +436,150 @@ test('T14.3: computeSpotlightPassUniforms and evaluateSpotlightOutsideMask merge
   assert.equal(evaluateSpotlightOutsideMask(0.775, 0.725, u.screenSize, u.regions), 0);
   assert.equal(evaluateSpotlightOutsideMask(0.5, 0.5, u.screenSize, u.regions), 1);
   assert.equal(evaluateSpotlightOutsideMask(0.01, 0.01, u.screenSize, u.regions), 1);
+});
+
+test('T14.4: computeStickerRenderPlan routes blurStage, sorts layerIndex, and preserves anti-bleed suppression across joined handoff', () => {
+  // 1. Blur stage routing
+  assert.equal(
+    computeStickerRenderPlan(
+      { stickers: [], stickerBackdrop: makeFrameStickerBackdropScene({ screenBlur: 0, cameraBlur: 0 }) },
+      1920,
+      1080
+    ).blurStage,
+    'none'
+  );
+  const beforeCam = computeStickerRenderPlan(
+    { stickers: [], stickerBackdrop: makeFrameStickerBackdropScene({ screenBlur: 14, cameraBlur: 0 }) },
+    1920,
+    1080
+  );
+  assert.equal(beforeCam.blurStage, 'beforeCamera');
+  assert.equal(beforeCam.blurRadiusPx, 14);
+
+  const beforeStick = computeStickerRenderPlan(
+    { stickers: [], stickerBackdrop: makeFrameStickerBackdropScene({ screenBlur: 10, cameraBlur: 20 }) },
+    1920,
+    1080
+  );
+  assert.equal(beforeStick.blurStage, 'beforeStickers');
+  assert.equal(beforeStick.blurRadiusPx, 20);
+
+  // 2. Joined StickerTransitionTrack handoff keeps screenSuppression == 1 and blur active at exact boundary
+  const clipA = makeStickerClip({
+    id: 'st-a',
+    timing: makeOverlayTiming(0, 2),
+    relativePath: 'a.png',
+    hidesScreen: true,
+    backdropBlur: 12,
+    enterDuration: 0.3,
+    exitDuration: 0.3,
+    layerIndex: 2,
+  });
+  const clipB = makeStickerClip({
+    id: 'st-b',
+    timing: makeOverlayTiming(2, 2),
+    relativePath: 'b.png',
+    hidesScreen: true,
+    backdropBlur: 16,
+    enterDuration: 0.3,
+    exitDuration: 0.3,
+    layerIndex: 1,
+  });
+  const track = new StickerTransitionTrack([clipA, clipB]);
+  const handoff = track.sample(2.0);
+  assert.equal(handoff.backdrop.screenSuppression, 1);
+
+  const handoffPlan = computeStickerRenderPlan(
+    {
+      stickers: [
+        makeFrameStickerScene({
+          id: 's-top',
+          relativePath: 'a.png',
+          position: { x: 0.5, y: 0.5 },
+          width: 0.4,
+          rotationRadians: 0,
+          opacity: 0.9,
+          scale: 1,
+          offset: { x: 0, y: 0 },
+          cornerRadius: 12,
+          borderWidth: 2,
+          borderColor: makeHexColor(0xffffff),
+          shadowOpacity: 0.3,
+          shadowRadius: 10,
+          shadowOffset: makeCompositionPoint(0, 6),
+          backdropBlur: 0,
+          backdropBlurIncludesCamera: false,
+          hidesScreen: false,
+          hidesCamera: false,
+          transitionProgress: 1,
+          layerIndex: 5,
+        }),
+        makeFrameStickerScene({
+          id: 's-hidden',
+          relativePath: 'hidden.png',
+          position: { x: 0.5, y: 0.5 },
+          width: 0.2,
+          rotationRadians: 0,
+          opacity: 0,
+          scale: 1,
+          offset: { x: 0, y: 0 },
+          cornerRadius: 0,
+          borderWidth: 0,
+          borderColor: makeHexColor(0xffffff),
+          shadowOpacity: 0,
+          shadowRadius: 0,
+          shadowOffset: makeCompositionPoint(0, 0),
+          backdropBlur: 0,
+          backdropBlurIncludesCamera: false,
+          hidesScreen: false,
+          hidesCamera: false,
+          transitionProgress: 0,
+          layerIndex: 0,
+        }),
+        makeFrameStickerScene({
+          id: 's-back',
+          relativePath: 'b.png',
+          position: { x: 0.25, y: 0.5 },
+          width: 0.25,
+          rotationRadians: Math.PI / 2,
+          opacity: 1,
+          scale: 1,
+          offset: { x: 0, y: 0 },
+          cornerRadius: 8,
+          borderWidth: 0,
+          borderColor: makeHexColor(0xffffff),
+          shadowOpacity: 0,
+          shadowRadius: 0,
+          shadowOffset: makeCompositionPoint(0, 0),
+          backdropBlur: 0,
+          backdropBlurIncludesCamera: false,
+          hidesScreen: false,
+          hidesCamera: false,
+          transitionProgress: 1,
+          layerIndex: 1,
+        }),
+      ],
+      stickerBackdrop: handoff.backdrop,
+    },
+    1920,
+    1080
+  );
+  assert.equal(handoffPlan.items.length, 2);
+  assert.equal(handoffPlan.items[0].id, 's-back');
+  assert.equal(handoffPlan.items[1].id, 's-top');
+
+  // 3. 90 deg rotation + shadow margin expansion
+  const rotVerts = buildRotatedQuadVertices([960, 540], [200, 100], Math.PI / 2, 1920, 1080, 0);
+  assert.equal(rotVerts.length, 24);
+  // Top-right local (+100, -50) rotated by +90 deg -> (+50, +100) => px (1010, 640) => ndcX = (1010/1920)*2 - 1
+  const expectedNdcX = (1010 / 1920) * 2 - 1;
+  const expectedNdcY = 1 - (640 / 1080) * 2;
+  assert.ok(Math.abs(rotVerts[4] - expectedNdcX) < 1e-5);
+  assert.ok(Math.abs(rotVerts[5] - expectedNdcY) < 1e-5);
+
+  const shadowRotVerts = buildRotatedQuadVertices([960, 540], [200, 100], 0, 1920, 1080, 20);
+  assert.ok(shadowRotVerts[2] < 0);
+  assert.ok(shadowRotVerts[3] < 0);
+  assert.ok(shadowRotVerts[10] > 1);
+  assert.ok(shadowRotVerts[11] > 1);
 });

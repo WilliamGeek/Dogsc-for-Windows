@@ -58,6 +58,15 @@ import {
   type SpotlightPassUniforms,
 } from './passes/spotlight.ts';
 import {
+  BackdropBlurRelay,
+  StickerPass,
+  computeStickerRenderPlan,
+  buildRotatedQuadVertices,
+  type StickerBlurStage,
+  type StickerDrawItem,
+  type StickerRenderPlan,
+} from './passes/stickers.ts';
+import {
   createTexture2D,
   resolveLayerRenderOrder,
   dispatchSceneLayers,
@@ -78,6 +87,8 @@ export {
   computeBlurMosaicUniforms,
   computeSpotlightPassUniforms,
   evaluateSpotlightOutsideMask,
+  computeStickerRenderPlan,
+  buildRotatedQuadVertices,
   resolveLayerRenderOrder,
   dispatchSceneLayers,
 };
@@ -90,6 +101,9 @@ export type {
   BlurMosaicUniformBatch,
   SpotlightRegionUniform,
   SpotlightPassUniforms,
+  StickerBlurStage,
+  StickerDrawItem,
+  StickerRenderPlan,
 };
 
 export interface RendererPlanContext {
@@ -411,6 +425,8 @@ async function bootstrapBrowser(): Promise<void> {
   const spotlightPass = new SpotlightPass(gl);
   const cursorPass = new CursorPass(gl);
   const cameraPass = new CameraPass(gl);
+  const blurRelay = new BackdropBlurRelay(gl);
+  const stickerPass = new StickerPass(gl);
   const screenTex = createTexture2D(gl, true);
   let cameraTex: WebGLTexture | null = null;
 
@@ -466,17 +482,42 @@ async function bootstrapBrowser(): Promise<void> {
       cachedCameraFileNum = sourceFrameFile;
     }
 
-    gl.viewport(0, 0, ctx.width, ctx.height);
-    gl.clearColor(0.0, 0.0, 0.0, 1.0);
-    gl.clear(gl.COLOR_BUFFER_BIT);
+    const stickerPlan = computeStickerRenderPlan(scene, ctx.width, ctx.height);
+    let blurPending = stickerPlan.blurStage !== 'none';
+    const flushBlurIfDue = (stage: 'beforeCamera' | 'beforeStickers'): void => {
+      if (blurPending && stickerPlan.blurStage === stage) {
+        blurRelay.flushBlurredToScreen(ctx.width, ctx.height, stickerPlan.blurRadiusPx);
+        blurPending = false;
+      }
+    };
+
+    if (blurPending) {
+      blurRelay.beginCapture(ctx.width, ctx.height);
+    } else {
+      gl.viewport(0, 0, ctx.width, ctx.height);
+      gl.clearColor(0.0, 0.0, 0.0, 1.0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+    }
 
     dispatchSceneLayers(scene, {
       background: () => bgPass.render(scene, ctx.width, ctx.height),
       screen: () => screenPass.render(scene, screenTex, ctx.width, ctx.height),
       cursor: () => cursorPass.render(scene, ctx.width, ctx.height),
       spotlight: () => spotlightPass.render(scene, ctx.width, ctx.height),
-      camera: () => cameraPass.render(scene, cameraTex, ctx.width, ctx.height),
+      camera: () => {
+        flushBlurIfDue('beforeCamera');
+        cameraPass.render(scene, cameraTex, ctx.width, ctx.height);
+      },
+      stickers: () => {
+        flushBlurIfDue('beforeStickers');
+        stickerPass.render(scene, ctx.width, ctx.height);
+      },
     });
+
+    if (blurPending) {
+      blurRelay.flushBlurredToScreen(ctx.width, ctx.height, stickerPlan.blurRadiusPx);
+      blurPending = false;
+    }
 
     gl.finish();
   };
