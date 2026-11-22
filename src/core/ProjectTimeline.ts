@@ -13,6 +13,7 @@ import {
   type ZoomAnimationClip,
   ZoomBezierCurveCubic,
   makeZoomAnimationClip,
+  zoomAnimationClipFromJSON,
 } from './ZoomAnimation.ts';
 import { type ScreenMotionClip } from './ScreenMotion.ts';
 import { type CameraMotionClip } from './CameraMotion.ts';
@@ -637,7 +638,7 @@ export function projectTimelineFromJSON(raw: unknown): ProjectTimeline {
     sourceSequence,
     primarySegmentAudioOverrides,
     zoomClips: Array.isArray(c.zoomClips)
-      ? c.zoomClips.map((z: any) => makeZoomAnimationClip(z))
+      ? c.zoomClips.map((z: any) => zoomAnimationClipFromJSON(z))
       : [],
     screenMotionClips: Array.isArray(c.screenMotionClips)
       ? (c.screenMotionClips as ScreenMotionClip[])

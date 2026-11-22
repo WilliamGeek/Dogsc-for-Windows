@@ -493,7 +493,7 @@ export class ProjectTimelineMediaPlan {
     const systemPlans: TimelineMediaPlan[] = [];
     const cameraPlans: TimelineMediaPlan[] = [];
     const microphonePlans: TimelineMediaPlan[] = [];
-    const alignedPrimaryEvents: PointerEventRecord[] = [];
+    const eventsBySource = new Map<string, PointerEventRecord[]>();
 
     for (const [id, source] of sourcesMap.entries()) {
       if (source.systemAudioRange) {
@@ -531,14 +531,14 @@ export class ProjectTimelineMediaPlan {
       );
       if (micPlan) microphonePlans.push(micPlan);
 
-      if (id === RecordingSourcePrimaryID) {
-        const aligned = PointerTimelineAlignment.align(
+      eventsBySource.set(
+        id,
+        PointerTimelineAlignment.align(
           source.pointerEvents,
           source.manifest?.pointerEvents?.startOffset ?? 0,
           source.manifest?.pointerEvents?.sourceStartTime ?? 0
-        );
-        alignedPrimaryEvents.push(...aligned);
-      }
+        )
+      );
     }
 
     this.systemAudio =
@@ -553,8 +553,7 @@ export class ProjectTimelineMediaPlan {
       microphonePlans.length === 0
         ? null
         : new TimelineMediaPlan({ outputDuration: map.outputDuration, combining: microphonePlans });
-    // Note: Multi-source ProjectPointerTrack(eventsBySource) completes in T13.5b-2.
-    this.pointer = new ProjectPointerTrack(map, alignedPrimaryEvents);
+    this.pointer = new ProjectPointerTrack({ timelineMap: map, eventsBySource });
   }
 
   get outputDuration(): number {

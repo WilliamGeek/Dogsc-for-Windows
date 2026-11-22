@@ -56,6 +56,7 @@ import { projectPreserveLegacyScreenAppearances } from './ScreenCardAppearance.t
 import {
   type ZoomAnimationClip,
   makeZoomAnimationClip,
+  zoomAnimationClipFromJSON,
 } from './ZoomAnimation.ts';
 
 // MARK: - ProjectMediaManifest
@@ -357,7 +358,7 @@ export function decodeRecorderProject(json: string | Record<string, any>): Recor
     timeline = projectTimelineFromJSON(container.timeline);
   } else {
     const decodedAnimations: ZoomAnimationClip[] = Array.isArray(container.zoomAnimations)
-      ? container.zoomAnimations.map((a: any) => makeZoomAnimationClip(a))
+      ? container.zoomAnimations.map((a: any) => zoomAnimationClipFromJSON(a))
       : [];
     timeline = makeProjectTimeline({ zoomClips: decodedAnimations });
   }

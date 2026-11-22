@@ -3,11 +3,14 @@ import assert from 'node:assert/strict';
 import {
   makeAnimationsFromClicks,
   makeAnimationsFromPointerEvents,
+  makeAnimationsInTimelineMap,
   clippedAnimations,
   clippedKeyframes,
   makeKeyframesFromClicks,
   AutoZoomPlanner,
 } from '../../src/core/AutoZoomPlanner.ts';
+import { TimelineMap } from '../../src/core/TimelineMap.ts';
+import { makeRecordingSegment, makeSourceSequenceEdited } from '../../src/core/ProjectTimeline.ts';
 import {
   makePointerClick,
   makePointerEventRecord,
@@ -126,4 +129,32 @@ test('T4.1: clippedAnimations and clippedKeyframes', () => {
   const clippedKfs = clippedKeyframes(kfs, 2.0);
   assert.equal(clippedKfs.length, 2);
   assert.equal(clippedKfs[clippedKfs.length - 1].time, 2.0);
+});
+
+test('T13.5b-2a: makeAnimationsInTimelineMap isolates segments per source and drops physical stop click', () => {
+  const altSourceID = 'bbbbbbbb-2222-4222-8222-222222222222';
+  const map = new TimelineMap(
+    makeSourceSequenceEdited([
+      makeRecordingSegment({ id: 's1', sourceStart: 0, sourceDuration: 5 }),
+      makeRecordingSegment({ id: 's2', sourceStart: 0, sourceDuration: 5, sourceID: altSourceID }),
+    ]),
+    { '00000000-0000-0000-0000-000000000001': 5, [altSourceID]: 5 }
+  );
+
+  const clips = makeAnimationsInTimelineMap(map, {
+    '00000000-0000-0000-0000-000000000001': [
+      makePointerEventRecord(1.0, { x: 0.2, y: 0.2 }, 'leftClick'),
+      makePointerEventRecord(4.5, { x: 0.9, y: 0.9 }, 'leftClick'), // trailing stop click -> dropped!
+    ],
+    [altSourceID]: [
+      makePointerEventRecord(1.5, { x: 0.7, y: 0.7 }, 'leftClick'),
+      makePointerEventRecord(4.8, { x: 0.1, y: 0.1 }, 'leftClick'), // trailing stop click -> dropped!
+    ],
+  });
+
+  assert.equal(clips.length, 2);
+  assert.ok(clips[0].endTime <= 5.0 + 1e-9);
+  assert.ok(Math.abs(clips[0].focus.x - 0.2) < 1e-6);
+  assert.ok(clips[1].startTime >= 5.0 - 1e-9);
+  assert.ok(Math.abs(clips[1].focus.x - 0.7) < 1e-6);
 });

@@ -117,3 +117,55 @@ test('v0.2.0: ScreenCardAppearance preserveLegacyScreenAppearances and setScreen
   assert.equal(editedPrimary.additionalSources[0].screenAppearance?.cornerRadius, 32);
   assert.equal(editedPrimary.additionalSources[0].screenAppearance?.screenFrame, 'windowLight');
 });
+
+test('T13.5b-2a: projectCameraAppearanceTransitionSample blends camera shapes and respects isHidden guard', async () => {
+  const { makeRecorderProject } = await import('../../src/core/ProjectMediaModel.ts');
+  const { makeProjectTimeline, makeRecordingSegment, makeSourceSequenceEdited } = await import(
+    '../../src/core/ProjectTimeline.ts'
+  );
+  const { makeCameraStyle } = await import('../../src/core/ProjectModel.ts');
+  const { makeSegmentSceneStyle, SEGMENT_APPEARANCE_TRANSITION_DURATION } = await import(
+    '../../src/core/SegmentSceneStyle.ts'
+  );
+  const {
+    projectCameraAppearanceTransitionSample,
+    projectCameraMotionBase,
+  } = await import('../../src/core/ScreenCardAppearance.ts');
+
+  const stylePrev = makeSegmentSceneStyle({
+    camera: makeCameraStyle({ shape: 'circle', position: { x: 0.1, y: 0.2 }, size: 0.2 }),
+  });
+  const styleCurr = makeSegmentSceneStyle({
+    camera: makeCameraStyle({ shape: 'horizontal', position: { x: 0.9, y: 0.8 }, size: 0.4 }),
+  });
+  const styleHidden = makeSegmentSceneStyle({
+    camera: makeCameraStyle({ shape: 'circle', isHidden: true }),
+  });
+
+  const project = makeRecorderProject({
+    timeline: makeProjectTimeline({
+      sourceSequence: makeSourceSequenceEdited([
+        makeRecordingSegment({ id: 's1', sourceStart: 0, sourceDuration: 2, sceneStyle: stylePrev }),
+        makeRecordingSegment({ id: 's2', sourceStart: 2, sourceDuration: 2, sceneStyle: styleCurr }),
+        makeRecordingSegment({ id: 's3', sourceStart: 4, sourceDuration: 2, sceneStyle: styleHidden }),
+      ]),
+    }),
+  });
+
+  // Midpoint inside 240ms transition after s1->s2 cut at t=2.0
+  const mid = 2.0 + SEGMENT_APPEARANCE_TRANSITION_DURATION * 0.5;
+  const sample = projectCameraAppearanceTransitionSample(project, mid, 16 / 9, 16 / 9);
+  assert.ok(sample != null);
+  assert.ok(Math.abs(sample.position.x - 0.5) < 1e-6);
+  assert.ok(Math.abs(sample.size - 0.3) < 1e-6);
+  assert.ok(sample.aspectRatio > 1.0 && sample.aspectRatio < 1.5);
+
+  // s2->s3 has isHidden mismatch -> returns null
+  const midHidden = 4.0 + SEGMENT_APPEARANCE_TRANSITION_DURATION * 0.5;
+  assert.equal(projectCameraAppearanceTransitionSample(project, midHidden, 16 / 9, 16 / 9), null);
+
+  // Base camera motion state reflects settled segment camera style after transition
+  const baseAfter = projectCameraMotionBase(project, 2.5);
+  assert.deepEqual(baseAfter.layout, { kind: 'shape', shape: 'horizontal' });
+  assert.equal(baseAfter.opacity, 1);
+});

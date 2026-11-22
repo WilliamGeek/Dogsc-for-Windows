@@ -1,7 +1,7 @@
-// Port of: F:\dogsc\Sources\RecorderCore\ProjectPointerTrack.swift
+// Port of: F:\dogsc-v0.2.0\Sources\RecorderCore\ProjectPointerTrack.swift
 
 import { min, max } from './swift.ts';
-import type { MediaTimeRange } from './MediaTimeRange.ts';
+import { type MediaTimeRange, makeMediaTimeRange } from './MediaTimeRange.ts';
 import {
   PointerTrack,
   type PointerSample,
@@ -9,13 +9,14 @@ import {
 } from './PointerTrack.ts';
 import {
   type PointerEventRecord,
-  makePointerEventRecord,
   NormalizedPoint,
   makeNormalizedPoint,
   type ZoomAnimationClip,
+  makeZoomAnimationClip,
   ZoomViewportTransform,
 } from './ZoomAnimation.ts';
 import { TimelineMap } from './TimelineMap.ts';
+import { RecordingSourcePrimaryID } from './RecordingSource.ts';
 import {
   type MotionStyle,
   makeMotionStyle,
@@ -23,6 +24,27 @@ import {
   makeCursorStyle,
 } from './ProjectModel.ts';
 import { BoundedMemoizationCache } from './BoundedMemoizationCache.ts';
+
+const _nextDownBuf = new ArrayBuffer(8);
+const _nextDownF64 = new Float64Array(_nextDownBuf);
+const _nextDownU64 = new BigInt64Array(_nextDownBuf);
+
+function nextDown(value: number): number {
+  if (Number.isNaN(value) || value === -Infinity) return value;
+  if (value === Infinity) return Number.MAX_VALUE;
+  if (value === 0) return -Number.MIN_VALUE;
+  _nextDownF64[0] = value;
+  if (value > 0) {
+    _nextDownU64[0] -= 1n;
+  } else {
+    _nextDownU64[0] += 1n;
+  }
+  return _nextDownF64[0];
+}
+
+export type EventsBySourceInput =
+  | ReadonlyMap<string, readonly PointerEventRecord[]>
+  | Record<string, readonly PointerEventRecord[]>;
 
 // MARK: - ProjectPointerTrackSegment
 
@@ -33,6 +55,7 @@ import { BoundedMemoizationCache } from './BoundedMemoizationCache.ts';
  */
 export class ProjectPointerTrackSegment {
   readonly id: string;
+  readonly sourceID: string;
   readonly outputRange: MediaTimeRange;
   readonly track: PointerTrack;
   readonly firstClickTime: number | null;
@@ -43,8 +66,10 @@ export class ProjectPointerTrackSegment {
     outputRange: MediaTimeRange;
     track: PointerTrack;
     startsAfterSourceDiscontinuity?: boolean;
+    sourceID?: string;
   }) {
     this.id = options.id;
+    this.sourceID = options.sourceID ?? RecordingSourcePrimaryID;
     this.outputRange = options.outputRange;
     this.track = options.track;
     this.startsAfterSourceDiscontinuity =
@@ -66,53 +91,119 @@ interface AutomaticCameraFocusSample {
 // MARK: - ProjectPointerTrack
 
 /**
- * Pointer evaluator in the final output-time domain.
- *
- * `TimelineMap` first maps source events into retained segment clocks and
- * injects a position seed at each cut. This wrapper delegates smoothing and
- * visibility to `PointerTrack`, then adds a short output-time endpoint bridge
- * at an edit so the synthetic cursor does not teleport between retained clips.
+ * Pointer evaluator in the final output-time domain across single or multiple
+ * recording sources.
  */
 export class ProjectPointerTrack {
   /**
    * CUR-005: long enough to read as a deliberate move, short enough not to
-   * hide the first action in the retained clip. A click inside this window
-   * shortens the bridge so its recorded position remains exact.
+   * hide the first action in the retained clip.
    */
   private static readonly cutBridgeDuration: number = 0.28;
   private static readonly endpointEpsilon: number = 1.0 / 10000.0;
 
   readonly segments: readonly ProjectPointerTrackSegment[];
+  private readonly automaticCameraRanges: readonly MediaTimeRange[];
   private readonly cursorActivityTimes: readonly number[];
   private readonly automaticCameraFocusCache: BoundedMemoizationCache<
     string,
     readonly AutomaticCameraFocusSample[]
   >;
 
-  constructor(timelineMap: TimelineMap, sourceEvents: readonly PointerEventRecord[]) {
+  constructor(
+    timelineMapOrOptions:
+      | TimelineMap
+      | {
+          timelineMap: TimelineMap;
+          sourceEvents?: readonly PointerEventRecord[];
+          eventsBySource?: EventsBySourceInput;
+        },
+    sourceEventsOrBySource?: readonly PointerEventRecord[] | EventsBySourceInput
+  ) {
+    let timelineMap: TimelineMap;
+    let eventsBySource: EventsBySourceInput;
+
+    if (timelineMapOrOptions instanceof TimelineMap) {
+      timelineMap = timelineMapOrOptions;
+      if (Array.isArray(sourceEventsOrBySource)) {
+        eventsBySource = new Map([[RecordingSourcePrimaryID, sourceEventsOrBySource]]);
+      } else if (sourceEventsOrBySource) {
+        eventsBySource = sourceEventsOrBySource as EventsBySourceInput;
+      } else {
+        eventsBySource = new Map();
+      }
+    } else {
+      timelineMap = timelineMapOrOptions.timelineMap;
+      if (timelineMapOrOptions.eventsBySource !== undefined) {
+        eventsBySource = timelineMapOrOptions.eventsBySource;
+      } else if (timelineMapOrOptions.sourceEvents !== undefined) {
+        eventsBySource = new Map([
+          [RecordingSourcePrimaryID, timelineMapOrOptions.sourceEvents],
+        ]);
+      } else {
+        eventsBySource = new Map();
+      }
+    }
+
     const discontinuities = new Set<string>();
-    for (let index = 0; index < timelineMap.segments.length; index++) {
-      const segment = timelineMap.segments[index];
-      const previousEnd = index > 0 ? timelineMap.segments[index - 1].sourceEnd : 0;
-      if (Math.abs(segment.sourceStart - previousEnd) > ProjectPointerTrack.endpointEpsilon) {
+    const recording = timelineMap.segments.filter((s) => s.media == null);
+    for (let index = 0; index < recording.length; index++) {
+      const segment = recording[index];
+      const previousEnd = index > 0 ? recording[index - 1].sourceEnd : 0;
+      if (
+        Math.abs(segment.sourceStart - previousEnd) >
+          ProjectPointerTrack.endpointEpsilon ||
+        (index > 0 && recording[index - 1].sourceID !== segment.sourceID)
+      ) {
         discontinuities.add(segment.id);
       }
     }
 
-    this.segments = timelineMap.mapPointerEventSegments(sourceEvents).map(
+    this.segments = timelineMap.mapPointerEventSegments(eventsBySource).map(
       (mapped) =>
         new ProjectPointerTrackSegment({
           id: mapped.id,
           outputRange: mapped.outputRange,
           track: new PointerTrack(mapped.events),
           startsAfterSourceDiscontinuity: discontinuities.has(mapped.id),
+          sourceID: mapped.sourceID,
         })
     );
+
+    // Consecutive segments of the same recording preserve camera run state;
+    // switching sources or inserting media splits runs cleanly.
+    const ranges: MediaTimeRange[] = [];
+    let runStart = 0;
+    while (runStart < this.segments.length) {
+      let runEnd = runStart;
+      while (
+        runEnd + 1 < this.segments.length &&
+        this.segments[runEnd + 1].sourceID === this.segments[runStart].sourceID &&
+        Math.abs(
+          this.segments[runEnd].outputRange.end -
+            this.segments[runEnd + 1].outputRange.start
+        ) <= ProjectPointerTrack.endpointEpsilon
+      ) {
+        runEnd += 1;
+      }
+      const start = this.segments[runStart].outputRange.start;
+      const dur = this.segments[runEnd].outputRange.end - start;
+      const range = makeMediaTimeRange(start, dur)!;
+      for (let i = runStart; i <= runEnd; i++) {
+        ranges.push(range);
+      }
+      runStart = runEnd + 1;
+    }
+    this.automaticCameraRanges = ranges;
 
     const activity: number[] = [];
     let previous: NormalizedPoint | null = null;
     let previousEnd: number | null = null;
+    let previousSourceID: string | null = null;
     for (const segment of this.segments) {
+      if (previousSourceID !== segment.sourceID) {
+        previous = null;
+      }
       if (
         previousEnd != null &&
         segment.outputRange.start > previousEnd + ProjectPointerTrack.endpointEpsilon
@@ -133,15 +224,12 @@ export class ProjectPointerTrack {
         }
       }
       previousEnd = segment.outputRange.end;
+      previousSourceID = segment.sourceID;
     }
     this.cursorActivityTimes = activity;
     this.automaticCameraFocusCache = new BoundedMemoizationCache(4);
   }
 
-  /**
-   * Prepares each retained segment's current spring path on a background
-   * task before the display link asks for its first pointer sample.
-   */
   prewarmCursorSpring(motion: MotionStyle): void {
     if (motion.cursor !== '平滑' && motion.cursor !== 'smooth') return;
     for (const segment of this.segments) {
@@ -230,33 +318,63 @@ export class ProjectPointerTrack {
   }
 
   /**
-   * Stable-region camera following. The camera keeps its latest target while
-   * the pointer remains inside a central rest area. Only a real departure
-   * updates the affected target axis; the screen spring owns the transition.
+   * Stable-region camera following constrained inside the active same-source
+   * contiguous run.
    */
   automaticCameraFocus(
     outputTime: number,
     clip: ZoomAnimationClip,
     motion: MotionStyle = makeMotionStyle()
   ): NormalizedPoint {
+    const lookupTime = min(
+      max(outputTime, clip.startTime),
+      max(clip.startTime, nextDown(clip.endTime))
+    );
+    let scopedClip = clip;
+    const segIdx = this.segmentIndex(lookupTime);
+    if (segIdx != null) {
+      const range = this.automaticCameraRanges[segIdx];
+      let nextStart = clip.startTime;
+      let nextFocus = clip.focus;
+      let nextEnterDuration = clip.enterDuration;
+      let nextEnterProgressOffset = clip.enterProgressOffset;
+      if (clip.startTime < range.start) {
+        nextStart = range.start;
+        const firstIdx = this.segmentIndex(range.start);
+        if (firstIdx != null && this.segments[firstIdx].track.events.length > 0) {
+          nextFocus = this.segments[firstIdx].track.events[0].location;
+        }
+        nextEnterDuration = 0;
+        nextEnterProgressOffset = 0;
+      }
+      scopedClip = makeZoomAnimationClip({
+        ...clip,
+        startTime: nextStart,
+        endTime: min(clip.endTime, range.end),
+        focus: nextFocus,
+        enterDuration: nextEnterDuration,
+        enterProgressOffset: nextEnterProgressOffset,
+      });
+    }
+
     const baseFocus = NormalizedPoint.constrained(
-      clip.focus,
+      scopedClip.focus,
       ZoomViewportTransform.focusEdgeInset
     );
     if (
-      clip.origin !== 'automatic' ||
+      scopedClip.origin !== 'automatic' ||
       !Number.isFinite(outputTime) ||
-      !(clip.endTime > clip.startTime)
+      !(scopedClip.endTime > scopedClip.startTime)
     ) {
       return baseFocus;
     }
 
-    const key = `${clip.id}:${clip.startTime}:${clip.endTime}:${clip.scale}:${baseFocus.x}:${baseFocus.y}:${clip.enterDuration}:${clip.enterProgressOffset}:${motion.screen}:${motion.screenSpringMass}:${motion.screenSpringStiffness}:${motion.screenSpringDamping}`;
+    const key = `${scopedClip.id}:${scopedClip.startTime}:${scopedClip.endTime}:${scopedClip.scale}:${baseFocus.x}:${baseFocus.y}:${scopedClip.enterDuration}:${scopedClip.enterProgressOffset}:${motion.screen}:${motion.screenSpringMass}:${motion.screenSpringStiffness}:${motion.screenSpringDamping}`;
 
     const samples = this.automaticCameraFocusCache.value(key, () => {
       return this.makeAutomaticCameraFocusSamples(
-        clip,
-        this.automaticEntryFocus(clip, baseFocus),
+        scopedClip,
+        this.automaticEntryFocus(scopedClip, baseFocus),
         motion
       );
     });
@@ -264,7 +382,7 @@ export class ProjectPointerTrack {
     if (!samples) return baseFocus;
 
     return this.interpolatedAutomaticCameraFocus(
-      min(max(outputTime, clip.startTime), clip.endTime),
+      min(max(outputTime, scopedClip.startTime), scopedClip.endTime),
       samples,
       baseFocus
     );
@@ -329,18 +447,22 @@ export class ProjectPointerTrack {
     let target = baseFocus;
     let velocityX = 0.0;
     let velocityY = 0.0;
-    const clipEvents = this.events(clip.startTime, clip.endTime);
     let sampleTime = clip.startTime;
     const result: AutomaticCameraFocusSample[] = [
       { time: sampleTime, focus: position },
     ];
 
     while (sampleTime < clip.endTime) {
-      const nextTime = min(sampleTime + interval, clip.endTime);
+      const index = this.segmentIndex(sampleTime);
+      if (index == null) break;
+      const segment = this.segments[index];
+      const nextTime = min(sampleTime + interval, clip.endTime, segment.outputRange.end);
+      if (!(nextTime > sampleTime)) break;
+
       if (nextTime >= followStart) {
         const cursor = ProjectPointerTrack.interpolatedRawPosition(
-          nextTime,
-          clipEvents
+          min(nextTime, nextDown(segment.outputRange.end)),
+          segment.track.events
         );
         if (cursor) {
           let tx = target.x;
@@ -450,15 +572,6 @@ export class ProjectPointerTrack {
     );
   }
 
-  private events(start: number, end: number): PointerEventRecord[] {
-    const result: PointerEventRecord[] = [];
-    for (const segment of this.segments) {
-      const evs = segment.track.eventsRange(start, end);
-      result.push(...evs);
-    }
-    return result;
-  }
-
   private cutBridgePosition(
     time: number,
     segmentIndex: number,
@@ -488,6 +601,13 @@ export class ProjectPointerTrack {
     }
 
     const previous = this.segments[segmentIndex - 1];
+    if (
+      previous.sourceID !== segment.sourceID ||
+      Math.abs(previous.outputRange.end - start) > ProjectPointerTrack.endpointEpsilon
+    ) {
+      return null;
+    }
+
     const previousTime = max(
       previous.outputRange.start,
       previous.outputRange.end - ProjectPointerTrack.endpointEpsilon
@@ -498,7 +618,7 @@ export class ProjectPointerTrack {
 
     const linear = min(max((time - start) / duration, 0), 1);
     const eased =
-      linear * linear * linear * (linear * (linear * 6 - 15) + 10); // quintic smootherstep!
+      linear * linear * linear * (linear * (linear * 6 - 15) + 10);
     return makeNormalizedPoint(
       from.x + (to.x - from.x) * eased,
       from.y + (to.y - from.y) * eased

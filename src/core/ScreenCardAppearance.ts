@@ -22,6 +22,12 @@ import type { RecorderProject } from './ProjectMediaModel.ts';
 import type { RecordingSegment } from './ProjectTimeline.ts';
 import type { RecordingSource } from './RecordingSource.ts';
 import {
+  type CameraMotionSample,
+  type CameraMotionState,
+  CameraMotionTrack,
+  makeCameraMotionStateFromBase,
+} from './CameraMotion.ts';
+import {
   type RecordingSegmentBoundary,
   type SegmentSceneStyle,
   SegmentAppearanceTransition,
@@ -354,6 +360,46 @@ export function projectSettledCameraAtOutputTime(
   return cameraStyleBlend(result, previous.sceneStyle?.camera ?? project.camera, progress);
 }
 
+/**
+ * Resolves shapes into aspect and corner fractions before blending across a cut.
+ */
+export function projectCameraAppearanceTransitionSample(
+  project: RecorderProject,
+  time: number,
+  cameraAspectRatio: number,
+  canvasAspectRatio: number,
+  boundary?: RecordingSegmentBoundary,
+): CameraMotionSample | null {
+  const b = boundary ?? projectTimelineRecordingSegmentBoundaryAtOutputTime(project.timeline, time);
+  const current = b.segment as RecordingSegment | null;
+  const previous = b.previous as RecordingSegment | null;
+  if (!current || !previous) return null;
+  if (!SegmentAppearanceTransition.canSettle(previous, current)) return null;
+  const progress = SegmentAppearanceTransition.progress(time, b.start);
+  if (progress === null) return null;
+  const currentStyle = current.sceneStyle?.camera ?? project.camera;
+  const previousStyle = previous.sceneStyle?.camera ?? project.camera;
+  if (previousStyle.isHidden !== currentStyle.isHidden) return null;
+  const currentSample = CameraMotionTrack.resolve(
+    makeCameraMotionStateFromBase(currentStyle),
+    cameraAspectRatio,
+    canvasAspectRatio,
+  );
+  const previousSample = CameraMotionTrack.resolve(
+    makeCameraMotionStateFromBase(previousStyle),
+    cameraAspectRatio,
+    canvasAspectRatio,
+  );
+  return CameraMotionTrack.transitionSample(previousSample, currentSample, progress);
+}
+
+export function projectCameraMotionBase(
+  project: RecorderProject,
+  time: number,
+): CameraMotionState {
+  return makeCameraMotionStateFromBase(projectSettledCameraAtOutputTime(project, time));
+}
+
 /// Paused authoring has to show the clip's own authored values: a playhead
 /// parked just after a cut would otherwise sit inside the appearance
 /// settling window, and the inspector's numbers would not match the
@@ -621,6 +667,8 @@ export const ScreenCardAppearance = Object.freeze({
   screenCanvasForTarget: projectScreenCanvasForTarget,
   screenCanvasAtOutputTime: projectScreenCanvasAtOutputTime,
   settledCameraAtOutputTime: projectSettledCameraAtOutputTime,
+  cameraAppearanceTransitionSample: projectCameraAppearanceTransitionSample,
+  cameraMotionBase: projectCameraMotionBase,
   settlingSegmentAppearance: projectSettlingSegmentAppearance,
   preserveLegacyScreenAppearances: projectPreserveLegacyScreenAppearances,
   setScreenAppearance: projectSetScreenAppearance,

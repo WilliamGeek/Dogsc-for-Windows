@@ -1,7 +1,8 @@
-// Port of: F:\dogsc\Sources\RecorderCore\PointerTrack.swift
-import { clamp, max, min } from './swift.ts';
+// Port of: F:\dogsc-v0.2.0\Sources\RecorderCore\PointerTrack.swift
+import { clamp, max, min, newUUID } from './swift.ts';
 import { BoundedMemoizationCache } from './BoundedMemoizationCache.ts';
 import { PointerEventTimelineOrdering } from './PointerEventTimelineOrdering.ts';
+import { CursorRenderGeometry } from './CursorRenderGeometry.ts';
 import {
   type NormalizedPoint,
   type PointerEventRecord,
@@ -49,6 +50,7 @@ export interface PointerSample {
   clickPhase: PointerClickPhase | null;
   rotationRadians: number;
   recordedCursorAssetID: CursorAssetID | null;
+  pressScale: number;
 }
 
 export function makePointerSample(
@@ -57,6 +59,7 @@ export function makePointerSample(
   clickPhase: PointerClickPhase | null = null,
   rotationRadians: number = 0,
   recordedCursorAssetID: CursorAssetID | null = null,
+  pressScale: number = 1,
 ): PointerSample {
   return {
     location,
@@ -64,6 +67,7 @@ export function makePointerSample(
     clickPhase,
     rotationRadians: Number.isFinite(rotationRadians) ? rotationRadians : 0,
     recordedCursorAssetID,
+    pressScale: Number.isFinite(pressScale) ? clamp(pressScale, 0.5, 1.5) : 1,
   };
 }
 
@@ -108,6 +112,7 @@ export class PointerTrack {
   private static readonly clickEffectDuration = 0.18;
 
   readonly events: readonly PointerEventRecord[];
+  private readonly identity: string;
   private readonly springCache: BoundedMemoizationCache<
     PointerSpringCacheKey,
     PointerSpringSample[]
@@ -115,10 +120,30 @@ export class PointerTrack {
 
   constructor(events: readonly PointerEventRecord[]) {
     this.events = PointerEventTimelineOrdering.normalized(events);
+    this.identity = newUUID();
     this.springCache = new BoundedMemoizationCache<
       PointerSpringCacheKey,
       PointerSpringSample[]
     >(2);
+  }
+
+  equals(other: PointerTrack): boolean {
+    if (this.identity === other.identity) return true;
+    if (this.events.length !== other.events.length) return false;
+    for (let i = 0; i < this.events.length; i++) {
+      const a = this.events[i];
+      const b = other.events[i];
+      if (
+        a.time !== b.time ||
+        a.location.x !== b.location.x ||
+        a.location.y !== b.location.y ||
+        a.kind !== b.kind ||
+        a.cursorAssetID !== b.cursorAssetID
+      ) {
+        return false;
+      }
+    }
+    return true;
   }
 
   get cachedSpringVariantCount(): number {
@@ -196,6 +221,12 @@ export class PointerTrack {
     }
 
     const clicking = clickPhase != null;
+    const press =
+      cursorIsVisible && style.pressesOnClick !== false
+        ? this.mostRecentClick(time - CursorRenderGeometry.pressDuration, time)
+        : null;
+    const pressScale =
+      press != null ? CursorRenderGeometry.pressScale(time - press.time) : 1;
     const rotationRadians = this.cursorRotationRadians(
       time,
       rawLocation,
@@ -206,13 +237,14 @@ export class PointerTrack {
     return {
       position: rawLocation,
       cursor: cursorIsVisible
-        ? {
-            location: rawLocation,
-            isClicking: clicking,
+        ? makePointerSample(
+            rawLocation,
+            clicking,
             clickPhase,
             rotationRadians,
-            recordedCursorAssetID: lower.cursorAssetID ?? null,
-          }
+            lower.cursorAssetID ?? null,
+            pressScale,
+          )
         : null,
     };
   }
@@ -374,6 +406,10 @@ export class PointerTrack {
     const mass = max(motion.cursorSpringMass, 0.01);
     const stiffness = max(motion.cursorSpringStiffness, 0.01);
     const damping = max(motion.cursorSpringDamping, 0.01);
+    // Forward and backward passes each run at twice natural frequency (4x stiffness)
+    // with the authored damping ratio (2x damping) to cancel phase lag cleanly.
+    const passStiffness = stiffness * 4;
+    const passDamping = damping * 2;
     const settleDuration = max(0.65, 6 * Math.sqrt(mass / stiffness));
     const endTime = max(last.time, first.time) + settleDuration;
     const jitterThreshold = 0.000_35;
@@ -421,9 +457,9 @@ export class PointerTrack {
 
       const deltaTime = max(nextTime - sampleTime, 0);
       const accelerationX =
-        (stiffness * (stableTarget.x - position.x) - damping * velocityX) / mass;
+        (passStiffness * (stableTarget.x - position.x) - passDamping * velocityX) / mass;
       const accelerationY =
-        (stiffness * (stableTarget.y - position.y) - damping * velocityY) / mass;
+        (passStiffness * (stableTarget.y - position.y) - passDamping * velocityY) / mass;
       velocityX += accelerationX * deltaTime;
       velocityY += accelerationY * deltaTime;
       position = {
@@ -435,7 +471,53 @@ export class PointerTrack {
       iteration += 1;
     }
 
-    return this.anchoringClicks(result, cancellationCheck);
+    const zeroPhase = PointerTrack.reverseSpringPass(
+      result,
+      mass,
+      passStiffness,
+      passDamping,
+      cancellationCheck,
+    );
+    if (zeroPhase == null) return null;
+    return this.anchoringClicks(zeroPhase, cancellationCheck);
+  }
+
+  private static reverseSpringPass(
+    forward: readonly PointerSpringSample[],
+    mass: number,
+    stiffness: number,
+    damping: number,
+    cancellationCheck: () => boolean,
+  ): PointerSpringSample[] | null {
+    if (forward.length <= 2) return forward.slice();
+    const output = forward.slice();
+    let index = forward.length - 1;
+    let position = forward[index].location;
+    let velocityX = 0.0;
+    let velocityY = 0.0;
+    let iteration = 0;
+
+    while (index > 0) {
+      if ((iteration & 4095) === 0 && cancellationCheck()) return null;
+      const previous = index - 1;
+      const deltaTime = max(forward[index].time - forward[previous].time, 0);
+      const target = forward[previous].location;
+      const accelerationX = (stiffness * (target.x - position.x) - damping * velocityX) / mass;
+      const accelerationY = (stiffness * (target.y - position.y) - damping * velocityY) / mass;
+      velocityX += accelerationX * deltaTime;
+      velocityY += accelerationY * deltaTime;
+      position = {
+        x: clamp(position.x + velocityX * deltaTime, 0, 1),
+        y: clamp(position.y + velocityY * deltaTime, 0, 1),
+      };
+      output[previous] = {
+        time: forward[previous].time,
+        location: position,
+      };
+      index = previous;
+      iteration += 1;
+    }
+    return output;
   }
 
   private anchoringClicks(

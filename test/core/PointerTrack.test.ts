@@ -8,8 +8,9 @@ import {
 } from '../../src/core/PointerTrack.ts';
 import { makePointerEventRecord } from '../../src/core/ZoomAnimation.ts';
 import { makeMotionStyle, makeCursorStyle } from '../../src/core/ProjectModel.ts';
+import { CursorRenderGeometry } from '../../src/core/CursorRenderGeometry.ts';
 
-test('T4.2: PointerTrack construction, 240Hz spring simulation, and prewarming', () => {
+test('T4.2: PointerTrack construction, 240Hz zero-phase spring simulation, and prewarming', () => {
   const events = [
     makePointerEventRecord(0.0, { x: 0.1, y: 0.2 }, 'move'),
     makePointerEventRecord(0.5, { x: 0.5, y: 0.6 }, 'move'),
@@ -29,8 +30,30 @@ test('T4.2: PointerTrack construction, 240Hz spring simulation, and prewarming',
   assert.ok(samples != null);
   assert.ok(samples.length > 200, `Expected >200 samples at 240Hz, got ${samples.length}`);
   assert.equal(samples[0].time, 0.0);
-  assert.ok(Math.abs(samples[0].location.x - 0.1) < 1e-6);
-  assert.ok(Math.abs(samples[0].location.y - 0.2) < 1e-6);
+  assert.ok(samples[0].location.x >= 0 && samples[0].location.x <= 1);
+  assert.ok(samples[0].location.y >= 0 && samples[0].location.y <= 1);
+
+  // Zero-phase forward/backward filter has symmetric zero-lag response at t=0.5
+  // (step 0.1 -> 0.5 reaches ~0.30 midpoint instead of remaining stuck at 0.10).
+  const midStepSample = track.evaluation(0.5, motion);
+  assert.ok(midStepSample.position != null);
+  assert.ok(
+    midStepSample.position.x > 0.25 && midStepSample.position.x < 0.35,
+    `Zero-phase symmetric step check failed: x=${midStepSample.position.x}`,
+  );
+
+  // Continuous movement (<= 0.12s interval): zero-phase tracks linear target without lag
+  const denseEvents = Array.from({ length: 21 }, (_, i) => {
+    const t = i * 0.05;
+    return makePointerEventRecord(t, { x: 0.1 + 0.8 * t, y: 0.2 + 0.6 * t }, 'move');
+  });
+  const denseTrack = new PointerTrack(denseEvents);
+  const denseMid = denseTrack.evaluation(0.5, motion);
+  assert.ok(denseMid.position != null);
+  assert.ok(
+    Math.abs(denseMid.position.x - 0.5) < 0.02,
+    `Zero-phase continuous lag check failed: x=${denseMid.position.x}`,
+  );
 
   // Time before first event returns position: null, cursor: null
   const before = track.evaluation(-0.5, motion);
@@ -110,4 +133,25 @@ test('T4.3: Required tests: style.assetID === "hidden" -> cursor === null but po
   // Also via PointerInterpolator static helper
   const interpSample = PointerInterpolator.sample(events, 0.5, makeMotionStyle(), hiddenStyle);
   assert.equal(interpSample, null);
+});
+
+test('T13.5b-2a: CursorRenderGeometry.pressScale and PointerTrack click pressScale contract', () => {
+  assert.equal(CursorRenderGeometry.pressScale(-0.01), 1);
+  assert.equal(CursorRenderGeometry.pressScale(0), 1);
+  assert.ok(Math.abs(CursorRenderGeometry.pressScale(0.08) - 0.82) < 1e-9);
+  assert.ok(CursorRenderGeometry.pressScale(0.20) > 0.95);
+  assert.equal(CursorRenderGeometry.pressScale(0.26), 1);
+
+  const events = [
+    makePointerEventRecord(0.0, { x: 0.5, y: 0.5 }, 'move'),
+    makePointerEventRecord(1.0, { x: 0.5, y: 0.5 }, 'leftClick'),
+  ];
+  const track = new PointerTrack(events);
+  const samplePressed = track.sample(1.08, makeMotionStyle(), makeCursorStyle({ pressesOnClick: true }));
+  assert.ok(samplePressed != null);
+  assert.ok(Math.abs(samplePressed.pressScale - 0.82) < 1e-6);
+
+  const sampleDisabled = track.sample(1.08, makeMotionStyle(), makeCursorStyle({ pressesOnClick: false }));
+  assert.ok(sampleDisabled != null);
+  assert.equal(sampleDisabled.pressScale, 1);
 });

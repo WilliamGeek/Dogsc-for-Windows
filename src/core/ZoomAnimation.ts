@@ -1,5 +1,5 @@
-// Port of: F:\dogsc\Sources\RecorderCore\ZoomAnimation.swift
-import { clamp, max, min, newUUID } from './swift.ts';
+// Port of: F:\dogsc-v0.2.0\Sources\RecorderCore\ZoomAnimation.swift
+import { clamp, max, min, newUUID, toInt } from './swift.ts';
 import type { CursorAssetID } from './ProjectModel.ts';
 import type { FocusEffect } from './FocusEffect.ts';
 import { TimelineTrackOrdering } from './TimelineTrackOrdering.ts';
@@ -303,6 +303,7 @@ export interface ZoomAnimationClip {
   focusEffect: FocusEffect | null;
   preferredEnterDuration: number | null;
   preferredExitDuration: number | null;
+  transitionIntentVersion: number;
 }
 
 export function makeZoomAnimationClip(
@@ -322,6 +323,7 @@ export function makeZoomAnimationClip(
     focusEffect?: FocusEffect | null;
     preferredEnterDuration?: number | null;
     preferredExitDuration?: number | null;
+    transitionIntentVersion?: number;
   },
 ): ZoomAnimationClip {
   const id = options.id ?? newUUID();
@@ -340,6 +342,8 @@ export function makeZoomAnimationClip(
   const focusEffect = options.focusEffect ?? null;
   const preferredEnterDuration = options.preferredEnterDuration ?? null;
   const preferredExitDuration = options.preferredExitDuration ?? null;
+  const transitionIntentVersion =
+    options.transitionIntentVersion !== undefined ? toInt(options.transitionIntentVersion) : 1;
 
   return {
     id,
@@ -355,18 +359,26 @@ export function makeZoomAnimationClip(
       return this.preferredEnterDuration ?? this.enterDuration;
     },
     requestedExitDuration(defaultTransition: number = 0.7): number {
-      return (
+      const requested =
         this.preferredExitDuration ??
-        (this.exitDuration > 0.0001 ? this.exitDuration : max(defaultTransition, 0))
-      );
+        (this.exitDuration > 0.0001 ? this.exitDuration : max(defaultTransition, 0));
+      if (
+        this.transitionIntentVersion === 0 &&
+        this.origin === 'automatic' &&
+        requested > 0 &&
+        requested < 1.0 / 30.0
+      ) {
+        return max(defaultTransition, 0);
+      }
+      return requested;
     },
     preserveTransitionIntent(defaultTransition: number = 0.7): void {
+      const exit = this.requestedExitDuration(defaultTransition);
       if (this.preferredEnterDuration == null) {
         this.preferredEnterDuration = this.enterDuration;
       }
-      if (this.preferredExitDuration == null) {
-        this.preferredExitDuration = this.requestedExitDuration(defaultTransition);
-      }
+      this.preferredExitDuration = exit;
+      this.transitionIntentVersion = 1;
     },
     scale,
     focus,
@@ -380,7 +392,20 @@ export function makeZoomAnimationClip(
     focusEffect,
     preferredEnterDuration,
     preferredExitDuration,
+    transitionIntentVersion,
   };
+}
+
+export function zoomAnimationClipFromJSON(raw: unknown): ZoomAnimationClip {
+  if (!raw || typeof raw !== 'object') {
+    throw new Error('Expected ZoomAnimationClip JSON object');
+  }
+  const z = raw as Record<string, any>;
+  return makeZoomAnimationClip({
+    ...z,
+    transitionIntentVersion:
+      typeof z.transitionIntentVersion === 'number' ? z.transitionIntentVersion : 0,
+  } as Parameters<typeof makeZoomAnimationClip>[0]);
 }
 
 export function zoomAnimationClipDuration(clip: ZoomAnimationClip): number {

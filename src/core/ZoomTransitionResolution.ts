@@ -1,7 +1,8 @@
-// Port of: F:\dogsc\Sources\RecorderCore\ZoomTransitionResolution.swift
+// Port of: F:\dogsc-v0.2.0\Sources\RecorderCore\ZoomTransitionResolution.swift
 import { max, min } from './swift.ts';
 import {
   ZOOM_INTERPOLATOR_ADJACENCY_TOLERANCE,
+  makeZoomAnimationClip,
   zoomAnimationClipDuration,
   type ZoomAnimationClip,
 } from './ZoomAnimation.ts';
@@ -14,24 +15,31 @@ export function zoomAnimationClipRequestedExitDuration(
   clip: ZoomAnimationClip,
   defaultTransition: number = 0.7,
 ): number {
-  return (
+  const requested =
     clip.preferredExitDuration ??
-    (clip.exitDuration > 0.000_1 ? clip.exitDuration : max(defaultTransition, 0))
-  );
+    (clip.exitDuration > 0.000_1 ? clip.exitDuration : max(defaultTransition, 0));
+  if (
+    clip.transitionIntentVersion === 0 &&
+    clip.origin === 'automatic' &&
+    requested > 0 &&
+    requested < 1.0 / 30.0
+  ) {
+    return max(defaultTransition, 0);
+  }
+  return requested;
 }
 
 export function zoomAnimationClipPreserveTransitionIntent(
   clip: ZoomAnimationClip,
   defaultTransition: number = 0.7,
 ): ZoomAnimationClip {
-  const preferredEnterDuration = clip.preferredEnterDuration ?? clip.enterDuration;
-  const preferredExitDuration =
-    clip.preferredExitDuration ?? zoomAnimationClipRequestedExitDuration(clip, defaultTransition);
-  return {
+  const exit = zoomAnimationClipRequestedExitDuration(clip, defaultTransition);
+  return makeZoomAnimationClip({
     ...clip,
-    preferredEnterDuration,
-    preferredExitDuration,
-  };
+    preferredEnterDuration: clip.preferredEnterDuration ?? clip.enterDuration,
+    preferredExitDuration: exit,
+    transitionIntentVersion: 1,
+  });
 }
 
 /**
@@ -48,7 +56,7 @@ export const ZoomTransitionResolution = Object.freeze({
     if (!Number.isFinite(outputDuration) || outputDuration <= 0) {
       return [];
     }
-    const ordered = animations
+    const sorted = animations
       .filter((a) => a.startTime < outputDuration && zoomAnimationClipDuration(a) > 0.001)
       .slice()
       .sort((a, b) =>
@@ -61,20 +69,45 @@ export const ZoomTransitionResolution = Object.freeze({
           : a.startTime - b.startTime,
       );
 
+    // Omit isolated automatic entrance fragments reduced to under two 60 Hz frames.
+    const ordered = sorted.filter((clip, index) => {
+      const continues =
+        index > 0 &&
+        Math.abs(sorted[index - 1].endTime - clip.startTime) <=
+          ZOOM_INTERPOLATOR_ADJACENCY_TOLERANCE;
+      if (
+        clip.origin === 'automatic' &&
+        !continues &&
+        clip.enterProgressOffset === 0 &&
+        zoomAnimationClipDuration(clip) < min(zoomAnimationClipRequestedEnterDuration(clip), 1.0 / 30.0)
+      ) {
+        return false;
+      }
+      return true;
+    });
+
     return ordered.map((authored, index) => {
-      const clip: ZoomAnimationClip = { ...authored };
+      const clip = makeZoomAnimationClip({ ...authored });
       const next = index + 1 < ordered.length ? ordered[index + 1] : null;
       const requestedEnter = max(zoomAnimationClipRequestedEnterDuration(clip), 0);
       const requestedExit = max(zoomAnimationClipRequestedExitDuration(clip), 0);
       if (next != null) {
         const gap = max(next.startTime - clip.endTime, 0);
-        clip.exitDuration =
-          gap <= ZOOM_INTERPOLATOR_ADJACENCY_TOLERANCE ? 0 : min(requestedExit, gap);
+        if (
+          clip.origin === 'automatic' &&
+          next.origin === 'automatic' &&
+          gap > 0 &&
+          gap < 1.0 / 60.0 &&
+          requestedExit > gap
+        ) {
+          clip.endTime = next.startTime;
+          clip.exitDuration = 0;
+        } else {
+          clip.exitDuration =
+            gap <= ZOOM_INTERPOLATOR_ADJACENCY_TOLERANCE ? 0 : min(requestedExit, gap);
+        }
       } else {
         const available = max(outputDuration - clip.startTime, 0);
-        // A short final zoom reserves a real entrance and return. For
-        // a longer zoom only its final hold is shortened, never the
-        // requested transition stored in the project.
         const exit = min(requestedExit, max(available - min(requestedEnter, available * 0.5), 0));
         clip.endTime = min(clip.endTime, outputDuration - exit);
         if (clip.endTime < authored.endTime - 0.000_001) {

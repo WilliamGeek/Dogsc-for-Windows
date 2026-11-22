@@ -84,3 +84,37 @@ test('T7.3: ProjectPointerTrack automaticCameraFocus follows pointer and clamps 
   assert.ok(focus.x <= 1.0);
   assert.ok(focus.y <= 1.0);
 });
+
+test('T13.5b-2a: multi-source ProjectPointerTrack marks source switch discontinuity and blocks cross-source cutBridge', () => {
+  const altSourceID = 'aaaaaaaa-1111-4111-8111-111111111111';
+  const map = new TimelineMap(
+    makeSourceSequenceEdited([
+      makeRecordingSegment({ id: 's-prim', sourceStart: 0, sourceDuration: 2 }),
+      makeRecordingSegment({ id: 's-alt', sourceStart: 0, sourceDuration: 2, sourceID: altSourceID }),
+    ]),
+    { '00000000-0000-0000-0000-000000000001': 5, [altSourceID]: 5 }
+  );
+
+  const track = new ProjectPointerTrack({
+    timelineMap: map,
+    eventsBySource: {
+      '00000000-0000-0000-0000-000000000001': [
+        makePointerEventRecord({ time: 0.5, location: makeNormalizedPoint(0.1, 0.1), kind: 'move' }),
+        makePointerEventRecord({ time: 1.9, location: makeNormalizedPoint(0.1, 0.1), kind: 'move' }),
+      ],
+      [altSourceID]: [
+        makePointerEventRecord({ time: 0.0, location: makeNormalizedPoint(0.9, 0.9), kind: 'move' }),
+        makePointerEventRecord({ time: 1.0, location: makeNormalizedPoint(0.9, 0.9), kind: 'move' }),
+      ],
+    },
+  });
+
+  assert.equal(track.segments.length, 2);
+  assert.equal(track.segments[1].sourceID, altSourceID);
+  assert.equal(track.segments[1].startsAfterSourceDiscontinuity, true);
+
+  // Across source boundary at t=2.05, cutBridge must NOT blend from primary (0.1,0.1); stays on alt source (0.9,0.9)
+  const atBoundary = track.evaluation(2.05);
+  assert.ok(atBoundary.position != null);
+  assert.ok(atBoundary.position.x > 0.85, `Expected unbridged alt position near 0.9, got ${atBoundary.position.x}`);
+});

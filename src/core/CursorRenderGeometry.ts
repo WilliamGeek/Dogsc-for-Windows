@@ -410,9 +410,39 @@ export function cursorRenderGeometryClickGeometry(
   }
 }
 
+export const CURSOR_RENDER_GEOMETRY_PRESS_IN_DURATION = 0.08;
+export const CURSOR_RENDER_GEOMETRY_PRESS_RELEASE_DURATION = 0.18;
+export const CURSOR_RENDER_GEOMETRY_PRESS_DURATION =
+  CURSOR_RENDER_GEOMETRY_PRESS_IN_DURATION + CURSOR_RENDER_GEOMETRY_PRESS_RELEASE_DURATION;
+export const CURSOR_RENDER_GEOMETRY_PRESSED_SCALE = 0.82;
+
+export function cursorRenderGeometryPressScale(elapsed: number): number {
+  if (!Number.isFinite(elapsed) || elapsed < 0 || elapsed >= CURSOR_RENDER_GEOMETRY_PRESS_DURATION) {
+    return 1;
+  }
+  const depth = 1 - CURSOR_RENDER_GEOMETRY_PRESSED_SCALE;
+  if (elapsed < CURSOR_RENDER_GEOMETRY_PRESS_IN_DURATION) {
+    const p = elapsed / CURSOR_RENDER_GEOMETRY_PRESS_IN_DURATION;
+    const eased = 1 - (1 - p) * (1 - p);
+    return 1 - depth * eased;
+  }
+  const p =
+    (elapsed - CURSOR_RENDER_GEOMETRY_PRESS_IN_DURATION) /
+    CURSOR_RENDER_GEOMETRY_PRESS_RELEASE_DURATION;
+  const overshoot = 1.2;
+  const q = p - 1;
+  const back = 1 + (overshoot + 1) * q * q * q + overshoot * q * q;
+  return CURSOR_RENDER_GEOMETRY_PRESSED_SCALE + depth * back;
+}
+
 export const CursorRenderGeometry = Object.freeze({
   canonicalHeight: CURSOR_RENDER_GEOMETRY_CANONICAL_HEIGHT,
   canonicalShortEdge: CURSOR_RENDER_GEOMETRY_CANONICAL_SHORT_EDGE,
+  pressInDuration: CURSOR_RENDER_GEOMETRY_PRESS_IN_DURATION,
+  pressReleaseDuration: CURSOR_RENDER_GEOMETRY_PRESS_RELEASE_DURATION,
+  pressDuration: CURSOR_RENDER_GEOMETRY_PRESS_DURATION,
+  pressedScale: CURSOR_RENDER_GEOMETRY_PRESSED_SCALE,
+  pressScale: cursorRenderGeometryPressScale,
   layout: cursorRenderGeometryLayout,
   clickGeometry: cursorRenderGeometryClickGeometry,
 });

@@ -9,6 +9,7 @@ import {
   makeMotionStyle,
   type MotionStyle,
   type CameraShape,
+  type CameraStyle,
 } from './ProjectModel.ts';
 import { TimelineTrackOrdering } from './TimelineTrackOrdering.ts';
 import type { TransitionTiming } from './FocusEffect.ts';
@@ -49,6 +50,20 @@ export function makeCameraMotionState(
     roundness: options.roundness ?? 0.5,
     opacity: options.opacity ?? 1,
   };
+}
+
+/**
+ * Resolves a static `CameraStyle` into the base `CameraMotionState`.
+ * `opacity` is always 1 because visibility is controlled by `CameraStyle.isHidden`.
+ */
+export function makeCameraMotionStateFromBase(style: CameraStyle): CameraMotionState {
+  return makeCameraMotionState({
+    layout: makeCameraLayoutModeShape(style.shape),
+    position: style.position,
+    size: style.size,
+    roundness: style.roundness,
+    opacity: 1,
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -159,12 +174,15 @@ export class CameraMotionTrack {
     cameraAspectRatio: number = 1.0,
     canvasAspectRatio: number = 16 / 9,
     motion: MotionStyle = makeMotionStyle(),
+    baseSample: CameraMotionSample | null = null,
   ): CameraMotionSample {
-    const resolvedBase = CameraMotionTrack.resolve(
-      base,
-      cameraAspectRatio,
-      canvasAspectRatio,
-    );
+    const resolvedBase =
+      baseSample ??
+      CameraMotionTrack.resolve(
+        base,
+        cameraAspectRatio,
+        canvasAspectRatio,
+      );
 
     if (!this.usesIndexedEvaluation || !Number.isFinite(time)) {
       return this.sampleByScanning(
@@ -387,7 +405,7 @@ export class CameraMotionTrack {
     return CameraMotionTrack.transitionSample(target, base, progress);
   }
 
-  private static transitionSample(
+  static transitionSample(
     inherited: CameraMotionSample,
     target: CameraMotionSample,
     progress: number,

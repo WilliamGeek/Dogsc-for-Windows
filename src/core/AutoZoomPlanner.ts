@@ -1,6 +1,7 @@
-// Port of: F:\dogsc\Sources\RecorderCore\AutoZoomPlanner.swift
+// Port of: F:\dogsc-v0.2.0\Sources\RecorderCore\AutoZoomPlanner.swift
 import { clamp, max, min } from './swift.ts';
 import { PointerEventTimelineOrdering } from './PointerEventTimelineOrdering.ts';
+import type { TimelineMap } from './TimelineMap.ts';
 import {
   ZOOM_INTERPOLATOR_ADJACENCY_TOLERANCE,
   makeZoomAnimationClip,
@@ -16,6 +17,10 @@ import {
   type ZoomKeyframe,
   type NormalizedPoint,
 } from './ZoomAnimation.ts';
+import {
+  zoomAnimationClipPreserveTransitionIntent,
+  zoomAnimationClipRequestedExitDuration,
+} from './ZoomTransitionResolution.ts';
 import { makeMotionStyle, type MotionStyle } from './ProjectModel.ts';
 
 // ---------------------------------------------------------------------------
@@ -162,11 +167,12 @@ function mergingConnectedAutomaticEnvelopes(
       previous.easing === animation.easing &&
       areCurvesEqual(previous.customCurve, animation.customCurve)
     ) {
-      const merged: ZoomAnimationClip = {
+      const merged = makeZoomAnimationClip({
         ...previous,
         endTime: max(previous.endTime, animation.endTime),
         exitDuration: animation.exitDuration,
-      };
+        preferredExitDuration: zoomAnimationClipRequestedExitDuration(animation),
+      });
       result[result.length - 1] = merged;
     } else {
       result.push(animation);
@@ -411,6 +417,8 @@ export function makeAnimationsFromClicks(
           easing,
           enterDuration,
           exitDuration: isLast ? exitDuration : 0,
+          preferredEnterDuration: enterDuration,
+          preferredExitDuration: exitDuration,
         }),
       );
     }
@@ -423,6 +431,90 @@ export function makeAnimationsFromClicks(
 }
 
 /**
+ * Plan each retained occurrence independently in a multi-source timeline.
+ * Drops the physical stop click once per recording (when enabled) before
+ * segmenting, and clamps clips cleanly within each segment's output range.
+ */
+export function makeAnimationsInTimelineMap(
+  timelineMap: TimelineMap,
+  eventsBySource:
+    | ReadonlyMap<string, readonly PointerEventRecord[]>
+    | Record<string, readonly PointerEventRecord[]>,
+  options: {
+    zoomScale?: number;
+    easing?: ZoomEasingPreset;
+    transitionDuration?: number;
+    dropTrailingStopClick?: boolean;
+  } = {},
+): ZoomAnimationClip[] {
+  const zoomScale = options.zoomScale ?? 1.6;
+  const easing = options.easing ?? '弹簧';
+  const transitionDuration = options.transitionDuration ?? 0.7;
+  const dropTrailingStopClick = options.dropTrailingStopClick ?? true;
+
+  const sourceMap = new Map<string, readonly PointerEventRecord[]>();
+  if (eventsBySource instanceof Map) {
+    for (const [k, v] of (eventsBySource as ReadonlyMap<string, readonly PointerEventRecord[]>).entries()) {
+      sourceMap.set(k, v);
+    }
+  } else {
+    for (const [k, v] of Object.entries(
+      eventsBySource as Record<string, readonly PointerEventRecord[]>,
+    )) {
+      sourceMap.set(k, v);
+    }
+  }
+
+  const contentEvents = new Map<string, PointerEventRecord[]>();
+  for (const [sourceID, events] of sourceMap.entries()) {
+    const normalized = PointerEventTimelineOrdering.normalized(events).slice();
+    if (dropTrailingStopClick) {
+      let stopIdx = -1;
+      for (let i = normalized.length - 1; i >= 0; i--) {
+        if (normalized[i].kind === 'leftClick' || normalized[i].kind === 'rightClick') {
+          stopIdx = i;
+          break;
+        }
+      }
+      if (stopIdx >= 0) {
+        normalized.splice(stopIdx, 1);
+      }
+    }
+    contentEvents.set(sourceID, normalized);
+  }
+
+  const transition = clamp(transitionDuration, 0, 5);
+  const result: ZoomAnimationClip[] = [];
+  for (const segment of timelineMap.mapPointerEventSegments(contentEvents)) {
+    const clicks: PointerClick[] = [];
+    for (const event of segment.events) {
+      if (event.kind === 'leftClick' || event.kind === 'rightClick') {
+        clicks.push({ time: event.time, location: event.location });
+      }
+    }
+    const clips = makeAnimationsFromClicks(clicks, {
+      zoomScale,
+      enterDuration: transition,
+      exitDuration: transition,
+      easing,
+    });
+    for (const raw of clips) {
+      const clip = zoomAnimationClipPreserveTransitionIntent(raw, transition);
+      clip.startTime = max(clip.startTime, segment.outputRange.start);
+      clip.endTime = min(clip.endTime, segment.outputRange.end);
+      if (!(clip.endTime > clip.startTime)) continue;
+      clip.enterDuration = min(clip.enterDuration, zoomAnimationClipDuration(clip));
+      clip.exitDuration = min(
+        clip.exitDuration,
+        max(segment.outputRange.end - clip.endTime, 0),
+      );
+      result.push(clip);
+    }
+  }
+  return result;
+}
+
+/**
  * Plans automatic zoom clips for a timeline of raw pointer event records.
  * Swift: `AutoZoomPlanner.makeAnimations(for pointerEvents: [PointerEventRecord], ...)`.
  */
@@ -432,17 +524,26 @@ export function makeAnimationsFromPointerEvents(
     zoomScale?: number;
     easing?: ZoomEasingPreset;
     transitionDuration?: number;
+    dropTrailingStopClick?: boolean;
   } = {},
 ): ZoomAnimationClip[] {
   const zoomScale = options.zoomScale ?? 1.6;
   const easing = options.easing ?? '弹簧';
   const transitionDuration = options.transitionDuration ?? 0.7;
+  const dropTrailingStopClick = options.dropTrailingStopClick ?? false;
 
   const clicks: PointerClick[] = [];
   for (const event of pointerEvents) {
     if (event.kind === 'leftClick' || event.kind === 'rightClick') {
       clicks.push({ time: event.time, location: event.location });
     }
+  }
+  if (dropTrailingStopClick && clicks.length > 0) {
+    let maxIdx = 0;
+    for (let i = 1; i < clicks.length; i++) {
+      if (clicks[i].time >= clicks[maxIdx].time) maxIdx = i;
+    }
+    clicks.splice(maxIdx, 1);
   }
 
   const duration = clamp(transitionDuration, 0, 5);
@@ -451,7 +552,7 @@ export function makeAnimationsFromPointerEvents(
     enterDuration: duration,
     exitDuration: duration,
     easing,
-  });
+  }).map((c) => zoomAnimationClipPreserveTransitionIntent(c, duration));
 
   const extended = extendingAutomaticHoldsThroughPointerActivity(
     planned,
@@ -584,16 +685,19 @@ export function clippedAnimations(
 ): ZoomAnimationClip[] {
   if (!Number.isFinite(duration) || duration <= 0) return [];
   const result: ZoomAnimationClip[] = [];
-  for (const animation of animations) {
-    if (animation.startTime >= duration) continue;
+  for (const rawAnimation of animations) {
+    if (rawAnimation.startTime >= duration) continue;
+    const animation = zoomAnimationClipPreserveTransitionIntent(rawAnimation);
     const endTime = min(animation.endTime, duration);
     const exitDuration = min(animation.exitDuration, max(duration - endTime, 0));
     if (endTime - animation.startTime > 0.01) {
-      result.push({
-        ...animation,
-        endTime,
-        exitDuration,
-      });
+      result.push(
+        makeZoomAnimationClip({
+          ...animation,
+          endTime,
+          exitDuration,
+        }),
+      );
     }
   }
   return result;
@@ -722,6 +826,7 @@ export function makeKeyframesFromPointerEvents(
 }
 
 export const AutoZoomPlanner = Object.freeze({
+  makeAnimationsInTimelineMap,
   makeAnimationsFromPointerEvents,
   makeAnimationsFromClicks,
   repairingLegacyAutomaticAnimations,
