@@ -150,7 +150,7 @@
 - [x] T12.10 Wave A.5 异步清理与安全收尾：`SafePath` 增加 `realpathSync` 符号链接/目录联接外逸拦截；`ExportServer` 在 `procExitPromise` 释放句柄后兜底删除残片；`RecordingSession` 增加 `stoppingNormally` 守卫；补回丢失的 `PROGRESS.md` 历史记录并隔离无效旧录制目录。
 
 ### Wave B：上游 `v0.2.0` 算法补齐与 Schema v28 双向兼容（P0-04，需先克隆只读 `F:\dogsc-v0.2.0`）
-- [ ] T13.1 上游 `v0.2.0` 只读源码差异审计，输出 `docs/V020_DIFF_MAP.md`（53 文件与 v28 字段对照）。
+- [x] T13.1 上游 `v0.2.0` 只读源码差异审计，输出 `docs/V020_DIFF_MAP.md`（53 文件与 v28 字段对照）。
 - [ ] T13.2 按 `PORTING_RULES.md` 移植 `CameraBeauty`、`ScreenCardAppearance`、`SegmentSceneStyle` 及单测。
 - [ ] T13.3 移植 `RecordingSource`、`RecordingSourceEditing`、`RecordingAspectTransitions` 及单测。
 - [ ] T13.4 移植 `PostProductionModel`、`VisualTrackTransfer`、`RecordingProjectImport` 及单测（44→53 模块）。

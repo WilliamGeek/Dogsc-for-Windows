@@ -80,5 +80,7 @@
 
 阶段 2 验收通过
 
-下一个任务：T13.1（Wave B 首卡：只读克隆 F:\dogsc-v0.2.0 并生成 docs/V020_DIFF_MAP.md 53模块差异审计表）
+2026-11-23 02:00 | T13.1 | DONE | 完成上游 v0.2.0 只读克隆(F:\dogsc-v0.2.0)与 44→53 模块逐文件 -w diff 审计，输出 docs/V020_DIFF_MAP.md（9新增/25行为修改/9清理/10未改、Schema v28 字段对照与 REORDER 依赖拓扑） | 248 pass (5 skip E2E)
+
+下一个任务：T13.2（移植 CameraBeauty、ScreenCardAppearance 核心模型与 SegmentSceneStyle 算法及单测）
 
