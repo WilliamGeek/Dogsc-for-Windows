@@ -1,0 +1,439 @@
+{
+  "title": "DogSC Windows · 项目级全栈架构与开发进度看板",
+  "subtitle": "高亮绿流 = Wave A 已落地与自动门禁闭环模块 | 虚化节点 (opacity 0.65) = 待开发 Wave B-F 与 T11.7 人工终审",
+  "mode": "instance",
+  "run_meta": {
+    "run_id": "dogsc-win-v0.3.1",
+    "duration": "Wave A 已闭环 / Wave B-F 待开发",
+    "status": "in_progress"
+  },
+  "spine_y": 500,
+  "col_width": 460,
+  "stages": {
+    "S0": { "name": "阶段 0-2: 多源采集与时钟对齐", "shortName": "S0 采集对齐", "minCol": 0, "maxCol": 2, "color": "#38bdf8" },
+    "S1": { "name": "阶段 1 / Wave B: 核心算法与上游对齐", "shortName": "S1 核心算法", "minCol": 3, "maxCol": 4, "color": "#818cf8" },
+    "S2": { "name": "阶段 3 / Wave C-D: WebGL2 渲染与导出", "shortName": "S2 渲染导出", "minCol": 5, "maxCol": 6, "color": "#c084fc" },
+    "S3": { "name": "Wave E-F: 质检门禁、编辑器与交付", "shortName": "S3 质检产品", "minCol": 7, "maxCol": 9, "color": "#10b981" }
+  },
+  "nodes": [
+    {
+      "id": "Start",
+      "type": "endpoint",
+      "badge_id": "START",
+      "label": "录制与重构总入口 (CLI)",
+      "subtitle": "record.ts / export.ts / 247单测基线",
+      "stage": "阶段 0-2: 多源采集与时钟对齐",
+      "col": 0,
+      "y": 500,
+      "executed": true,
+      "execution_badge": "✓ v0.3.1 / 247单测",
+      "details": {
+        "inputs": "CLI 参数 (--seconds / --fps / --display) 或 recordings/<id>",
+        "outputs": "四件套会话产物与 MP4 成片",
+        "code_anchor": "scripts/record.ts"
+      }
+    },
+    {
+      "id": "C_MultiSrc",
+      "type": "action",
+      "badge_id": "WAVE D · T15.1/4",
+      "label": "窗口/区域/摄像头采集",
+      "subtitle": "gdigrab / ddagrab 区域 / dshow 摄像头",
+      "stage": "阶段 0-2: 多源采集与时钟对齐",
+      "col": 1,
+      "y": 200,
+      "executed": false,
+      "execution_badge": "○ 未开发 Wave D",
+      "details": {
+        "gate_rule": "当前仅支持整屏 ddagrab；区域/窗口/摄像头/暂停恢复待 Wave D 实现",
+        "code_anchor": "src/capture/ScreenRecorder.ts"
+      }
+    },
+    {
+      "id": "C_Audio",
+      "type": "action",
+      "badge_id": "WAVE D · T15.2/3",
+      "label": "系统音频与麦克风采集",
+      "subtitle": "PowerShell WASAPI Loopback + dshow",
+      "stage": "阶段 0-2: 多源采集与时钟对齐",
+      "col": 1,
+      "y": 350,
+      "executed": false,
+      "execution_badge": "○ 未开发 Wave D",
+      "details": {
+        "gate_rule": "system-audio.wav 与 mic-audio.wav 零依赖采集与时钟对齐待 Wave D 实现"
+      }
+    },
+    {
+      "id": "C_Screen",
+      "type": "action",
+      "badge_id": "T10.3 / T12.3",
+      "label": "整屏 GPU 采集 (ddagrab)",
+      "subtitle": "ScreenRecorder.ts: draw_mouse=0 + NVENC 探活",
+      "stage": "阶段 0-2: 多源采集与时钟对齐",
+      "col": 1,
+      "y": 500,
+      "executed": true,
+      "execution_badge": "✓ draw_mouse=0",
+      "details": {
+        "inputs": "DXGI outputIdx + fps (默认 60fps CFR)",
+        "outputs": "screen.mp4 (H.264 / 无系统光标重影)",
+        "code_anchor": "src/capture/ScreenRecorder.ts:79"
+      }
+    },
+    {
+      "id": "C_Mouse",
+      "type": "action",
+      "badge_id": "T10.2 / T12.5",
+      "label": "低级鼠标钩子与多屏映射",
+      "subtitle": "mousehook.ps1 WH_MOUSE_LL + DisplayEnumeration",
+      "stage": "阶段 0-2: 多源采集与时钟对齐",
+      "col": 1,
+      "y": 660,
+      "executed": true,
+      "execution_badge": "✓ DPI V2",
+      "details": {
+        "inputs": "DisplayDescriptor 物理矩形 (-ScreenX/Y/W/H)",
+        "outputs": "pointer.jsonl (4ms 移动节流 + leftClick/rightClick)",
+        "code_anchor": "tools/mousehook.ps1"
+      }
+    },
+    {
+      "id": "X_CapFail",
+      "type": "block",
+      "badge_id": "BLOCK · T12.2",
+      "label": "采集异常熔断与原子清理",
+      "subtitle": "无效显示器 / ffmpeg 非0退出删脏目录",
+      "stage": "阶段 0-2: 多源采集与时钟对齐",
+      "col": 1,
+      "y": 880,
+      "executed": true,
+      "execution_badge": "✓ exit=1 清理",
+      "details": {
+        "gate_rule": "--display 9 等失败直接 reject 并 rmSync 清理半成品目录",
+        "code_anchor": "src/capture/RecordingSession.ts:371"
+      }
+    },
+    {
+      "id": "A_Session",
+      "type": "artifact",
+      "badge_id": "ARTIFACT · T10.4",
+      "label": "会话录制四件套产物",
+      "subtitle": "screen.mp4 / pointer.jsonl / meta.json / project.json",
+      "stage": "阶段 0-2: 多源采集与时钟对齐",
+      "col": 2,
+      "y": 350,
+      "executed": true,
+      "execution_badge": "✓ 四件套",
+      "details": {
+        "outputs": "recordings/<YYYYMMDD-HHmmss>/ 四件套完整落盘",
+        "code_anchor": "src/capture/RecordingSession.ts"
+      }
+    },
+    {
+      "id": "G_MediaProbe",
+      "type": "gate",
+      "badge_id": "GATE · T12.1/7",
+      "label": "媒体探针与首帧时钟门禁",
+      "subtitle": "MediaProbe ffprobe 真实时长 + showinfo 首帧修复中",
+      "stage": "阶段 0-2: 多源采集与时钟对齐",
+      "col": 2,
+      "y": 500,
+      "executed": true,
+      "execution_badge": "✓ 0.000s",
+      "details": {
+        "gate_rule": "ffprobe 替代墙钟时长 (0.000s 误差)；T12.9 将用 showinfo 修复首帧 406ms 残差",
+        "code_anchor": "src/capture/MediaProbe.ts"
+      }
+    },
+    {
+      "id": "F_X264",
+      "type": "fallback",
+      "badge_id": "FALLBACK · T12.3",
+      "label": "软件编码兜底 (libx264)",
+      "subtitle": "NVENC 1帧空输出探活失败 → libx264 CRF 20",
+      "stage": "阶段 0-2: 多源采集与时钟对齐",
+      "col": 2,
+      "y": 660,
+      "executed": true,
+      "execution_badge": "✓ 自动回退",
+      "details": {
+        "fallback_desc": "detectEncoder() 执行 1 帧空输出探活，无 NVENC 时自动回退 libx264",
+        "code_anchor": "src/capture/ScreenRecorder.ts:146"
+      }
+    },
+    {
+      "id": "M_CoreV20",
+      "type": "action",
+      "badge_id": "WAVE B · T13.1-6",
+      "label": "上游 v0.2.0 核心对齐",
+      "subtitle": "+9模块 (44→53) + Schema v28 双向互操作",
+      "stage": "阶段 1 / Wave B: 核心算法与上游对齐",
+      "col": 3,
+      "y": 350,
+      "executed": false,
+      "execution_badge": "○ 未开发 Wave B",
+      "details": {
+        "gate_rule": "补齐 CameraBeauty / RecordingSource / ScreenCardAppearance 等 9 个模块并升级 Schema 28"
+      }
+    },
+    {
+      "id": "M_CoreV18",
+      "type": "action",
+      "badge_id": "B1-B8 · v0.1.8",
+      "label": "RecorderCore 核心算法",
+      "subtitle": "AutoZoom / 240Hz弹簧 / 3D投影 / FrameScene",
+      "stage": "阶段 1 / Wave B: 核心算法与上游对齐",
+      "col": 3,
+      "y": 500,
+      "executed": true,
+      "execution_badge": "✓ 44模块 v27",
+      "details": {
+        "inputs": "pointerEvents + RecorderProject (Schema 23-27)",
+        "outputs": "FrameSceneEvaluator 逐帧求值（零 node:* 依赖）",
+        "code_anchor": "src/core/FrameScene.ts"
+      }
+    },
+    {
+      "id": "A_Frames",
+      "type": "artifact",
+      "badge_id": "ARTIFACT · T11.3",
+      "label": "源视频预解码帧序列",
+      "subtitle": "FrameExtractor.ts 输出 1起始 %06d.jpg",
+      "stage": "阶段 1 / Wave B: 核心算法与上游对齐",
+      "col": 4,
+      "y": 350,
+      "executed": true,
+      "execution_badge": "✓ %06d.jpg",
+      "details": {
+        "outputs": "recordings/<id>/frames/000001.jpg ... 供浏览器零 seek 纹理上传",
+        "code_anchor": "src/capture/FrameExtractor.ts"
+      }
+    },
+    {
+      "id": "M_FramePlan",
+      "type": "action",
+      "badge_id": "T11.2 / T12.1",
+      "label": "输出帧调度与有效时长夹取",
+      "subtitle": "FramePlan.ts 源帧映射 + 幂等场景求值",
+      "stage": "阶段 1 / Wave B: 核心算法与上游对齐",
+      "col": 4,
+      "y": 500,
+      "executed": true,
+      "execution_badge": "✓ 零尾帧复帧",
+      "details": {
+        "inputs": "trueDuration = min(probedDuration, sourceFrameCount / fps)",
+        "outputs": "frameAt(n) -> { scene, sourceFrameFile }",
+        "code_anchor": "src/render/FramePlan.ts"
+      }
+    },
+    {
+      "id": "M_WebGLFull",
+      "type": "action",
+      "badge_id": "WAVE C · T14.1-6",
+      "label": "WebGL2 全通道扩展渲染",
+      "subtitle": "camera / stickers / mosaic / spotlight / chrome / 聚焦",
+      "stage": "阶段 3 / Wave C-D: WebGL2 渲染与导出",
+      "col": 5,
+      "y": 350,
+      "executed": false,
+      "execution_badge": "○ 未开发 Wave C",
+      "details": {
+        "gate_rule": "模块化 web/passes/* 消费 FrameScene 全量通道，未实现前 UI 严禁暴露假开关"
+      }
+    },
+    {
+      "id": "M_WebGLBase",
+      "type": "action",
+      "badge_id": "T11.4 / T11.5",
+      "label": "WebGL2 基础合成渲染",
+      "subtitle": "renderer.ts: 背景网格 / 3D阴影 / SDF圆角 / 单矢量光标",
+      "stage": "阶段 3 / Wave C-D: WebGL2 渲染与导出",
+      "col": 5,
+      "y": 500,
+      "executed": true,
+      "execution_badge": "✓ 单光标",
+      "details": {
+        "outputs": "headless Edge --headless=new --use-angle=d3d11 gl.readPixels RGBA",
+        "code_anchor": "web/renderer.ts"
+      }
+    },
+    {
+      "id": "M_ExportSrv",
+      "type": "action",
+      "badge_id": "T11.6 / T12.4/8",
+      "label": "流式导出与路径安全服务",
+      "subtitle": "ExportServer + DevServer + SafePath + exporter.ts",
+      "stage": "阶段 3 / Wave C-D: WebGL2 渲染与导出",
+      "col": 6,
+      "y": 500,
+      "executed": true,
+      "execution_badge": "✓ 409+Watchdog",
+      "details": {
+        "inputs": "POST /api/frame/:n + /api/done + /api/error",
+        "outputs": "ffmpeg -vf vflip -> export.mp4 (ImageBitmap.close 防 OOM)",
+        "code_anchor": "src/server/ExportServer.ts"
+      }
+    },
+    {
+      "id": "M_AudioMux",
+      "type": "action",
+      "badge_id": "WAVE D-E · T15.5/T16.5",
+      "label": "多音轨混音与多规格导出",
+      "subtitle": "MP4 1080p/1440p/4K + M4A + atempo/amix",
+      "stage": "阶段 3 / Wave C-D: WebGL2 渲染与导出",
+      "col": 6,
+      "y": 660,
+      "executed": false,
+      "execution_badge": "○ 未开发 Wave D/E",
+      "details": {
+        "gate_rule": "支持系统声+麦克风多轨延迟对齐混音及 1080p/1440p/4K/M4A 规格切换"
+      }
+    },
+    {
+      "id": "X_ExpFail",
+      "type": "block",
+      "badge_id": "BLOCK · T12.4",
+      "label": "导出看门狗阻断",
+      "subtitle": "30s 无帧超时 / 少帧409 / /api/error 删残片",
+      "stage": "阶段 3 / Wave C-D: WebGL2 渲染与导出",
+      "col": 6,
+      "y": 880,
+      "executed": true,
+      "execution_badge": "✓ 30s/409 熔断",
+      "details": {
+        "gate_rule": "缺帧返回 409 并清理半成品 outFile；taskkill 清理 Edge 进程树",
+        "code_anchor": "src/server/ExportServer.ts:265"
+      }
+    },
+    {
+      "id": "M_EditorUI",
+      "type": "action",
+      "badge_id": "WAVE E · T16.1-5",
+      "label": "交互式编辑器与录制岛",
+      "subtitle": "StudioServer + 多轨时间线 + 实时检查器",
+      "stage": "Wave E-F: 质检门禁、编辑器与交付",
+      "col": 7,
+      "y": 350,
+      "executed": false,
+      "execution_badge": "○ 未开发 Wave E",
+      "details": {
+        "gate_rule": "支持时间线拆分/裁切/变速/缩放拖拽与原子保存 project.json，严格零假开关"
+      }
+    },
+    {
+      "id": "G_Verify",
+      "type": "gate",
+      "badge_id": "GATE · G1+G2",
+      "label": "自动质检与真同步门禁",
+      "subtitle": "verify-export.ts 时长/帧数/闪帧对齐 + 247单测",
+      "stage": "Wave E-F: 质检门禁、编辑器与交付",
+      "col": 7,
+      "y": 500,
+      "executed": true,
+      "execution_badge": "✓ G1+G2",
+      "details": {
+        "gate_rule": "T12.9 将把 verify-export --sync 升级为校验 pointer 点击 vs 源视频绿帧 onset ≤ 1-2 帧",
+        "code_anchor": "scripts/verify-export.ts"
+      }
+    },
+    {
+      "id": "M_ShellPkg",
+      "type": "action",
+      "badge_id": "WAVE F · T17.1-4",
+      "label": "Windows 桌面外壳与打包",
+      "subtitle": "WebView2/Electron/Tauri + 硬件矩阵 + 许可证",
+      "stage": "Wave E-F: 质检门禁、编辑器与交付",
+      "col": 8,
+      "y": 350,
+      "executed": false,
+      "execution_badge": "○ 未开发 Wave F",
+      "details": {
+        "gate_rule": "需用户拍板打包选型 D2 并完成 Win10/11 硬件设备矩阵实测"
+      }
+    },
+    {
+      "id": "H_Review",
+      "type": "human",
+      "badge_id": "HUMAN · T11.7",
+      "label": "人工与浏览器视觉终审",
+      "subtitle": "单光标 / 涟漪同帧同步 / 零尾帧 / Browser SOP",
+      "stage": "Wave E-F: 质检门禁、编辑器与交付",
+      "col": 8,
+      "y": 500,
+      "executed": false,
+      "execution_badge": "⏳ 待复核 T11.7",
+      "details": {
+        "gate_rule": "当前等待修复首帧 406ms 残差并由用户/视觉终审后勾选 T11.7"
+      }
+    },
+    {
+      "id": "Deliver",
+      "type": "endpoint",
+      "badge_id": "DELIVER",
+      "label": "最终交付产物",
+      "subtitle": "Wave A export.mp4 实机成片 → v1.0.0-windows",
+      "stage": "Wave E-F: 质检门禁、编辑器与交付",
+      "col": 9,
+      "y": 500,
+      "executed": true,
+      "execution_badge": "✓ Wave A 原型",
+      "details": {
+        "outputs": "当前交付真实可信 CLI 录屏导出引擎；Wave B-F 完成后交付桌面完整版"
+      }
+    },
+    {
+      "id": "X_Term",
+      "type": "block",
+      "badge_id": "X_TERM",
+      "label": "统一异常收口终端",
+      "subtitle": "非0退出 + taskkill 清理孤儿进程与半成品",
+      "stage": "Wave E-F: 质检门禁、编辑器与交付",
+      "col": 9,
+      "y": 880,
+      "executed": true,
+      "execution_badge": "✓ 异常收口",
+      "details": {
+        "code_anchor": "scripts/export.ts:186"
+      }
+    }
+  ],
+  "edges": [
+    { "id": "e_start_screen", "source": "Start", "target": "C_Screen", "label": "主线整屏", "className": "edge-main", "executed": true },
+    { "id": "e_start_mouse", "source": "Start", "target": "C_Mouse", "label": "低级钩子", "className": "edge-main", "executed": true },
+    { "id": "e_start_multi", "source": "Start", "target": "C_MultiSrc", "label": "多源扩展(待开发)", "className": "edge-main", "executed": false },
+    { "id": "e_start_audio", "source": "Start", "target": "C_Audio", "label": "音频采集(待开发)", "className": "edge-main", "executed": false },
+    { "id": "e_screen_probe", "source": "C_Screen", "target": "G_MediaProbe", "label": "screen.mp4", "className": "edge-main", "executed": true },
+    { "id": "e_mouse_probe", "source": "C_Mouse", "target": "G_MediaProbe", "className": "edge-main", "executed": true },
+    { "id": "e_screen_x264", "source": "C_Screen", "target": "F_X264", "label": "NVENC失败回退", "className": "edge-fallback", "executed": true },
+    { "id": "e_screen_session", "source": "C_Screen", "target": "A_Session", "className": "edge-artifact", "executed": true },
+    { "id": "e_multi_session", "source": "C_MultiSrc", "target": "A_Session", "className": "edge-main", "executed": false },
+    { "id": "e_audio_session", "source": "C_Audio", "target": "A_Session", "className": "edge-main", "executed": false },
+    { "id": "e_start_capfail", "source": "Start", "target": "X_CapFail", "label": "无效屏/ffmpeg异常", "className": "edge-block", "executed": false, "route": { "busY": 775 } },
+    { "id": "e_capfail_term", "source": "X_CapFail", "target": "X_Term", "label": "exit=1 删脏目录", "className": "edge-block", "executed": false, "route": { "busY": 1005 } },
+    { "id": "e_probe_v18", "source": "G_MediaProbe", "target": "M_CoreV18", "label": "ffprobe真实时长", "className": "edge-main", "executed": true },
+    { "id": "e_x264_v18", "source": "F_X264", "target": "M_CoreV18", "label": "软件H.264兜底流", "className": "edge-fallback", "executed": true },
+    { "id": "e_probe_v20", "source": "G_MediaProbe", "target": "M_CoreV20", "label": "Schema v28", "className": "edge-main", "executed": false },
+    { "id": "e_session_frames", "source": "A_Session", "target": "A_Frames", "label": "ffmpeg预解码", "className": "edge-artifact", "executed": true, "route": { "busY": 120 } },
+    { "id": "e_v18_plan", "source": "M_CoreV18", "target": "M_FramePlan", "label": "FrameScene求值", "className": "edge-main", "executed": true },
+    { "id": "e_v20_plan", "source": "M_CoreV20", "target": "M_FramePlan", "label": "53模块/多源映射", "className": "edge-main", "executed": false },
+    { "id": "e_frames_glbase", "source": "A_Frames", "target": "M_WebGLBase", "className": "edge-artifact", "executed": true },
+    { "id": "e_plan_glbase", "source": "M_FramePlan", "target": "M_WebGLBase", "label": "逐帧场景", "className": "edge-main", "executed": true },
+    { "id": "e_plan_glfull", "source": "M_FramePlan", "target": "M_WebGLFull", "label": "全通道场景", "className": "edge-main", "executed": false },
+    { "id": "e_glbase_expsrv", "source": "M_WebGLBase", "target": "M_ExportSrv", "label": "gl.readPixels RGBA", "className": "edge-main", "executed": true },
+    { "id": "e_glfull_expsrv", "source": "M_WebGLFull", "target": "M_ExportSrv", "label": "多通道RGBA", "className": "edge-main", "executed": false },
+    { "id": "e_audio_mux", "source": "C_Audio", "target": "M_AudioMux", "label": "混音与时钟延迟对齐", "className": "edge-artifact", "executed": false, "route": { "busY": 765 } },
+    { "id": "e_expsrv_expfail", "source": "M_ExportSrv", "target": "X_ExpFail", "label": "30s超时/少帧409", "className": "edge-block", "executed": false, "route": { "busY": 795 } },
+    { "id": "e_expfail_term", "source": "X_ExpFail", "target": "X_Term", "label": "kill进程树+删残片", "className": "edge-block", "executed": false, "route": { "busY": 1035 } },
+    { "id": "e_expsrv_verify", "source": "M_ExportSrv", "target": "G_Verify", "label": "export.mp4", "className": "edge-main", "executed": true },
+    { "id": "e_mux_verify", "source": "M_AudioMux", "target": "G_Verify", "label": "多规格MP4/M4A", "className": "edge-main", "executed": false },
+    { "id": "e_expsrv_editor", "source": "M_ExportSrv", "target": "M_EditorUI", "label": "StudioServer对接", "className": "edge-main", "executed": false },
+    { "id": "e_verify_review", "source": "G_Verify", "target": "H_Review", "label": "G1+G2通过→待肉眼", "className": "edge-main", "executed": false },
+    { "id": "e_verify_deliver", "source": "G_Verify", "target": "Deliver", "label": "Wave A 自动闭环成片", "className": "edge-main", "executed": true, "route": { "busY": 620 } },
+    { "id": "e_editor_pkg", "source": "M_EditorUI", "target": "M_ShellPkg", "label": "GUI工作台就绪", "className": "edge-main", "executed": false },
+    { "id": "e_editor_review", "source": "M_EditorUI", "target": "H_Review", "className": "edge-main", "executed": false },
+    { "id": "e_pkg_deliver", "source": "M_ShellPkg", "target": "Deliver", "label": "v1.0.0安装包", "className": "edge-main", "executed": false },
+    { "id": "e_review_deliver", "source": "H_Review", "target": "Deliver", "label": "用户确认T11.7", "className": "edge-main", "executed": false }
+  ]
+}
+
