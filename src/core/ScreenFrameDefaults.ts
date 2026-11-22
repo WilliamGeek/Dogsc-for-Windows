@@ -41,9 +41,9 @@ export function screenFrameStyleDefaults(style: ScreenFrameStyle): ScreenFrameDe
     case 'none':
       return makeScreenFrameDefaults(24, 24, { shadowStrength: 0.28 });
     case 'windowLight':
-      return makeScreenFrameDefaults(18, 0, { toolbarScale: 0.9, shadowStrength: 0.22 });
+      return makeScreenFrameDefaults(22, 0, { toolbarScale: 0.96, shadowStrength: 0.24 });
     case 'windowDark':
-      return makeScreenFrameDefaults(18, 0, { toolbarScale: 0.9, shadowStrength: 0.3 });
+      return makeScreenFrameDefaults(22, 0, { toolbarScale: 0.96, shadowStrength: 0.32 });
     case 'browserLight':
       return makeScreenFrameDefaults(22, 0, { toolbarScale: 1.08, shadowStrength: 0.22 });
     case 'browserDark':
@@ -51,7 +51,7 @@ export function screenFrameStyleDefaults(style: ScreenFrameStyle): ScreenFrameDe
     case 'devicePhone':
     case 'devicePhonePortrait':
     case 'devicePhoneLandscape':
-      return makeScreenFrameDefaults(64, 40, { frameScale: 0.9, shadowStrength: 0.24 });
+      return makeScreenFrameDefaults(64, 40, { shadowStrength: 0.24 });
     case 'deviceTablet':
     case 'deviceTabletPortrait':
     case 'deviceTabletLandscape':

@@ -1,6 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { makeRecordingMarker } from '../../src/core/RecordingMarker.ts';
+import {
+  makeRecordingMarker,
+  recordingMarkerResolvedSourceID,
+} from '../../src/core/RecordingMarker.ts';
+import { RecordingSourcePrimaryID } from '../../src/core/RecordingSource.ts';
 
 test('makeRecordingMarker clamps sourceTime and number per Swift L12-13', () => {
   // Swift L12: self.sourceTime = sourceTime.isFinite ? max(sourceTime, 0) : 0
@@ -22,4 +26,13 @@ test('makeRecordingMarker handles UUID correctly', () => {
   const customId = 'CUSTOM-MARKER-UUID';
   const m2 = makeRecordingMarker(2.0, 2, customId);
   assert.equal(m2.id, customId);
+  assert.equal(m2.sourceID, null);
+  assert.equal(recordingMarkerResolvedSourceID(m2), RecordingSourcePrimaryID);
+
+  const m3 = makeRecordingMarker({
+    sourceTime: 4.5,
+    number: 3,
+    sourceID: 'SOURCE-EXTRA-1',
+  });
+  assert.equal(recordingMarkerResolvedSourceID(m3), 'SOURCE-EXTRA-1');
 });

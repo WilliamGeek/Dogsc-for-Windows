@@ -16,6 +16,7 @@ import {
   openingSequenceAvailableElements,
   openingSequenceParticipatingElements,
   BackgroundPatternPresetAllCases,
+  backgroundPatternPresetDisplayName,
   DynamicBackgroundPresetAllCases,
   dynamicBackgroundPresetDisplayName,
   dynamicBackgroundPresetFromJSON,
@@ -48,9 +49,9 @@ import {
   makeMotionStyle,
 } from '../../src/core/ProjectModel.ts';
 
-test('ProjectSchema validation for versions 23-27 per Swift L6-41', () => {
-  // Valid range: 23 to 27
-  for (let v = 23; v <= 27; v++) {
+test('ProjectSchema validation for versions 23-28 per Swift L6-41', () => {
+  // Valid range: 23 to 28
+  for (let v = 23; v <= 28; v++) {
     assert.doesNotThrow(() => ProjectSchema.validateForDecoding(v));
     assert.doesNotThrow(() => ProjectSchema.validateForEncoding(v));
   }
@@ -65,13 +66,13 @@ test('ProjectSchema validation for versions 23-27 per Swift L6-41', () => {
     (err: any) => err instanceof ProjectSchemaError && err.code === 'refusingToEncodeUnsupportedVersion',
   );
 
-  // Version 28 is future unsupported
+  // Version 29 is future unsupported
   assert.throws(
-    () => ProjectSchema.validateForDecoding(28),
+    () => ProjectSchema.validateForDecoding(29),
     (err: any) => err instanceof ProjectSchemaError && err.code === 'unsupportedFutureVersion',
   );
   assert.throws(
-    () => ProjectSchema.validateForEncoding(28),
+    () => ProjectSchema.validateForEncoding(29),
     (err: any) => err instanceof ProjectSchemaError && err.code === 'refusingToEncodeFutureVersion',
   );
 });
@@ -138,8 +139,11 @@ test('OpeningSequence timing clamps and element filters per Swift L193-306', () 
 test('BackgroundSource types and dynamic presets per Swift L308-465', () => {
   assert.equal(BackgroundPatternPresetAllCases.length, 5);
   assert.equal(DynamicBackgroundPresetAllCases.length, 3);
+  assert.ok(ScreenFrameStyleAllCases.includes('deviceTablet'));
 
-  assert.equal(dynamicBackgroundPresetDisplayName('赛博微流网格'), '流金缓移网格');
+  assert.equal(backgroundPatternPresetDisplayName('黑曜石网格'), '深色网格');
+  assert.equal(dynamicBackgroundPresetDisplayName('赛博微流网格'), '流动网格');
+  assert.equal(dynamicBackgroundPresetDisplayName('极光流体星云'), '流体渐变');
   assert.equal(dynamicBackgroundPresetFromJSON('旋转十字星阵'), '赛博微流网格');
 
   assert.equal(backgroundSourceIsImage({ kind: 'projectImage', relativePath: 'bg.png' }), true);
@@ -173,6 +177,8 @@ test('CursorClickEffectStyle durations and CursorStyle defaults per Swift L554-7
   assert.equal(cursor.idleDelay, 1.2);
   assert.equal(cursor.clickEffectStyle, 'ripple');
   assert.equal(cursor.motionTiltStrength, 2.0);
+  assert.equal(cursor.pressesOnClick, true);
+  assert.equal(makeCursorStyle({ pressesOnClick: false }).pressesOnClick, false);
   assert.equal(cursorStyleShowsClickEffect(cursor), true);
 
   // Clamps

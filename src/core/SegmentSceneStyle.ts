@@ -16,16 +16,20 @@ import {
   makeCursorStyle,
   makeMotionStyle,
 } from './ProjectModel.ts';
-import { type RecorderProject } from './ProjectMediaModel.ts';
-import {
-  type ProjectTimeline,
-  type RecordingSegment,
-  type SourceSequence,
+import type { RecorderProject } from './ProjectMediaModel.ts';
+import type {
+  ProjectTimeline,
+  RecordingSegment,
+  SourceSequence,
 } from './ProjectTimeline.ts';
-import { TimelineMediaPlan } from './TimelineMediaPlan.ts';
 import { cameraBeautySettingsFromJSON } from './CameraBeauty.ts';
 
 const PRIMARY_SOURCE_ID = '00000000-0000-0000-0000-000000000001';
+const NUMERICAL_BOUNDARY_TOLERANCE = 0.000_001;
+
+function isSameBoundary(lhs: number, rhs: number): boolean {
+  return Math.abs(lhs - rhs) <= NUMERICAL_BOUNDARY_TOLERANCE;
+}
 
 // Mirrors RecordingAspectTransitions.duration without creating a circular dependency.
 export const SEGMENT_APPEARANCE_TRANSITION_DURATION = 0.240;
@@ -214,9 +218,9 @@ export function projectTimelineRecordingSegmentBoundaryAtOutputTime(
   for (const segment of segments) {
     const end = start + segment.outputDuration;
     if (
-      (time > start || TimelineMediaPlan.isSameBoundary(time, start)) &&
+      (time > start || isSameBoundary(time, start)) &&
       time < end &&
-      !TimelineMediaPlan.isSameBoundary(time, end)
+      !isSameBoundary(time, end)
     ) {
       return makeRecordingSegmentBoundary(segment, previous, start);
     }
@@ -225,7 +229,7 @@ export function projectTimelineRecordingSegmentBoundaryAtOutputTime(
   }
   // The editor can park its playhead exactly at the programme end.
   const last = segments.length > 0 ? segments[segments.length - 1] : null;
-  if (!last || !TimelineMediaPlan.isSameBoundary(time, start)) {
+  if (!last || !isSameBoundary(time, start)) {
     return RecordingSegmentBoundaryNone;
   }
   const prevBeforeLast = segments.length > 1 ? segments[segments.length - 2] : null;

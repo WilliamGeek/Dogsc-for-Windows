@@ -85,3 +85,35 @@ test('ScreenCardAppearance JSON decoding fills missing keys from defaults and pa
 
   assert.throws(() => screenCardAppearanceFromJSON({ borderColor: 'not-a-hex' }));
 });
+
+test('v0.2.0: ScreenCardAppearance preserveLegacyScreenAppearances and setScreenAppearance per Swift L250-286', async () => {
+  const { makeRecorderProject, makeProjectMediaManifest, makeProjectMediaReference } = await import(
+    '../../src/core/ProjectMediaModel.ts'
+  );
+  const { makeRecordingSource } = await import('../../src/core/RecordingSource.ts');
+  const { ScreenCardAppearance: SCA } = await import('../../src/core/ScreenCardAppearance.ts');
+
+  const extra = makeRecordingSource({
+    id: 'SRC-2',
+    name: 'Second',
+    media: makeProjectMediaManifest({
+      screen: makeProjectMediaReference({ relativePath: 'second.mp4' }),
+    }),
+  });
+  const base = makeRecorderProject({
+    canvas: makeCanvasStyle({ cornerRadius: 32, screenFrame: 'windowLight' }),
+    additionalSources: [extra],
+  });
+
+  // Editing primary freezes legacy look onto additional source first (value semantics).
+  const editedPrimary = SCA.setScreenAppearance(
+    base,
+    makeScreenCardAppearance({ cornerRadius: 8 }),
+    { kind: 'recording', id: '00000000-0000-0000-0000-000000000001' },
+  );
+  assert.equal(base.canvas.cornerRadius, 32);
+  assert.equal(base.additionalSources[0].screenAppearance, null);
+  assert.equal(editedPrimary.canvas.cornerRadius, 8);
+  assert.equal(editedPrimary.additionalSources[0].screenAppearance?.cornerRadius, 32);
+  assert.equal(editedPrimary.additionalSources[0].screenAppearance?.screenFrame, 'windowLight');
+});

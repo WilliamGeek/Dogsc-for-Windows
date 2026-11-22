@@ -1,7 +1,7 @@
 // Port of: F:\dogsc\Sources\RecorderCore\ProjectModel.swift
 import { clamp, max, min } from './swift.ts';
 import type { ElementMotionCurve } from './ElementMotion.ts';
-import { HexColorWhite, type HexColor } from './HexColor.ts';
+import { HexColorWhite, hexColorFromJSON, makeHexColor, type HexColor } from './HexColor.ts';
 import {
   type CanvasCustomAspectRatio,
   makeCanvasCustomAspectRatio,
@@ -39,13 +39,13 @@ export class ProjectSchemaError extends Error {
         msg = `项目版本 ${found} 过旧；当前应用最低支持版本 ${extra?.expected ?? 23}。`;
         break;
       case 'unsupportedFutureVersion':
-        msg = `项目版本 ${found} 来自更新的应用；当前应用只支持到版本 ${extra?.expected ?? 27}，为避免损坏项目已停止打开。`;
+        msg = `项目版本 ${found} 来自更新的应用；当前应用只支持到版本 ${extra?.expected ?? 28}，为避免损坏项目已停止打开。`;
         break;
       case 'refusingToEncodeUnsupportedVersion':
-        msg = `拒绝写入项目版本 ${found}；可写入版本范围为 ${extra?.supportedRange?.[0] ?? 23}...${extra?.supportedRange?.[1] ?? 27}。`;
+        msg = `拒绝写入项目版本 ${found}；可写入版本范围为 ${extra?.supportedRange?.[0] ?? 23}...${extra?.supportedRange?.[1] ?? 28}。`;
         break;
       case 'refusingToEncodeFutureVersion':
-        msg = `拒绝用当前应用覆盖未来项目版本 ${found}；当前应用只支持到版本 ${extra?.expected ?? 27}。`;
+        msg = `拒绝用当前应用覆盖未来项目版本 ${found}；当前应用只支持到版本 ${extra?.expected ?? 28}。`;
         break;
     }
     super(msg);
@@ -59,7 +59,8 @@ export class ProjectSchemaError extends Error {
 
 export const ProjectSchema = Object.freeze({
   minimumSupportedVersion: 23,
-  currentVersion: 27,
+  // Version 28 adds independent recording sources and source-aware segments/markers.
+  currentVersion: 28,
 
   validateForDecoding(version: number): void {
     if (version < ProjectSchema.minimumSupportedVersion) {
@@ -164,6 +165,7 @@ export const ScreenFrameStyleAllCases: readonly ScreenFrameStyle[] = Object.free
   'browserLight',
   'browserDark',
   'devicePhone',
+  'deviceTablet',
 ]);
 
 export function screenFrameStyleIsDeviceFrame(style: ScreenFrameStyle): boolean {
@@ -366,6 +368,21 @@ export const BackgroundPatternPresetAllCases: readonly BackgroundPatternPreset[]
   '立体等角网',
 ]);
 
+export function backgroundPatternPresetDisplayName(preset: BackgroundPatternPreset): string {
+  switch (preset) {
+    case '黑曜石网格':
+      return '深色网格';
+    case '工程白网格':
+      return '浅色网格';
+    case '暗夜星阵':
+      return '深色点阵';
+    case '建筑极简点':
+      return '浅色点阵';
+    case '立体等角网':
+      return '等角网格';
+  }
+}
+
 export type DynamicBackgroundPreset = '赛博微流网格' | '星辉漫步点阵' | '极光流体星云';
 
 export const DynamicBackgroundPresetAllCases: readonly DynamicBackgroundPreset[] = Object.freeze([
@@ -377,11 +394,11 @@ export const DynamicBackgroundPresetAllCases: readonly DynamicBackgroundPreset[]
 export function dynamicBackgroundPresetDisplayName(preset: DynamicBackgroundPreset): string {
   switch (preset) {
     case '赛博微流网格':
-      return '流金缓移网格';
+      return '流动网格';
     case '星辉漫步点阵':
-      return '暖星漫步点阵';
+      return '流动点阵';
     case '极光流体星云':
-      return '蓝白流体云幕';
+      return '流体渐变';
   }
 }
 
@@ -545,6 +562,15 @@ export function cursorClickEffectStyleDuration(style: CursorClickEffectStyle): n
 // ---------------------------------------------------------------------------
 // CursorStyle
 // ---------------------------------------------------------------------------
+function parseHexColorOption(value: unknown): HexColor | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value === 'string') return hexColorFromJSON(value);
+  if (typeof value === 'object' && typeof (value as { rgb24?: unknown }).rgb24 === 'number') {
+    return makeHexColor((value as { rgb24: number }).rgb24);
+  }
+  throw new Error('Expected #RRGGBB string or HexColor object');
+}
+
 export interface CursorStyle {
   assetID: CursorAssetID;
   size: number;
@@ -555,6 +581,7 @@ export interface CursorStyle {
   clickOpacity: number;
   clickScale: number;
   motionTiltStrength: number;
+  pressesOnClick: boolean;
 }
 
 export function makeCursorStyle(options: Partial<CursorStyle> = {}): CursorStyle {
@@ -566,13 +593,14 @@ export function makeCursorStyle(options: Partial<CursorStyle> = {}): CursorStyle
   const rawIdleDelay = options.idleDelay ?? 1.2;
   const idleDelay = clamp(Number.isFinite(rawIdleDelay) ? rawIdleDelay : 1.2, 0.2, 8);
   const clickEffectStyle = options.clickEffectStyle ?? 'ripple';
-  const clickColor = options.clickColor ?? null;
+  const clickColor = parseHexColorOption(options.clickColor);
   const rawClickOpacity = options.clickOpacity ?? 0.8;
   const clickOpacity = clamp(Number.isFinite(rawClickOpacity) ? rawClickOpacity : 0.8, 0.05, 1.0);
   const rawClickScale = options.clickScale ?? 1.0;
   const clickScale = clamp(Number.isFinite(rawClickScale) ? rawClickScale : 1.0, 0.4, 3.0);
   const rawMotionTilt = options.motionTiltStrength ?? 2.0;
   const motionTiltStrength = clamp(Number.isFinite(rawMotionTilt) ? rawMotionTilt : 2.0, 2, 4);
+  const pressesOnClick = options.pressesOnClick ?? true;
 
   return {
     assetID,
@@ -584,6 +612,7 @@ export function makeCursorStyle(options: Partial<CursorStyle> = {}): CursorStyle
     clickOpacity,
     clickScale,
     motionTiltStrength,
+    pressesOnClick,
   };
 }
 
@@ -745,7 +774,7 @@ export function makeCanvasStyle(options: Partial<CanvasStyle> = {}): CanvasStyle
   const crop = normalizedCropClamped(options.crop ?? NormalizedCropFull);
   const cornerRadius = options.cornerRadius ?? 24;
   const borderWidth = options.borderWidth ?? 0;
-  const borderColor = options.borderColor ?? HexColorWhite;
+  const borderColor = parseHexColorOption(options.borderColor) ?? HexColorWhite;
   const shadowStrength = options.shadowStrength ?? 0.28;
   const backgroundBlur = options.backgroundBlur ?? 0;
   const insetOpacity = options.insetOpacity ?? 0.125;

@@ -69,3 +69,72 @@ test('RecordingSource JSON decoding restores optional fields and validates requi
   assert.throws(() => recordingSourceFromJSON({ name: 'missing-id' }));
   assert.throws(() => recordingSourceFromJSON({ id: 'X', media: {} }));
 });
+
+test('v0.2.0: RecordingSource RecorderProject multi-source mutators preserve value semantics per Swift L58-154', async () => {
+  const { makeRecorderProject } = await import('../../src/core/ProjectMediaModel.ts');
+  const { makeProjectTimeline, makeRecordingSegment, makeSourceSequenceEdited } = await import(
+    '../../src/core/ProjectTimeline.ts'
+  );
+
+  const primaryMedia = makeProjectMediaManifest({
+    screen: makeProjectMediaReference({ relativePath: 'primary.mp4' }),
+  });
+  const extraMedia = makeProjectMediaManifest({
+    screen: makeProjectMediaReference({ relativePath: 'extra.mp4' }),
+    camera: makeProjectMediaReference({ relativePath: 'extra_cam.mp4' }),
+  });
+  const extraSource = makeRecordingSource({
+    id: 'EXTRA-SRC-1',
+    name: 'Extra',
+    media: extraMedia,
+    capture: makeCaptureConfiguration({ captureFrameRate: 30 }),
+  });
+  const segExtra = makeRecordingSegment({
+    id: 'SEG-EXTRA',
+    sourceStart: 0,
+    sourceDuration: 4,
+    sourceID: extraSource.id,
+  });
+
+  const proj = makeRecorderProject({
+    title: 'Multi',
+    media: primaryMedia,
+    additionalSources: [extraSource],
+    timeline: makeProjectTimeline({ sourceSequence: makeSourceSequenceEdited([segExtra]) }),
+  });
+
+  assert.equal(RecordingSource.sources(proj).length, 2);
+  assert.equal(RecordingSource.openingRecordingSourceID(proj), extraSource.id);
+  assert.equal(RecordingSource.openingDeclaresCamera(proj), true);
+  assert.equal(RecordingSource.captureFrameRate(proj, extraSource.id), 30);
+
+  const cropped = RecordingSource.setCrop(
+    proj,
+    makeNormalizedCrop(0.1, 0.2, 0.6, 0.5),
+    extraSource.id,
+  );
+  assert.equal(cropped.changed, true);
+  assert.deepEqual(cropped.project.additionalSources[0].crop, {
+    x: 0.1,
+    y: 0.2,
+    width: 0.6,
+    height: 0.5,
+  });
+  // Input project untouched
+  assert.deepEqual(proj.additionalSources[0].crop, NormalizedCropFull);
+
+  const segCropped = RecordingSource.setSegmentCrop(
+    cropped.project,
+    makeNormalizedCrop(0, 0, 0.5, 0.5),
+    segExtra.id,
+  );
+  assert.equal(segCropped.changed, true);
+  if (segCropped.project.timeline.sourceSequence.kind === 'edited') {
+    assert.deepEqual(segCropped.project.timeline.sourceSequence.segments[0].crop, {
+      x: 0,
+      y: 0,
+      width: 0.5,
+      height: 0.5,
+    });
+  }
+});

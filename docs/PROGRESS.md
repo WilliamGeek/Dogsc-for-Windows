@@ -84,6 +84,7 @@
 2026-11-23 02:04 | T13.2 | DONE | 移植 CameraBeautySettings、ScreenCardAppearance（核心模型）与 SegmentSceneStyle（片段边界 lookup / 240ms smoothstep / hexColorMixing / canvasStyleBlend / cameraStyleBlend），CameraStyle 接入 beauty 默认值，新增 10 项核心单测并通过 zero node:* 校验 | 258 pass (5 skip E2E)
 2026-11-23 02:07 | T13.3 | REORDER | REORDER: T13.3(RecordingSourceEditing) / T13.4(VisualTrackTransfer, RecordingProjectImport) 依赖 T13.5 的 ProjectTimeline/OverlayTimeline/TimelineMap/ProjectTimelineEditing v0.2.0 多源接口，先完成叶子模型 T13.3a，禁止写临时 stub | 258 pass (5 skip E2E)
 2026-11-23 02:08 | T13.3a | DONE | 移植 RecordingSource（核心结构）、RecordingAspectTransitions（240ms 兼容外框比例平滑插值与中途抢占重定位）与 PostProductionModel（MediaAsset / VideoClip / AudioClip / Subtitle* / MainTrackVisualStyle / VisualClipSound），新增 7 项核心单测且 zero node:* 校验通过 | 265 pass (5 skip E2E)
+2026-11-23 02:30 | T13.5a | DONE | 同步 Schema v28 持久化模型（ProjectSchema v28、CursorStyle.pressesOnClick、ScreenFrameDefaults、RecordingMarker.sourceID、ExportSettings videoCodec/quality/4096 限幅、OverlayTimeline MotionElementEdit/AnimationClip、ProjectTimeline InsertedMedia/多源片段/图层组织、ProjectMediaModel v27->v28 自动冻结旧外观与 _unknownFields 无损保留、ExportPolicy 多源介质/码率阶梯与 CaptureEncodingPolicy、ProjectValidator 悬空源校验），消除 RecorderProject 扩展环依赖 | 271 pass (5 skip E2E)
 
-下一个任务：T13.5（Stage 3：同步 44 个共享核心模块至上游 v0.2.0 与 Schema v28，然后接入 T13.3b/T13.4 与 T13.6 G3 Golden Fixture）
+下一个任务：T13.6（构建 v27/v28 双向 Schema 黄金夹具与门禁 G3 test/core/SchemaInterop.test.ts 互操作验证）
 

@@ -6,88 +6,26 @@
 
 import { max, min, newUUID, toInt } from './swift.ts';
 import { type HexColor, HexColorWhite, hexColorFromJSON, makeHexColor } from './HexColor.ts';
-import { type OverlayTiming, makeOverlayTiming } from './OverlayTimeline.ts';
 import {
-  type ScreenCardAppearance,
-  screenCardAppearanceFromJSON,
-} from './ScreenCardAppearance.ts';
-import {
-  type SegmentSceneStyle,
-  segmentSceneStyleFromJSON,
-} from './SegmentSceneStyle.ts';
+  type MainTrackVisualStyle,
+  type OverlayTiming,
+  type VisualClipSound,
+  mainTrackVisualStyleFromJSON,
+  makeMainTrackVisualStyle,
+  makeOverlayTiming,
+  makeVisualClipSound,
+  visualClipSoundFromJSON,
+} from './OverlayTimeline.ts';
 import { type NormalizedPoint, makeNormalizedPoint } from './ZoomAnimation.ts';
 
-// ---------------------------------------------------------------------------
-// MainTrackVisualStyle & VisualClipSound (from VisualTrackTransfer.swift L1-19)
-// ---------------------------------------------------------------------------
-
-/// Presentation saved while an authored visual changes track roles.
-export interface MainTrackVisualStyle {
-  usesFrameStyle: boolean;
-  screenAppearance: ScreenCardAppearance | null;
-  sceneStyle: SegmentSceneStyle | null;
-}
-
-export function makeMainTrackVisualStyle(options: {
-  usesFrameStyle?: boolean;
-  screenAppearance?: ScreenCardAppearance | null;
-  sceneStyle?: SegmentSceneStyle | null;
-} = {}): MainTrackVisualStyle {
-  return {
-    usesFrameStyle: options.usesFrameStyle ?? false,
-    screenAppearance: options.screenAppearance ? { ...options.screenAppearance } : null,
-    sceneStyle: options.sceneStyle ? { ...options.sceneStyle } : null,
-  };
-}
-
-export function mainTrackVisualStyleFromJSON(raw: unknown): MainTrackVisualStyle | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const c = raw as Record<string, unknown>;
-  return {
-    usesFrameStyle: typeof c.usesFrameStyle === 'boolean' ? c.usesFrameStyle : false,
-    screenAppearance:
-      c.screenAppearance !== undefined && c.screenAppearance !== null
-        ? screenCardAppearanceFromJSON(c.screenAppearance)
-        : null,
-    sceneStyle:
-      c.sceneStyle !== undefined && c.sceneStyle !== null
-        ? segmentSceneStyleFromJSON(c.sceneStyle)
-        : null,
-  };
-}
-
-export interface VisualClipSound {
-  path: string;
-  volume: number;
-  fadeIn: number;
-  fadeOut: number;
-}
-
-export function makeVisualClipSound(options: {
-  path: string;
-  volume?: number;
-  fadeIn?: number;
-  fadeOut?: number;
-}): VisualClipSound {
-  return {
-    path: options.path,
-    volume: options.volume ?? 1,
-    fadeIn: options.fadeIn ?? 0,
-    fadeOut: options.fadeOut ?? 0,
-  };
-}
-
-export function visualClipSoundFromJSON(raw: unknown): VisualClipSound | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const c = raw as Record<string, unknown>;
-  if (typeof c.path !== 'string') return null;
-  return makeVisualClipSound({
-    path: c.path,
-    volume: typeof c.volume === 'number' ? c.volume : 1,
-    fadeIn: typeof c.fadeIn === 'number' ? c.fadeIn : 0,
-    fadeOut: typeof c.fadeOut === 'number' ? c.fadeOut : 0,
-  });
-}
+export {
+  type MainTrackVisualStyle,
+  type VisualClipSound,
+  mainTrackVisualStyleFromJSON,
+  makeMainTrackVisualStyle,
+  makeVisualClipSound,
+  visualClipSoundFromJSON,
+};
 
 // ---------------------------------------------------------------------------
 // TimedOverlayClip, MediaAssetKind, MediaAsset
@@ -179,6 +117,29 @@ export function makeMediaAsset(options: {
     name: options.name ?? pathLastComponent(options.path),
     importedAt: options.importedAt ?? new Date(),
   };
+}
+
+export function mediaAssetFromJSON(raw: unknown): MediaAsset {
+  if (!raw || typeof raw !== 'object') {
+    throw new Error('Expected MediaAsset JSON object');
+  }
+  const c = raw as Record<string, unknown>;
+  if (typeof c.path !== 'string' || typeof c.kind !== 'string') {
+    throw new Error('MediaAsset requires path and kind');
+  }
+  const importedAt =
+    c.importedAt instanceof Date
+      ? c.importedAt
+      : typeof c.importedAt === 'string' || typeof c.importedAt === 'number'
+        ? new Date(c.importedAt)
+        : new Date();
+  return makeMediaAsset({
+    id: typeof c.id === 'string' ? c.id : undefined,
+    path: c.path,
+    kind: c.kind as MediaAssetKind,
+    name: typeof c.name === 'string' ? c.name : undefined,
+    importedAt,
+  });
 }
 
 /// The label shown in the media library. The extension is dropped: a tile
@@ -418,6 +379,25 @@ export function makeSubtitleCue(options: {
     text: options.text,
     secondaryText: options.secondaryText ?? null,
   };
+}
+
+export function subtitleCueFromJSON(raw: unknown): SubtitleCue {
+  if (!raw || typeof raw !== 'object') {
+    throw new Error('Expected SubtitleCue JSON object');
+  }
+  const c = raw as Record<string, any>;
+  if (typeof c.text !== 'string' || !c.timing || typeof c.timing.startTime !== 'number') {
+    throw new Error('SubtitleCue requires timing and text');
+  }
+  return makeSubtitleCue({
+    id: typeof c.id === 'string' ? c.id : undefined,
+    timing: makeOverlayTiming(
+      c.timing.startTime,
+      typeof c.timing.duration === 'number' ? c.timing.duration : 3,
+    ),
+    text: c.text,
+    secondaryText: typeof c.secondaryText === 'string' ? c.secondaryText : null,
+  });
 }
 
 export type SubtitleFont = 'system' | 'rounded' | 'serif' | 'mono';

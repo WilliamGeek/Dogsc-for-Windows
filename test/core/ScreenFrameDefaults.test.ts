@@ -15,16 +15,16 @@ test('screenFrameStyleDefaults exact values per Swift L25-39', () => {
   assert.equal(none.frameScale, 1.0);
 
   const winLight = screenFrameStyleDefaults('windowLight');
-  assert.equal(winLight.outerRadius, 18);
+  assert.equal(winLight.outerRadius, 22);
   assert.equal(winLight.contentRadius, 0);
-  assert.equal(winLight.toolbarScale, 0.9);
-  assert.equal(winLight.shadowStrength, 0.22);
+  assert.equal(winLight.toolbarScale, 0.96);
+  assert.equal(winLight.shadowStrength, 0.24);
 
   const winDark = screenFrameStyleDefaults('windowDark');
-  assert.equal(winDark.outerRadius, 18);
+  assert.equal(winDark.outerRadius, 22);
   assert.equal(winDark.contentRadius, 0);
-  assert.equal(winDark.toolbarScale, 0.9);
-  assert.equal(winDark.shadowStrength, 0.3);
+  assert.equal(winDark.toolbarScale, 0.96);
+  assert.equal(winDark.shadowStrength, 0.32);
 
   const browserLight = screenFrameStyleDefaults('browserLight');
   assert.equal(browserLight.outerRadius, 22);
@@ -41,7 +41,7 @@ test('screenFrameStyleDefaults exact values per Swift L25-39', () => {
   const phone = screenFrameStyleDefaults('devicePhone');
   assert.equal(phone.outerRadius, 64);
   assert.equal(phone.contentRadius, 40);
-  assert.equal(phone.frameScale, 0.9);
+  assert.equal(phone.frameScale, 1.0);
   assert.equal(phone.shadowStrength, 0.24);
 
   const tablet = screenFrameStyleDefaults('deviceTablet');
@@ -58,16 +58,16 @@ test('canvasStyleApplyingScreenFrameStyle applies all preset overrides per Swift
   // Apply windowDark
   const withWinDark = canvasStyleApplyingScreenFrameStyle(initial, 'windowDark');
   assert.equal(withWinDark.screenFrame, 'windowDark');
-  assert.equal(withWinDark.screenFrameToolbarScale, 0.9);
-  assert.equal(withWinDark.screenFrameOuterCornerRadius, 18);
+  assert.equal(withWinDark.screenFrameToolbarScale, 0.96);
+  assert.equal(withWinDark.screenFrameOuterCornerRadius, 22);
   assert.equal(withWinDark.screenFrameContentCornerRadius, 0);
   assert.equal(withWinDark.cornerRadius, 0);
-  assert.equal(withWinDark.shadowStrength, 0.3);
+  assert.equal(withWinDark.shadowStrength, 0.32);
 
   // Apply devicePhone
   const withPhone = canvasStyleApplyingScreenFrameStyle(withWinDark, 'devicePhone');
   assert.equal(withPhone.screenFrame, 'devicePhone');
-  assert.equal(withPhone.screenFrameScale, 0.9);
+  assert.equal(withPhone.screenFrameScale, 1.0);
   assert.equal(withPhone.screenFrameOuterCornerRadius, 64);
   assert.equal(withPhone.screenFrameContentCornerRadius, 40);
   assert.equal(withPhone.cornerRadius, 40);

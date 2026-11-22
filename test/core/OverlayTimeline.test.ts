@@ -118,13 +118,16 @@ test('T6.1: StickerClip defaults and JSON decoding', () => {
   assert.equal(clip.borderWidth, 0);
   assert.equal(clip.animation, 'pop');
   assert.equal(clip.animationCurve, 'swift');
-  assert.equal(clip.enterDuration, 0.7);
-  assert.equal(clip.exitDuration, 0.22);
+  assert.equal(clip.enterDuration, 0.45);
+  assert.equal(clip.exitDuration, 0.3);
   assert.equal(clip.backdropBlur, 20);
   assert.equal(clip.backdropBlurIncludesCamera, false);
   assert.equal(clip.hidesScreen, false);
   assert.equal(clip.hidesCamera, false);
   assert.equal(clip.layerIndex, 0);
+  assert.equal(clip.mainTrackStyle, null);
+  assert.equal(clip.sourceStart, 0);
+  assert.equal(clip.playbackRate, 1);
 
   const parsed = stickerClipFromJSON({
     id: 's-1',
@@ -133,6 +136,9 @@ test('T6.1: StickerClip defaults and JSON decoding', () => {
     position: { x: 0.2, y: 0.8 },
     animation: 'slideUp',
     hidesScreen: true,
+    sourceStart: 1.5,
+    playbackRate: 2,
+    mainTrackStyle: { usesFrameStyle: true },
   });
   assert.equal(parsed.id, 's-1');
   assert.equal(parsed.timing.startTime, 1);
@@ -141,4 +147,44 @@ test('T6.1: StickerClip defaults and JSON decoding', () => {
   assert.equal(parsed.animation, 'slideUp');
   assert.equal(parsed.hidesScreen, true);
   assert.equal(parsed.hidesCamera, false);
+  assert.equal(parsed.sourceStart, 1.5);
+  assert.equal(parsed.playbackRate, 2);
+  assert.equal(parsed.mainTrackStyle?.usesFrameStyle, true);
+});
+
+test('v0.2.0: MotionElementEdit & AnimationClip defaults and Swift JSON decoding', async () => {
+  const {
+    motionElementEditIsEmpty,
+    makeMotionElementEdit,
+    motionElementEditFromJSON,
+    animationClipFromJSON,
+  } = await import('../../src/core/OverlayTimeline.ts');
+
+  const empty = makeMotionElementEdit();
+  assert.equal(motionElementEditIsEmpty(empty), true);
+  const fw = makeMotionElementEdit({ fontWeight: 1200 });
+  assert.equal(fw.fontWeight, 900);
+  assert.equal(motionElementEditIsEmpty(fw), false);
+  assert.equal(motionElementEditFromJSON({ fontWeight: 50 }).fontWeight, 100);
+
+  const anim = animationClipFromJSON({
+    id: 'anim-1',
+    timing: { startTime: 2, duration: 3 },
+    sourcePath: 'motions/card.dmhtml',
+    position: { x: 0.5, y: 0.5 },
+    width: 0.6,
+    opacity: 0.9,
+    properties: {
+      headline: { string: { _0: 'Hello' } },
+      accent: { color: { _0: '#FF5500' } },
+    },
+    soundtrack: { path: 'fx/whoosh.wav', volume: 0.8 },
+  });
+  assert.equal(anim.properties.headline.kind, 'string');
+  assert.equal(anim.properties.headline.value, 'Hello');
+  assert.equal(anim.properties.accent.kind, 'color');
+  if (anim.properties.accent.kind === 'color') {
+    assert.equal(anim.properties.accent.value.rgb24, 0xff5500);
+  }
+  assert.equal(anim.soundtrack?.path, 'fx/whoosh.wav');
 });

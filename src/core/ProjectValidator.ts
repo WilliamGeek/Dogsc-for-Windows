@@ -13,6 +13,7 @@ import { OpeningSequenceElementAllCases, openingSequenceMaximumStagger } from '.
 import type { ZoomAnimationClip } from './ZoomAnimation.ts';
 import type { ProjectTimeline } from './ProjectTimeline.ts';
 import type { RecorderProject } from './ProjectMediaModel.ts';
+import { RecordingSourcePrimaryID } from './RecordingSource.ts';
 
 // MARK: - ProjectValidationError
 
@@ -282,6 +283,25 @@ export const ProjectValidator = Object.freeze({
       ProjectValidator.validateCursor(project.cursorStyle);
       ProjectValidator.validateMotion(project.motion);
       ProjectValidator.validateOpening(project.openingSequence);
+      // A segment pointing at a removed recording stays renderable-looking
+      // in the model while every preview and export fails on load. Reject it
+      // here so no edit or save can introduce a dangling reference.
+      if (project.timeline.sourceSequence.kind === 'edited') {
+        const available = new Set<string>([
+          RecordingSourcePrimaryID,
+          ...(project.additionalSources ?? []).map((s) => s.id),
+        ]);
+        for (const segment of project.timeline.sourceSequence.segments) {
+          if (segment.media == null) {
+            const resolved = segment.sourceID ?? RecordingSourcePrimaryID;
+            if (!available.has(resolved)) {
+              throw new ProjectValidationError('invalidTimeline', {
+                reason: '主轨片段引用的录制已不在项目中。',
+              });
+            }
+          }
+        }
+      }
       ProjectValidator.validateTimeline(project.timeline);
       return;
     }

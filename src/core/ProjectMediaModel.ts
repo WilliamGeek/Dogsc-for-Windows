@@ -37,12 +37,22 @@ import {
   type CursorStyle,
   makeCursorStyle,
 } from './ProjectModel.ts';
-import { type ExportSettings, makeExportSettings } from './ExportSettings.ts';
+import {
+  type ExportSettings,
+  exportSettingsFromJSON,
+  makeExportSettings,
+} from './ExportSettings.ts';
 import { type RecordingMarker, makeRecordingMarker } from './RecordingMarker.ts';
 import {
   type ProjectTimeline,
   makeProjectTimeline,
+  projectTimelineFromJSON,
 } from './ProjectTimeline.ts';
+import {
+  type RecordingSource,
+  recordingSourceFromJSON,
+} from './RecordingSource.ts';
+import { projectPreserveLegacyScreenAppearances } from './ScreenCardAppearance.ts';
 import {
   type ZoomAnimationClip,
   makeZoomAnimationClip,
@@ -94,8 +104,11 @@ export interface RecorderProject {
   exportSettings: ExportSettings;
   timeline: ProjectTimeline;
   media: ProjectMediaManifest | null;
+  additionalSources: RecordingSource[];
   recordingMarkers: RecordingMarker[];
   zoomAnimations: ZoomAnimationClip[];
+  /** Preserves unrecognized top-level JSON fields across decode/encode roundtrips. */
+  _unknownFields?: Record<string, unknown>;
 }
 
 export function makeRecorderProject(options?: {
@@ -113,7 +126,9 @@ export function makeRecorderProject(options?: {
   zoomAnimations?: ZoomAnimationClip[];
   timeline?: ProjectTimeline;
   media?: ProjectMediaManifest | null;
+  additionalSources?: RecordingSource[];
   recordingMarkers?: RecordingMarker[];
+  _unknownFields?: Record<string, unknown>;
 }): RecorderProject {
   const version = options?.version ?? ProjectSchema.currentVersion;
   const title = options?.title ?? '未命名录制';
@@ -130,9 +145,10 @@ export function makeRecorderProject(options?: {
   const timeline =
     options?.timeline ?? makeProjectTimeline({ zoomClips: zoomAnimations });
   const media = options?.media ?? null;
+  const additionalSources = options?.additionalSources ? options.additionalSources.slice() : [];
   const recordingMarkers = options?.recordingMarkers ?? [];
 
-  return {
+  const project: RecorderProject = {
     version,
     title,
     createdAt,
@@ -146,6 +162,7 @@ export function makeRecorderProject(options?: {
     exportSettings,
     timeline,
     media,
+    additionalSources,
     recordingMarkers,
     get zoomAnimations() {
       return this.timeline.zoomClips as ZoomAnimationClip[];
@@ -157,13 +174,44 @@ export function makeRecorderProject(options?: {
       };
     },
   };
+  if (options?._unknownFields && Object.keys(options._unknownFields).length > 0) {
+    project._unknownFields = { ...options._unknownFields };
+  }
+  return project;
 }
 
 // MARK: - JSON Serialization & Deserialization
 
+const KNOWN_PROJECT_KEYS = new Set<string>([
+  'version',
+  'title',
+  'createdAt',
+  'capture',
+  'canvas',
+  'camera',
+  'audio',
+  'motion',
+  'openingSequence',
+  'cursorStyle',
+  'exportSettings',
+  'timeline',
+  'media',
+  'additionalSources',
+  'recordingMarkers',
+  'zoomAnimations',
+  'screenRecordingRelativePath',
+  'cameraRecordingRelativePath',
+  'microphoneRecordingRelativePath',
+  'pointerEventsRelativePath',
+  'cameraStartOffset',
+  'microphoneStartOffset',
+  'pointerStartOffset',
+]);
+
 export function encodeRecorderProject(project: RecorderProject): string {
   ProjectSchema.validateForEncoding(project.version);
-  return JSON.stringify({
+  const payload: Record<string, unknown> = {
+    ...(project._unknownFields ?? {}),
     version: ProjectSchema.currentVersion,
     title: project.title,
     createdAt: project.createdAt.toISOString(),
@@ -177,8 +225,13 @@ export function encodeRecorderProject(project: RecorderProject): string {
     exportSettings: project.exportSettings,
     timeline: project.timeline,
     media: project.media,
-    recordingMarkers: project.recordingMarkers,
-  });
+  };
+  // Keep legacy single-recording payloads unchanged apart from the schema.
+  if (project.additionalSources && project.additionalSources.length > 0) {
+    payload.additionalSources = project.additionalSources;
+  }
+  payload.recordingMarkers = project.recordingMarkers;
+  return JSON.stringify(payload);
 }
 
 /**
@@ -238,6 +291,13 @@ export function decodeRecorderProject(json: string | Record<string, any>): Recor
   const decodedVersion = container.version ?? 1;
   ProjectSchema.validateForDecoding(decodedVersion);
 
+  const unknownFields: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(container)) {
+    if (!KNOWN_PROJECT_KEYS.has(k)) {
+      unknownFields[k] = v;
+    }
+  }
+
   const markerIDs = new Set<string>();
   const recordingMarkers: RecordingMarker[] = Array.isArray(container.recordingMarkers)
     ? container.recordingMarkers
@@ -260,6 +320,7 @@ export function decodeRecorderProject(json: string | Record<string, any>): Recor
             id: m.id,
             sourceTime: m.sourceTime,
             number: m.number,
+            sourceID: typeof m.sourceID === 'string' ? m.sourceID : null,
           })
         )
     : [];
@@ -282,9 +343,9 @@ export function decodeRecorderProject(json: string | Record<string, any>): Recor
 
   let exportSettings: ExportSettings;
   if (decodedVersion >= 5 && container.exportSettings) {
-    let settings = makeExportSettings(container.exportSettings);
-    if (decodedVersion < 7 && settings.resolution === 'fullHD') {
-      settings = makeExportSettings({ ...settings, resolution: 'source' });
+    let settings = exportSettingsFromJSON(container.exportSettings);
+    if (decodedVersion < 7 && (settings.resolution as string) === 'fullHD') {
+      settings = makeExportSettings({ ...settings, resolution: '原始素材' });
     }
     exportSettings = settings;
   } else {
@@ -293,7 +354,7 @@ export function decodeRecorderProject(json: string | Record<string, any>): Recor
 
   let timeline: ProjectTimeline;
   if (decodedVersion >= 4 && container.timeline) {
-    timeline = makeProjectTimeline(container.timeline);
+    timeline = projectTimelineFromJSON(container.timeline);
   } else {
     const decodedAnimations: ZoomAnimationClip[] = Array.isArray(container.zoomAnimations)
       ? container.zoomAnimations.map((a: any) => makeZoomAnimationClip(a))
@@ -349,7 +410,11 @@ export function decodeRecorderProject(json: string | Record<string, any>): Recor
     }
   }
 
-  return makeRecorderProject({
+  const additionalSources: RecordingSource[] = Array.isArray(container.additionalSources)
+    ? container.additionalSources.map(recordingSourceFromJSON)
+    : [];
+
+  let project = makeRecorderProject({
     version: ProjectSchema.currentVersion,
     title,
     createdAt,
@@ -363,6 +428,13 @@ export function decodeRecorderProject(json: string | Record<string, any>): Recor
     exportSettings,
     timeline,
     media,
+    additionalSources,
     recordingMarkers,
+    _unknownFields: unknownFields,
   });
+
+  if (decodedVersion < 28) {
+    project = projectPreserveLegacyScreenAppearances(project);
+  }
+  return project;
 }

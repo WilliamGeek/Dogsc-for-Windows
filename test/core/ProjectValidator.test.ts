@@ -6,7 +6,11 @@ import { ProjectValidator, ProjectValidationError } from '../../src/core/Project
 import { makeRecorderProject } from '../../src/core/ProjectMediaModel.ts';
 import { makeCanvasStyle, makeCameraStyle, makeAudioStyle, makeCursorStyle, makeMotionStyle } from '../../src/core/ProjectModel.ts';
 import { makeZoomAnimationClip, makeNormalizedPoint } from '../../src/core/ZoomAnimation.ts';
-import { makeProjectTimeline } from '../../src/core/ProjectTimeline.ts';
+import {
+  makeProjectTimeline,
+  makeRecordingSegment,
+  makeSourceSequenceEdited,
+} from '../../src/core/ProjectTimeline.ts';
 
 test('T7.4: ProjectValidator accepts default project', () => {
   const project = makeRecorderProject();
@@ -61,5 +65,22 @@ test('T7.4: ProjectValidator detects duplicate and overlapping zoom clips', () =
   assert.throws(
     () => ProjectValidator.validate(makeProjectTimeline({ zoomClips: [c1, c3] })),
     (err: any) => err instanceof ProjectValidationError && err.kind === 'overlappingZoom'
+  );
+});
+
+test('v0.2.0: ProjectValidator rejects dangling recording segment sourceID per Swift L124-134', () => {
+  const danglingSeg = makeRecordingSegment({
+    sourceStart: 0,
+    sourceDuration: 3,
+    sourceID: 'MISSING-SOURCE-UUID',
+  });
+  const invalidProject = makeRecorderProject({
+    timeline: makeProjectTimeline({
+      sourceSequence: makeSourceSequenceEdited([danglingSeg]),
+    }),
+  });
+  assert.throws(
+    () => ProjectValidator.validate(invalidProject),
+    (err: any) => err instanceof ProjectValidationError && err.kind === 'invalidTimeline',
   );
 });
