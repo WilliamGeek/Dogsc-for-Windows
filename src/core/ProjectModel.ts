@@ -9,6 +9,7 @@ import {
 } from './CanvasCustomAspectRatio.ts';
 import type { NormalizedPoint, ZoomEasingPreset } from './ZoomAnimation.ts';
 import type { ScreenMotionCreationStyle } from './ScreenMotionCreationStyle.ts';
+import { type CameraBeautySettings, makeCameraBeautySettings } from './CameraBeauty.ts';
 
 // ---------------------------------------------------------------------------
 // ProjectSchema & ProjectSchemaError
@@ -945,6 +946,7 @@ export interface CameraStyle {
   scaleDuringZoom: number;
   contentPosition: NormalizedPoint;
   contentScale: number;
+  beauty: CameraBeautySettings;
 }
 
 export function makeCameraStyle(options: Partial<CameraStyle> = {}): CameraStyle {
@@ -959,6 +961,9 @@ export function makeCameraStyle(options: Partial<CameraStyle> = {}): CameraStyle
   const scaleDuringZoom = options.scaleDuringZoom ?? 0.7;
   const contentPosition = options.contentPosition ?? { x: 0.5, y: 0.5 };
   const contentScale = options.contentScale ?? 1;
+  const beauty = options.beauty
+    ? makeCameraBeautySettings(options.beauty)
+    : makeCameraBeautySettings();
 
   return {
     shape,
@@ -972,6 +977,7 @@ export function makeCameraStyle(options: Partial<CameraStyle> = {}): CameraStyle
     scaleDuringZoom,
     contentPosition,
     contentScale,
+    beauty,
   };
 }
 

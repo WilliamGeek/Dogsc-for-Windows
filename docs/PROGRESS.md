@@ -81,6 +81,7 @@
 阶段 2 验收通过
 
 2026-11-23 02:00 | T13.1 | DONE | 完成上游 v0.2.0 只读克隆(F:\dogsc-v0.2.0)与 44→53 模块逐文件 -w diff 审计，输出 docs/V020_DIFF_MAP.md（9新增/25行为修改/9清理/10未改、Schema v28 字段对照与 REORDER 依赖拓扑） | 248 pass (5 skip E2E)
+2026-11-23 02:04 | T13.2 | DONE | 移植 CameraBeautySettings、ScreenCardAppearance（核心模型）与 SegmentSceneStyle（片段边界 lookup / 240ms smoothstep / hexColorMixing / canvasStyleBlend / cameraStyleBlend），CameraStyle 接入 beauty 默认值，新增 10 项核心单测并通过 zero node:* 校验 | 258 pass (5 skip E2E)
 
-下一个任务：T13.2（移植 CameraBeauty、ScreenCardAppearance 核心模型与 SegmentSceneStyle 算法及单测）
+下一个任务：T13.3a（先移植不依赖 T13.5 的叶子多源与后期模型 RecordingSource / RecordingAspectTransitions / PostProductionModel）
 
