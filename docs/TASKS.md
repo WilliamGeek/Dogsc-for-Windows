@@ -166,7 +166,7 @@
 - [x] T14.6 光标素材样式、速度倾斜、闲置渐隐与 4 种点击动效（ripple/ring/dot/combo）全量对齐。
 
 ### Wave D：Windows 全源采集、零依赖音视频多轨与暂停标记（P2-01~03）
-- [ ] T15.1 支持自选区域（`ddagrab` GPU `offset_x/y + video_size` 偶对齐）与单个窗口（`gdigrab -draw_mouse 0` + 窗口枚举）。
+- [x] T15.1 支持自选区域（`ddagrab` GPU `offset_x/y + video_size` 偶对齐）与单个窗口（`gdigrab -draw_mouse 0` + 窗口枚举）。
 - [ ] T15.2 零依赖系统音频回环采集 `tools/wasapi-loopback.ps1` + `src/capture/SystemAudioRecorder.ts`。
 - [ ] T15.3 DirectShow 音视频设备枚举 `src/capture/MediaDevices.ts` 与麦克风录制 `src/capture/MicRecorder.ts`。
 - [ ] T15.4 DirectShow 摄像头同步录制 `src/capture/CameraRecorder.ts` + 同步锚点 + `camera_frames/` 预解码。

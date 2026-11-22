@@ -20,6 +20,60 @@ const STDERR_TAIL_LIMIT = 16 * 1024;
 const STOP_TIMEOUT_MS = 5000;
 
 export type VideoEncoderKind = 'h264_nvenc' | 'libx264';
+export type CaptureMode = 'display' | 'region' | 'window';
+
+export interface CaptureRegion {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Pure function: aligns a capture region for `ddagrab` GPU capture:
+ * clamps non-negative integer coordinates and rounds dimensions down to even >= 2
+ * (required by yuv420p/NVENC), optionally clamping inside displayBounds.
+ */
+export function alignEvenRegion(
+  region: CaptureRegion,
+  displayBounds?: { width: number; height: number }
+): CaptureRegion {
+  if (
+    !Number.isFinite(region.x) ||
+    !Number.isFinite(region.y) ||
+    !Number.isFinite(region.width) ||
+    !Number.isFinite(region.height)
+  ) {
+    throw new Error('区域录制参数包含非有限数字');
+  }
+  if (region.width < 2 || region.height < 2) {
+    throw new Error(`区域宽高至少为 2x2，当前为 ${region.width}x${region.height}`);
+  }
+
+  let x = Math.max(0, Math.floor(region.x));
+  let y = Math.max(0, Math.floor(region.y));
+  let availW = Math.floor(region.width);
+  let availH = Math.floor(region.height);
+
+  if (
+    displayBounds &&
+    Number.isFinite(displayBounds.width) &&
+    Number.isFinite(displayBounds.height) &&
+    displayBounds.width >= 2 &&
+    displayBounds.height >= 2
+  ) {
+    const dw = Math.floor(displayBounds.width);
+    const dh = Math.floor(displayBounds.height);
+    x = Math.min(x, dw - 2);
+    y = Math.min(y, dh - 2);
+    availW = Math.min(availW, dw - x);
+    availH = Math.min(availH, dh - y);
+  }
+
+  const width = Math.max(2, Math.floor(availW / 2) * 2);
+  const height = Math.max(2, Math.floor(availH / 2) * 2);
+  return { x, y, width, height };
+}
 
 export interface FfmpegArgsOptions {
   outFile: string;
@@ -28,6 +82,10 @@ export interface FfmpegArgsOptions {
   outputIdx?: number;
   /** Draw the OS cursor into the capture. Defaults to false (T12.3). */
   drawMouse?: boolean;
+  /** Capture mode: full display ('display'), cropped GPU region ('region'), or single window ('window'). */
+  captureMode?: CaptureMode;
+  region?: CaptureRegion;
+  windowTitle?: string;
 }
 
 export interface ScreenRecorderOptions {
@@ -37,6 +95,9 @@ export interface ScreenRecorderOptions {
   encoder?: VideoEncoderKind;
   /** Draw the OS cursor into the capture. Defaults to false (T12.3). */
   drawMouse?: boolean;
+  captureMode?: CaptureMode;
+  region?: CaptureRegion;
+  windowTitle?: string;
   /** ffmpeg binary; test seam for a fake command. Defaults to `ffmpeg`. */
   ffmpegBin?: string;
   /** Leading args before ffmpeg args; test seam only. */
@@ -95,6 +156,7 @@ export function buildFfmpegArgs(o: FfmpegArgsOptions): string[] {
   const outputIdx = o.outputIdx ?? 0;
   const fps = o.fps > 0 ? o.fps : 60;
   const drawMouse = o.drawMouse ?? false;
+  const mode: CaptureMode = o.captureMode ?? 'display';
 
   const baseArgs: string[] = [
     '-y',
@@ -102,13 +164,48 @@ export function buildFfmpegArgs(o: FfmpegArgsOptions): string[] {
     'pipe:1',
     '-stats_period',
     '0.05',
-    '-f',
-    'lavfi',
-    '-i',
-    `ddagrab=output_idx=${outputIdx}:framerate=${fps}:draw_mouse=${drawMouse ? 1 : 0}`,
-    '-vf',
-    'hwdownload,format=bgra,showinfo,format=yuv420p',
   ];
+
+  if (mode === 'window') {
+    const title = o.windowTitle?.trim() ?? '';
+    if (!title) {
+      throw new Error('单窗口录制需要非空的 windowTitle 参数');
+    }
+    baseArgs.push(
+      '-f',
+      'gdigrab',
+      '-framerate',
+      String(fps),
+      '-draw_mouse',
+      drawMouse ? '1' : '0',
+      '-i',
+      `title=${title}`,
+      '-vf',
+      'pad=ceil(iw/2)*2:ceil(ih/2)*2,showinfo,format=yuv420p'
+    );
+  } else if (mode === 'region') {
+    if (!o.region) {
+      throw new Error('区域录制需要有效的 region 参数');
+    }
+    const r = alignEvenRegion(o.region);
+    baseArgs.push(
+      '-f',
+      'lavfi',
+      '-i',
+      `ddagrab=output_idx=${outputIdx}:offset_x=${r.x}:offset_y=${r.y}:video_size=${r.width}x${r.height}:framerate=${fps}:draw_mouse=${drawMouse ? 1 : 0}`,
+      '-vf',
+      'hwdownload,format=bgra,showinfo,format=yuv420p'
+    );
+  } else {
+    baseArgs.push(
+      '-f',
+      'lavfi',
+      '-i',
+      `ddagrab=output_idx=${outputIdx}:framerate=${fps}:draw_mouse=${drawMouse ? 1 : 0}`,
+      '-vf',
+      'hwdownload,format=bgra,showinfo,format=yuv420p'
+    );
+  }
 
   if (o.encoder === 'h264_nvenc') {
     return [
@@ -221,6 +318,9 @@ export function startScreenRecording(o: ScreenRecorderOptions): ScreenRecorderHa
     encoder,
     outputIdx,
     drawMouse: o.drawMouse,
+    captureMode: o.captureMode,
+    region: o.region,
+    windowTitle: o.windowTitle,
   });
 
   // Contract §3: screenStartUnixMs is sampled immediately before spawning ffmpeg.

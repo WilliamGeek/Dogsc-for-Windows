@@ -99,8 +99,9 @@
 2026-11-23 04:18 | T14.5 | DONE | 新增 web/passes/chrome.ts（ChromePass + computeChromePassGeometry 覆盖窗口/浏览器/手机竖横屏/平板竖横屏 6 类 3D 透视外框及内嵌 contentVertices 与红黄绿灯/地址栏/灵动岛细节，同步修正 Screen/Spotlight/Cursor 对外框投影基准的适配）与 web/passes/focus.ts（FocusPass FBO 模糊与径向/旋转线性聚焦圈外部暗化混合），完成轻3D/聚拢/侧滑开场序列几何与零 NaN 单测校验（新增 3 项单测） | 311 pass / 316 total (0 fail, 5 skip E2E)
 2026-11-23 04:21 | T14.6 | DONE | 全量升级 web/passes/cursor.ts（resolveCursorShape / computeCursorRenderParams / buildCursorShapeTriangles / computeClickShaderUniforms），补齐 arrow/pointingHand/crosshair 光标形态、velocity 倾斜角 rotationRadians、pressScale 按压缩放、闲置/hidden 隐藏与 ripple/glow/pulse/burst 四种点击特效 GLSL 渲染（含 glow 光晕与 8 方位 burst 散射粒）；收官 Wave C 全通道扩展渲染并新增 1 项单测 | 312 pass / 317 total (0 fail, 5 skip E2E)
 2026-11-23 04:24 | ARCH-DAG-WaveC | DONE | 刷新 docs/ARCHITECTURE_DAG.json 并通过 cli.py validate --strict 与 render --strict（24 节点 / 35 路径 / 0 警告）重建 docs/WORKFLOW.html（488.6 KB）与 docs/WORKFLOW.md；点亮 M_WebGLFull（✓ 全通道 Pass）、e_plan_glfull、e_glfull_expsrv，同步 Start/G_Verify 312 通过单测计数与 e_verify_review 文案，保持 Wave D-F 与 T11.7 虚化（opacity 0.65） | cli.py --strict 0 warnings
+2026-11-23 04:58 | T15.1 | DONE | 新增 src/capture/WindowEnumeration.ts（Per-Monitor V2 DPI 窗口枚举与 BOM/最小化过滤解析），扩展 ScreenRecorder.ts（alignEvenRegion + ddagrab 偶对齐区域与 gdigrab -draw_mouse 0 单窗口采集参数）及 RecordingSession.ts（多屏物理区域/窗口坐标映射与 CaptureSource 联动），新增 4 项单测；同步完成 Chromium 实时 WebGL2 全通道着色器/画布与刷新后 WORKFLOW.html 双重视觉验收 PASS | 316 pass / 321 total (0 fail, 5 skip E2E)
 
-下一个任务：T15.1（Wave D Windows 全源采集与区域/窗口录制）
+下一个任务：T15.2（零依赖 WASAPI 系统音频回环采集 tools/wasapi-loopback.ps1 + SystemAudioRecorder）
 
 
 

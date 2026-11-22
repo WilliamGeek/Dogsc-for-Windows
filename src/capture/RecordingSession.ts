@@ -17,8 +17,11 @@ import {
 import { resolve } from 'node:path';
 import { finished } from 'node:stream/promises';
 import {
+  CaptureSource,
   type CaptureConfiguration,
+  type NormalizedRect,
   makeCaptureConfiguration,
+  makeNormalizedRect,
   type OutputFrameRate,
 } from '../core/CaptureConfiguration.ts';
 import {
@@ -37,7 +40,14 @@ import {
 import { AutoZoomPlanner } from '../core/AutoZoomPlanner.ts';
 import { parsePointerJsonl } from './PointerJsonl.ts';
 import { startMouseHook } from './MouseHook.ts';
-import { startScreenRecording, detectEncoder, type VideoEncoderKind } from './ScreenRecorder.ts';
+import {
+  startScreenRecording,
+  detectEncoder,
+  alignEvenRegion,
+  type VideoEncoderKind,
+  type CaptureMode,
+  type CaptureRegion,
+} from './ScreenRecorder.ts';
 import { probeMediaFile } from './MediaProbe.ts';
 import { enumerateDisplays, type DisplayDescriptor } from './DisplayEnumeration.ts';
 
@@ -77,9 +87,96 @@ export interface RecordSessionOptions {
   fps?: number;
   outputIdx?: number;
   encoder?: VideoEncoderKind;
+  captureMode?: CaptureMode;
+  region?: CaptureRegion;
+  windowTitle?: string;
+  windowBounds?: { x: number; y: number; width: number; height: number };
   baseDir?: string;
   /** Injected descriptors for deterministic tests; production enumerates WMI. */
   displays?: DisplayDescriptor[];
+}
+
+export interface ResolvedSessionCaptureGeometry {
+  captureMode: CaptureMode;
+  captureSource: CaptureSource;
+  alignedRegion?: CaptureRegion;
+  windowTitle?: string;
+  normalizedArea: NormalizedRect | null;
+  hookBounds: { x: number; y: number; w: number; h: number };
+}
+
+/**
+ * Pure function: maps display + captureMode ('display' | 'region' | 'window') into
+ * aligned ddagrab/gdigrab parameters and virtual-desktop WH_MOUSE_LL screen bounds.
+ */
+export function resolveSessionCaptureGeometry(
+  display: DisplayDescriptor,
+  options: Pick<RecordSessionOptions, 'captureMode' | 'region' | 'windowTitle' | 'windowBounds'>
+): ResolvedSessionCaptureGeometry {
+  const mode: CaptureMode = options.captureMode ?? 'display';
+  if (mode === 'region') {
+    if (!options.region) {
+      throw new Error('captureMode="region" 需要提供 region 参数');
+    }
+    const aligned = alignEvenRegion(options.region, {
+      width: display.width,
+      height: display.height,
+    });
+    return {
+      captureMode: 'region',
+      captureSource: CaptureSource.area,
+      alignedRegion: aligned,
+      normalizedArea: makeNormalizedRect({
+        x: aligned.x / Math.max(display.width, 1),
+        y: aligned.y / Math.max(display.height, 1),
+        width: aligned.width / Math.max(display.width, 1),
+        height: aligned.height / Math.max(display.height, 1),
+      }),
+      hookBounds: {
+        x: display.x + aligned.x,
+        y: display.y + aligned.y,
+        w: aligned.width,
+        h: aligned.height,
+      },
+    };
+  }
+
+  if (mode === 'window') {
+    const title = options.windowTitle?.trim() ?? '';
+    if (!title) {
+      throw new Error('captureMode="window" 需要提供非空的 windowTitle 参数');
+    }
+    const wb = options.windowBounds;
+    const validWb =
+      wb &&
+      Number.isFinite(wb.x) &&
+      Number.isFinite(wb.y) &&
+      Number.isFinite(wb.width) &&
+      Number.isFinite(wb.height) &&
+      wb.width > 0 &&
+      wb.height > 0;
+    return {
+      captureMode: 'window',
+      captureSource: CaptureSource.window,
+      windowTitle: title,
+      normalizedArea: null,
+      hookBounds: validWb
+        ? { x: wb.x, y: wb.y, w: wb.width, h: wb.height }
+        : { x: display.x, y: display.y, w: display.width, h: display.height },
+    };
+  }
+
+  return {
+    captureMode: 'display',
+    captureSource: CaptureSource.display,
+    normalizedArea: null,
+    hookBounds: {
+      x: display.x,
+      y: display.y,
+      w: display.width,
+      h: display.height,
+    },
+  };
 }
 
 export function formatSessionId(d: Date = new Date()): string {
@@ -206,6 +303,7 @@ export async function recordSession(o: RecordSessionOptions): Promise<string> {
       `显示器索引越界: ${outputIdx}；可用索引: ${displays.map((d) => d.index).join(', ') || '无'}`
     );
   }
+  const captureGeometry = resolveSessionCaptureGeometry(display, o);
 
   const id = formatSessionId();
   const baseDir = resolve(o.baseDir ?? 'recordings');
@@ -232,12 +330,7 @@ export async function recordSession(o: RecordSessionOptions): Promise<string> {
     // Step 1: Start mouse hook and wait for header. The hook and ffmpeg share
     // the same physical pixel rectangle, including negative-coordinate screens.
     hook = startMouseHook({
-      screenBounds: {
-        x: display.x,
-        y: display.y,
-        w: display.width,
-        h: display.height,
-      },
+      screenBounds: captureGeometry.hookBounds,
     });
     const lineIterator = hook.lines[Symbol.asyncIterator]();
 
@@ -280,6 +373,9 @@ export async function recordSession(o: RecordSessionOptions): Promise<string> {
       fps,
       outputIdx,
       encoder,
+      captureMode: captureGeometry.captureMode,
+      region: captureGeometry.alignedRegion,
+      windowTitle: captureGeometry.windowTitle,
     });
 
     // Step 3: Wait for the first captured frame, then start the requested
@@ -358,9 +454,11 @@ export async function recordSession(o: RecordSessionOptions): Promise<string> {
       meta.pointerOffsetSeconds,
       probed.durationSeconds,
       {
-        source: '整块屏幕',
+        source: captureGeometry.captureSource,
         displayID: outputIdx,
         displayName: display.deviceName,
+        windowName: captureGeometry.windowTitle ?? null,
+        area: captureGeometry.normalizedArea,
         captureFrameRate: fps as OutputFrameRate,
         captureCodec: 'H.264',
         recordsSystemAudio: false,
