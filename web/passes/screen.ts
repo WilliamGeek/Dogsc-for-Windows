@@ -1,195 +1,35 @@
 /**
  * web/passes/screen.ts
  *
- * WebGL2 3D perspective-projected screen card + SDF shadow pass.
+ * WebGL2 3D perspective-projected screen card + SDF shadow + blur mosaic pass.
  * Browser ESM & Node 24 strip-types compatible (NO node:* imports, NO enum/namespace).
  */
 
-import {
-  makeCompositionPoint,
-  type CompositionRect,
-} from '../../src/core/CompositionScene.ts';
-import type {
-  FrameScene,
-  FrameScreenScene,
-} from '../../src/core/FrameScene.ts';
+import type { FrameScene } from '../../src/core/FrameScene.ts';
 import { hexColorComponents } from '../../src/core/HexColor.ts';
 import {
-  projectedScreenQuadProject,
-  projectedScreenQuadProjector,
-  type ProjectedScreenQuad,
-} from '../../src/core/ScreenProjection.ts';
-import type { FrameStickerBackdropScene } from '../../src/core/StickerTransition.ts';
-import { createProgram, safeCanvasDimensions } from './glUtils.ts';
+  SCREEN_VERTEX_SHADER,
+  buildProjectedQuadVertices,
+  buildShadowQuadVertices,
+  computeEffectiveScreenOpacity,
+  computeScreenShaderUniforms,
+  createProgram,
+  safeCanvasDimensions,
+  type ScreenShaderUniforms,
+} from './glUtils.ts';
+import {
+  MAX_BLUR_MOSAICS,
+  computeBlurMosaicUniforms,
+} from './spotlight.ts';
 
-export interface ScreenShaderUniforms {
-  screenSize: [number, number];
-  cornerRadius: number;
-  effectiveBorderWidth: number;
-  borderColor: [number, number, number, number];
-}
-
-/**
- * Pure function: computes effective screen card opacity after applying
- * sticker-backdrop screen suppression (0..1).
- */
-export function computeEffectiveScreenOpacity(
-  screen: FrameScreenScene,
-  backdrop?: FrameStickerBackdropScene | null
-): number {
-  const baseOpacity = Number.isFinite(screen.opacity)
-    ? Math.min(Math.max(screen.opacity, 0), 1)
-    : 1;
-  const rawSup = backdrop?.screenSuppression ?? 0;
-  const suppression = Number.isFinite(rawSup) ? Math.min(Math.max(rawSup, 0), 1) : 0;
-  return Math.min(Math.max(baseOpacity * (1 - suppression), 0), 1);
-}
-
-/**
- * Pure function: builds interleaved [ndcX, ndcY, w, u, v] vertices for two triangles
- * forming the projected screen quad with perspective-correct homogeneous weights (1/w).
- * Returns Float32Array of length 30 (6 vertices * 5 floats).
- */
-export function buildProjectedQuadVertices(
-  quad: ProjectedScreenQuad,
-  sourceRect: CompositionRect,
-  canvasWidth: number,
-  canvasHeight: number
-): Float32Array {
-  const { width: safeWidth, height: safeHeight } = safeCanvasDimensions(canvasWidth, canvasHeight);
-
-  const mapper = projectedScreenQuadProjector(quad, sourceRect);
-  const px = mapper && Number.isFinite(mapper.perspectiveX) ? mapper.perspectiveX : 0;
-  const py = mapper && Number.isFinite(mapper.perspectiveY) ? mapper.perspectiveY : 0;
-
-  const w0 = 1.0;
-  const w1 = Math.max(1.0 + px, 1e-4);
-  const w2 = Math.max(1.0 + px + py, 1e-4);
-  const w3 = Math.max(1.0 + py, 1e-4);
-
-  const toNdcX = (x: number): number => (x / safeWidth) * 2 - 1;
-  const toNdcY = (y: number): number => 1 - (y / safeHeight) * 2;
-
-  const c0: [number, number, number, number, number] = [toNdcX(quad.topLeft.x), toNdcY(quad.topLeft.y), w0, 0, 0];
-  const c1: [number, number, number, number, number] = [toNdcX(quad.topRight.x), toNdcY(quad.topRight.y), w1, 1, 0];
-  const c2: [number, number, number, number, number] = [toNdcX(quad.bottomRight.x), toNdcY(quad.bottomRight.y), w2, 1, 1];
-  const c3: [number, number, number, number, number] = [toNdcX(quad.bottomLeft.x), toNdcY(quad.bottomLeft.y), w3, 0, 1];
-
-  return new Float32Array([
-    ...c0,
-    ...c1,
-    ...c2,
-    ...c0,
-    ...c2,
-    ...c3,
-  ]);
-}
-
-/**
- * Pure function: extracts rounded-corner and anti-aliased border uniforms from FrameScreenScene.
- */
-export function computeScreenShaderUniforms(screen: FrameScreenScene): ScreenShaderUniforms {
-  const w = Number.isFinite(screen.finalRect.width) ? Math.max(screen.finalRect.width, 1) : 1;
-  const h = Number.isFinite(screen.finalRect.height) ? Math.max(screen.finalRect.height, 1) : 1;
-  const cornerRadius = Number.isFinite(screen.cornerRadius) ? Math.max(screen.cornerRadius, 0) : 0;
-  const bw = Number.isFinite(screen.borderWidth) ? Math.max(screen.borderWidth, 0) : 0;
-  const bo = Number.isFinite(screen.borderOpacity)
-    ? Math.min(Math.max(screen.borderOpacity, 0), 1)
-    : 0;
-
-  let effectiveBorderWidth = 0;
-  let borderAlpha = 0;
-  if (bw > 0) {
-    effectiveBorderWidth = bw;
-    borderAlpha = Math.max(bo, 0.85);
-  } else if (bo > 0) {
-    effectiveBorderWidth = 1.5;
-    borderAlpha = bo;
-  }
-
-  const rgb = hexColorComponents(screen.borderColor);
-  return {
-    screenSize: [w, h],
-    cornerRadius,
-    effectiveBorderWidth,
-    borderColor: [rgb.red, rgb.green, rgb.blue, borderAlpha],
-  };
-}
-
-/**
- * Pure function: builds expanded perspective-projected vertices for the screen shadow quad.
- * Returns null if shadow is disabled or zero-opacity.
- */
-export function buildShadowQuadVertices(
-  screen: FrameScreenScene,
-  canvasWidth: number,
-  canvasHeight: number
-): Float32Array | null {
-  if (!screen.shadow || screen.shadow.opacity <= 0) {
-    return null;
-  }
-
-  const { width: safeWidth, height: safeHeight } = safeCanvasDimensions(canvasWidth, canvasHeight);
-  const w = Math.max(screen.finalRect.width, 1);
-  const h = Math.max(screen.finalRect.height, 1);
-
-  const margin =
-    screen.shadow.radius * 2.5 +
-    Math.max(Math.abs(screen.shadow.offset.x), Math.abs(screen.shadow.offset.y)) +
-    8;
-
-  const u0 = -margin / w;
-  const u1 = 1 + margin / w;
-  const v0 = -margin / h;
-  const v1 = 1 + margin / h;
-
-  const p0 = makeCompositionPoint(screen.finalRect.x - margin, screen.finalRect.y - margin);
-  const p1 = makeCompositionPoint(screen.finalRect.x + w + margin, screen.finalRect.y - margin);
-  const p2 = makeCompositionPoint(screen.finalRect.x + w + margin, screen.finalRect.y + h + margin);
-  const p3 = makeCompositionPoint(screen.finalRect.x - margin, screen.finalRect.y + h + margin);
-
-  const q0 = projectedScreenQuadProject(screen.projectedQuad, p0, screen.finalRect) ?? p0;
-  const q1 = projectedScreenQuadProject(screen.projectedQuad, p1, screen.finalRect) ?? p1;
-  const q2 = projectedScreenQuadProject(screen.projectedQuad, p2, screen.finalRect) ?? p2;
-  const q3 = projectedScreenQuadProject(screen.projectedQuad, p3, screen.finalRect) ?? p3;
-
-  const mapper = projectedScreenQuadProjector(screen.projectedQuad, screen.finalRect);
-  const px = mapper && Number.isFinite(mapper.perspectiveX) ? mapper.perspectiveX : 0;
-  const py = mapper && Number.isFinite(mapper.perspectiveY) ? mapper.perspectiveY : 0;
-
-  const w0 = Math.max(1 + px * u0 + py * v0, 1e-4);
-  const w1 = Math.max(1 + px * u1 + py * v0, 1e-4);
-  const w2 = Math.max(1 + px * u1 + py * v1, 1e-4);
-  const w3 = Math.max(1 + px * u0 + py * v1, 1e-4);
-
-  const toNdcX = (x: number): number => (x / safeWidth) * 2 - 1;
-  const toNdcY = (y: number): number => 1 - (y / safeHeight) * 2;
-
-  const c0: [number, number, number, number, number] = [toNdcX(q0.x), toNdcY(q0.y), w0, u0, v0];
-  const c1: [number, number, number, number, number] = [toNdcX(q1.x), toNdcY(q1.y), w1, u1, v0];
-  const c2: [number, number, number, number, number] = [toNdcX(q2.x), toNdcY(q2.y), w2, u1, v1];
-  const c3: [number, number, number, number, number] = [toNdcX(q3.x), toNdcY(q3.y), w3, u0, v1];
-
-  return new Float32Array([
-    ...c0,
-    ...c1,
-    ...c2,
-    ...c0,
-    ...c2,
-    ...c3,
-  ]);
-}
-
-export const SCREEN_VERTEX_SHADER = `#version 300 es
-layout(location = 0) in vec2 a_ndc;
-layout(location = 1) in float a_w;
-layout(location = 2) in vec2 a_uv;
-out vec2 v_uv;
-void main() {
-  gl_Position = vec4(a_ndc.x * a_w, a_ndc.y * a_w, 0.0, a_w);
-  v_uv = a_uv;
-}
-`;
+export {
+  SCREEN_VERTEX_SHADER,
+  buildProjectedQuadVertices,
+  buildShadowQuadVertices,
+  computeEffectiveScreenOpacity,
+  computeScreenShaderUniforms,
+};
+export type { ScreenShaderUniforms };
 
 export const SCREEN_FRAGMENT_SHADER = `#version 300 es
 precision highp float;
@@ -201,12 +41,33 @@ uniform vec2 u_screenSize;
 uniform float u_cornerRadius;
 uniform float u_borderWidth;
 uniform vec4 u_borderColor;
+uniform int u_blurMosaicCount;
+uniform vec4 u_blurMosaicRects[${MAX_BLUR_MOSAICS}];
+uniform vec4 u_blurMosaicParams[${MAX_BLUR_MOSAICS}];
 out vec4 fragColor;
 
 float sdRoundedBox(vec2 p, vec2 b, float r) {
   float clampedR = min(r, min(b.x, b.y));
   vec2 q = abs(p) - b + clampedR;
   return min(max(q.x, q.y), 0.0) + length(max(q, 0.0)) - clampedR;
+}
+
+vec3 samplePixelBlurMosaic(vec2 uv, vec4 rect, float intensity, vec2 sourceSize) {
+  float cellPx = mix(6.0, 28.0, clamp(intensity, 0.0, 1.0));
+  vec2 cellUV = max(vec2(cellPx) / max(sourceSize, vec2(1.0)), vec2(0.0005));
+  vec2 rMin = max(rect.xy, u_sourceCrop.xy);
+  vec2 rMax = min(rect.xy + rect.zw, u_sourceCrop.xy + u_sourceCrop.zw);
+  vec2 snapped = (floor(uv / cellUV) + 0.5) * cellUV;
+  vec2 spread = cellUV * (0.45 + 0.65 * intensity);
+
+  vec3 acc = vec3(0.0);
+  for (int dy = -1; dy <= 1; dy++) {
+    for (int dx = -1; dx <= 1; dx++) {
+      vec2 tap = clamp(snapped + vec2(float(dx), float(dy)) * spread, rMin, rMax);
+      acc += texture(u_screenTex, tap).rgb;
+    }
+  }
+  return acc / 9.0;
 }
 
 void main() {
@@ -220,6 +81,25 @@ void main() {
 
   vec2 croppedUV = u_sourceCrop.xy + clamp(v_uv, 0.0, 1.0) * u_sourceCrop.zw;
   vec3 texColor = texture(u_screenTex, croppedUV).rgb;
+
+  if (u_blurMosaicCount > 0) {
+    vec2 sourceSize = u_screenSize / max(u_sourceCrop.zw, vec2(0.001));
+    for (int i = 0; i < ${MAX_BLUR_MOSAICS}; i++) {
+      if (i >= u_blurMosaicCount) break;
+      vec4 r = u_blurMosaicRects[i];
+      vec4 param = u_blurMosaicParams[i];
+      vec2 center = r.xy + 0.5 * r.zw;
+      vec2 localP = (croppedUV - center) * sourceSize;
+      vec2 halfB = 0.5 * r.zw * sourceSize;
+      float radPx = param.x * min(r.z * sourceSize.x, r.w * sourceSize.y);
+      float mDist = sdRoundedBox(localP, halfB, radPx);
+      float mask = 1.0 - smoothstep(-0.75, 0.75, mDist);
+      if (mask > 0.001) {
+        vec3 mosaicCol = samplePixelBlurMosaic(croppedUV, r, param.y, sourceSize);
+        texColor = mix(texColor, mosaicCol, mask * param.z);
+      }
+    }
+  }
 
   vec3 outColor = texColor;
   if (u_borderWidth > 0.0 && u_borderColor.a > 0.0) {
@@ -272,6 +152,9 @@ export class ScreenPass {
   private readonly uCornerRadius: WebGLUniformLocation | null;
   private readonly uBorderWidth: WebGLUniformLocation | null;
   private readonly uBorderColor: WebGLUniformLocation | null;
+  private readonly uBlurMosaicCount: WebGLUniformLocation | null;
+  private readonly uBlurMosaicRects: WebGLUniformLocation | null;
+  private readonly uBlurMosaicParams: WebGLUniformLocation | null;
 
   private readonly uShadowScreenSize: WebGLUniformLocation | null;
   private readonly uShadowCornerRadius: WebGLUniformLocation | null;
@@ -289,6 +172,13 @@ export class ScreenPass {
     this.uCornerRadius = gl.getUniformLocation(this.screenProgram, 'u_cornerRadius');
     this.uBorderWidth = gl.getUniformLocation(this.screenProgram, 'u_borderWidth');
     this.uBorderColor = gl.getUniformLocation(this.screenProgram, 'u_borderColor');
+    this.uBlurMosaicCount = gl.getUniformLocation(this.screenProgram, 'u_blurMosaicCount');
+    this.uBlurMosaicRects =
+      gl.getUniformLocation(this.screenProgram, 'u_blurMosaicRects[0]') ??
+      gl.getUniformLocation(this.screenProgram, 'u_blurMosaicRects');
+    this.uBlurMosaicParams =
+      gl.getUniformLocation(this.screenProgram, 'u_blurMosaicParams[0]') ??
+      gl.getUniformLocation(this.screenProgram, 'u_blurMosaicParams');
 
     this.shadowProgram = createProgram(gl, SCREEN_VERTEX_SHADER, SHADOW_FRAGMENT_SHADER);
     this.uShadowScreenSize = gl.getUniformLocation(this.shadowProgram, 'u_screenSize');
@@ -360,6 +250,7 @@ export class ScreenPass {
       width,
       height
     );
+    const blurBatch = computeBlurMosaicUniforms(scene.screen);
 
     gl.useProgram(this.screenProgram);
     gl.bindVertexArray(this.vao);
@@ -387,6 +278,9 @@ export class ScreenPass {
       screenUniforms.borderColor[2],
       screenUniforms.borderColor[3]
     );
+    gl.uniform1i(this.uBlurMosaicCount, blurBatch.count);
+    gl.uniform4fv(this.uBlurMosaicRects, blurBatch.rectsFlat);
+    gl.uniform4fv(this.uBlurMosaicParams, blurBatch.paramsFlat);
 
     gl.drawArrays(gl.TRIANGLES, 0, 6);
   }

@@ -160,7 +160,7 @@
 ### Wave C：WebGL2 全通道视觉渲染补齐（P1-08, P2-10，零假开关前置条件）
 - [x] T14.1 模块化拆分 `web/passes/{background,screen,cursor}.ts`，按 `scene.layerOrder` 动态调度渲染。
 - [x] T14.2 摄像头画中画通道 `web/passes/camera.ts`（镜像/AspectFill/圆角圆形遮罩/阴影边框/缩放避让/出场）。
-- [ ] T14.3 马赛克像素化/模糊与聚光灯通道 `web/passes/spotlight.ts` 及对应屏幕遮罩。
+- [x] T14.3 马赛克像素化/模糊与聚光灯通道 `web/passes/spotlight.ts` 及对应屏幕遮罩。
 - [ ] T14.4 贴纸图层与防穿帮背景模糊接力通道 `web/passes/stickers.ts`。
 - [ ] T14.5 窗口/浏览器/手机平板设备外框 Chrome、聚焦外围虚化 FBO 与开场 3D 序列视觉校验。
 - [ ] T14.6 光标素材样式、速度倾斜、闲置渐隐与 4 种点击动效（ripple/ring/dot/combo）全量对齐。

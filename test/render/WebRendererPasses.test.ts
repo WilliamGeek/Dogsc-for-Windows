@@ -29,6 +29,13 @@ import {
   buildCameraQuadVertices,
   buildCameraShadowVertices,
 } from '../../web/passes/camera.ts';
+import {
+  MAX_BLUR_MOSAICS,
+  MAX_SPOTLIGHT_REGIONS,
+  computeBlurMosaicUniforms,
+  computeSpotlightPassUniforms,
+  evaluateSpotlightOutsideMask,
+} from '../../web/passes/spotlight.ts';
 import * as rendererExports from '../../web/renderer.ts';
 import {
   makeCompositionRect,
@@ -38,6 +45,7 @@ import {
 import {
   makeFrameScreenScene,
   makeFrameCameraScene,
+  makeFrameMosaicScene,
   makeFrameShadow,
 } from '../../src/core/FrameScene.ts';
 import { CameraContentFill } from '../../src/core/CameraContentFill.ts';
@@ -158,6 +166,9 @@ test('T14.1: web/renderer.ts preserves exact re-exports from modular passes', ()
   assert.equal(rendererExports.sampleCameraUV, sampleCameraUV);
   assert.equal(rendererExports.buildCameraQuadVertices, buildCameraQuadVertices);
   assert.equal(rendererExports.buildCameraShadowVertices, buildCameraShadowVertices);
+  assert.equal(rendererExports.computeBlurMosaicUniforms, computeBlurMosaicUniforms);
+  assert.equal(rendererExports.computeSpotlightPassUniforms, computeSpotlightPassUniforms);
+  assert.equal(rendererExports.evaluateSpotlightOutsideMask, evaluateSpotlightOutsideMask);
 });
 
 test('T14.2: computeCameraShaderUniforms enforces circle mask clamping, AspectFill uvRect, beauty, and suppression', () => {
@@ -261,4 +272,154 @@ test('T14.2: camera vertices expand shadow, handle zoom dodge scale, and integra
   assert.ok(shadowVerts !== null && shadowVerts.length === 24);
   assert.ok(shadowVerts[0] < quadVerts[0]);
   assert.ok(shadowVerts[1] > quadVerts[1]);
+});
+
+test('T14.3: computeBlurMosaicUniforms filters blur mosaics, ignores inactive items, and caps at MAX_BLUR_MOSAICS', () => {
+  const rect = makeCompositionRect(0, 0, 1920, 1080);
+  const quad = ScreenProjection.project(rect, 0, 0, 0, 1);
+
+  const mosaics = [
+    makeFrameMosaicScene({
+      sourceRect: { x: 0.1, y: 0.2, width: 0.3, height: 0.2 },
+      cornerRadius: 0.1,
+      style: 'blur',
+      intensity: 0.8,
+      transitionProgress: 0.5,
+    }),
+    makeFrameMosaicScene({
+      sourceRect: { x: 0.5, y: 0.5, width: 0.2, height: 0.2 },
+      cornerRadius: 0.2,
+      style: 'spotlight',
+      intensity: 0.9,
+      spotlightDimming: 0.4,
+      transitionProgress: 1.0,
+    }),
+    makeFrameMosaicScene({
+      sourceRect: { x: 0.2, y: 0.2, width: 0.1, height: 0.1 },
+      cornerRadius: 0.1,
+      style: 'blur',
+      intensity: 0.6,
+      transitionProgress: 0, // inactive
+    }),
+    makeFrameMosaicScene({
+      sourceRect: { x: 0.3, y: 0.3, width: 0.1, height: 0.1 },
+      cornerRadius: 0.1,
+      style: 'blur',
+      intensity: 0, // zero intensity
+      transitionProgress: 1.0,
+    }),
+  ];
+  for (let i = 0; i < 10; i++) {
+    mosaics.push(
+      makeFrameMosaicScene({
+        sourceRect: { x: 0.05 * (i % 4), y: 0.1, width: 0.2, height: 0.2 },
+        cornerRadius: 0.05,
+        style: 'blur',
+        intensity: 0.5,
+        transitionProgress: 1.0,
+      })
+    );
+  }
+
+  const screen = makeFrameScreenScene({
+    sourceCrop: makeNormalizedCrop(),
+    baseRect: rect,
+    finalRect: rect,
+    projectedQuad: quad,
+    cornerRadius: 0,
+    borderWidth: 0,
+    borderColor: makeHexColor(0xffffff),
+    borderOpacity: 0,
+    shadow: null,
+    mosaics,
+  });
+
+  const batch = computeBlurMosaicUniforms(screen);
+  assert.equal(batch.count, MAX_BLUR_MOSAICS);
+  assert.equal(batch.rectsFlat.length, MAX_BLUR_MOSAICS * 4);
+  assert.equal(batch.paramsFlat.length, MAX_BLUR_MOSAICS * 4);
+  assert.ok(Math.abs(batch.rectsFlat[0] - 0.1) < 1e-6);
+  assert.ok(Math.abs(batch.paramsFlat[0] - 0.1) < 1e-6);
+  assert.ok(Math.abs(batch.paramsFlat[1] - 0.8) < 1e-6);
+  assert.ok(Math.abs(batch.paramsFlat[2] - 0.5) < 1e-6);
+  assert.ok(Math.abs(batch.paramsFlat[3] - 0.4) < 1e-6);
+});
+
+test('T14.3: computeSpotlightPassUniforms and evaluateSpotlightOutsideMask merge multiple cutouts cleanly', () => {
+  const rect = makeCompositionRect(160, 90, 1600, 900);
+  const quad = ScreenProjection.project(rect, 0, 0, 0, 1);
+
+  const blurOnlyScreen = makeFrameScreenScene({
+    sourceCrop: makeNormalizedCrop(),
+    baseRect: rect,
+    finalRect: rect,
+    projectedQuad: quad,
+    cornerRadius: 24,
+    borderWidth: 0,
+    borderColor: makeHexColor(0xffffff),
+    borderOpacity: 0,
+    shadow: null,
+    mosaics: [
+      makeFrameMosaicScene({
+        sourceRect: { x: 0.2, y: 0.2, width: 0.2, height: 0.2 },
+        cornerRadius: 0.1,
+        style: 'blur',
+        intensity: 0.7,
+        transitionProgress: 1,
+      }),
+    ],
+  });
+  assert.equal(computeSpotlightPassUniforms(blurOnlyScreen, null), null);
+
+  const spotlightScreen = makeFrameScreenScene({
+    sourceCrop: makeNormalizedCrop(),
+    baseRect: rect,
+    finalRect: rect,
+    projectedQuad: quad,
+    cornerRadius: 24,
+    borderWidth: 0,
+    borderColor: makeHexColor(0xffffff),
+    borderOpacity: 0,
+    shadow: null,
+    mosaics: [
+      makeFrameMosaicScene({
+        sourceRect: { x: 0.1, y: 0.1, width: 0.2, height: 0.2 },
+        cornerRadius: 0.1,
+        style: 'spotlight',
+        intensity: 0.5,
+        spotlightDimming: 0.3,
+        transitionProgress: 0.5, // effective dimming = 0.15
+      }),
+      makeFrameMosaicScene({
+        sourceRect: { x: 0.65, y: 0.6, width: 0.25, height: 0.25 },
+        cornerRadius: 0.5, // circle/pill
+        style: 'spotlight',
+        intensity: 0.5,
+        spotlightDimming: 0.5,
+        transitionProgress: 1.0, // effective dimming = 0.5 -> wins max
+      }),
+    ],
+  });
+
+  // Sticker suppression hides spotlight completely
+  assert.equal(
+    computeSpotlightPassUniforms(
+      spotlightScreen,
+      makeFrameStickerBackdropScene({ screenSuppression: 1.0 })
+    ),
+    null
+  );
+
+  const u = computeSpotlightPassUniforms(spotlightScreen, null);
+  assert.ok(u !== null);
+  assert.equal(u.count, 2);
+  assert.ok(u.count <= MAX_SPOTLIGHT_REGIONS);
+  assert.ok(Math.abs(u.dimmingAlpha - 0.5) < 1e-6);
+
+  // Union of two non-overlapping spotlights keeps both centers bright (outsideMask == 0)
+  // while pixels outside both regions are dimmed (outsideMask == 1).
+  assert.equal(evaluateSpotlightOutsideMask(0.2, 0.2, u.screenSize, u.regions), 0);
+  assert.equal(evaluateSpotlightOutsideMask(0.775, 0.725, u.screenSize, u.regions), 0);
+  assert.equal(evaluateSpotlightOutsideMask(0.5, 0.5, u.screenSize, u.regions), 1);
+  assert.equal(evaluateSpotlightOutsideMask(0.01, 0.01, u.screenSize, u.regions), 1);
 });

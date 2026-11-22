@@ -48,6 +48,16 @@ import {
   type CameraShaderUniforms,
 } from './passes/camera.ts';
 import {
+  SpotlightPass,
+  computeBlurMosaicUniforms,
+  computeSpotlightPassUniforms,
+  evaluateSpotlightOutsideMask,
+  type BlurMosaicUniform,
+  type BlurMosaicUniformBatch,
+  type SpotlightRegionUniform,
+  type SpotlightPassUniforms,
+} from './passes/spotlight.ts';
+import {
   createTexture2D,
   resolveLayerRenderOrder,
   dispatchSceneLayers,
@@ -65,6 +75,9 @@ export {
   sampleCameraUV,
   buildCameraQuadVertices,
   buildCameraShadowVertices,
+  computeBlurMosaicUniforms,
+  computeSpotlightPassUniforms,
+  evaluateSpotlightOutsideMask,
   resolveLayerRenderOrder,
   dispatchSceneLayers,
 };
@@ -73,6 +86,10 @@ export type {
   ScreenShaderUniforms,
   CursorClickEffectPass,
   CameraShaderUniforms,
+  BlurMosaicUniform,
+  BlurMosaicUniformBatch,
+  SpotlightRegionUniform,
+  SpotlightPassUniforms,
 };
 
 export interface RendererPlanContext {
@@ -391,6 +408,7 @@ async function bootstrapBrowser(): Promise<void> {
 
   const bgPass = new BackgroundPass(gl);
   const screenPass = new ScreenPass(gl);
+  const spotlightPass = new SpotlightPass(gl);
   const cursorPass = new CursorPass(gl);
   const cameraPass = new CameraPass(gl);
   const screenTex = createTexture2D(gl, true);
@@ -456,6 +474,7 @@ async function bootstrapBrowser(): Promise<void> {
       background: () => bgPass.render(scene, ctx.width, ctx.height),
       screen: () => screenPass.render(scene, screenTex, ctx.width, ctx.height),
       cursor: () => cursorPass.render(scene, ctx.width, ctx.height),
+      spotlight: () => spotlightPass.render(scene, ctx.width, ctx.height),
       camera: () => cameraPass.render(scene, cameraTex, ctx.width, ctx.height),
     });
 
