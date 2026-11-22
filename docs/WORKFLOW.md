@@ -1,6 +1,6 @@
 # DogSC Windows · 项目级全栈架构与开发进度看板
 
-> **拓扑概览**：高亮绿流 = Wave A 已落地与自动门禁闭环模块 | 虚化节点 (opacity 0.65) = 待开发 Wave B-F 与 T11.7 人工终审 | **渲染模式**：`instance` | **规模**：24 节点 · 35 路径
+> **拓扑概览**：高亮绿流 = Wave A + Wave B (v0.2.0 53模块) 已落地模块 | 虚化节点 (opacity 0.65) = 待开发 Wave C-F 与 T11.7 人工终审 | **渲染模式**：`instance` | **规模**：24 节点 · 35 路径
 
 ## 一、 全景拓扑图 (Mermaid 同步版)
 
@@ -15,7 +15,7 @@ flowchart LR
   classDef block fill:#450a0a,stroke:#ef4444,stroke-width:2px,color:#fca5a5;
 
   subgraph S0 ["阶段 0-2: 多源采集与时钟对齐"]
-    Start["录制与重构总入口 (CLI) (✓ v0.3.1 / 247单测)"]:::endpoint
+    Start["录制与重构总入口 (CLI) (✓ 53模块 / 298单测)"]:::endpoint
     C_MultiSrc["窗口/区域/摄像头采集 (○ 未开发 Wave D)"]:::action
     C_Audio["系统音频与麦克风采集 (○ 未开发 Wave D)"]:::action
     C_Screen["整屏 GPU 采集 (ddagrab) (✓ draw_mouse=0)"]:::action
@@ -26,7 +26,7 @@ flowchart LR
     F_X264["软件编码兜底 (libx264) (✓ 自动回退)"]:::fallback
   end
   subgraph S1 ["阶段 1 / Wave B: 核心算法与上游对齐"]
-    M_CoreV20["上游 v0.2.0 核心对齐 (○ 未开发 Wave B)"]:::action
+    M_CoreV20["上游 v0.2.0 核心对齐 (✓ 53模块 v28)"]:::action
     M_CoreV18["RecorderCore 核心算法 (✓ 44模块 v27)"]:::action
     A_Frames["源视频预解码帧序列 (✓ %06d.jpg)"]:::artifact
     M_FramePlan["输出帧调度与有效时长夹取 (✓ 零尾帧复帧)"]:::action
@@ -40,10 +40,10 @@ flowchart LR
   end
   subgraph S3 ["Wave E-F: 质检门禁、编辑器与交付"]
     M_EditorUI["交互式编辑器与录制岛 (○ 未开发 Wave E)"]:::action
-    G_Verify["自动质检与真同步门禁 (✓ G1+G2)"]:::gate
+    G_Verify["自动质检与真同步门禁 (✓ G1+G2+G3)"]:::gate
     M_ShellPkg["Windows 桌面外壳与打包 (○ 未开发 Wave F)"]:::action
     H_Review["人工与浏览器视觉终审 (⏳ 待复核 T11.7)"]:::human
-    Deliver["最终交付产物 (✓ Wave A 原型)"]:::endpoint
+    Deliver["最终交付产物 (✓ Wave A+B 就绪)"]:::endpoint
     X_Term["统一异常收口终端 (✓ 异常收口)"]:::block
   end
 
@@ -88,7 +88,7 @@ flowchart LR
 
 | 节点 ID | 类型 | 阶段 | 名称 | 核心规则 / 代码锚点 / 状态 |
 | :--- | :--- | :--- | :--- | :--- |
-| `Start` | `endpoint` | 阶段 0-2: 多源采集与时钟对齐 | 录制与重构总入口 (CLI) | **[✓ v0.3.1 / 247单测]** scripts/record.ts |
+| `Start` | `endpoint` | 阶段 0-2: 多源采集与时钟对齐 | 录制与重构总入口 (CLI) | **[✓ 53模块 / 298单测]** scripts/record.ts |
 | `C_MultiSrc` | `action` | 阶段 0-2: 多源采集与时钟对齐 | 窗口/区域/摄像头采集 | src/capture/ScreenRecorder.ts |
 | `C_Audio` | `action` | 阶段 0-2: 多源采集与时钟对齐 | 系统音频与麦克风采集 | system-audio.wav 与 mic-audio.wav 零依赖采集与时钟对齐待 Wave D 实现 |
 | `C_Screen` | `action` | 阶段 0-2: 多源采集与时钟对齐 | 整屏 GPU 采集 (ddagrab) | **[✓ draw_mouse=0]** src/capture/ScreenRecorder.ts:79 |
@@ -97,7 +97,7 @@ flowchart LR
 | `A_Session` | `artifact` | 阶段 0-2: 多源采集与时钟对齐 | 会话录制四件套产物 | **[✓ 四件套]** src/capture/RecordingSession.ts |
 | `G_MediaProbe` | `gate` | 阶段 0-2: 多源采集与时钟对齐 | 媒体探针与首帧时钟门禁 | **[✓ 0.000s]** src/capture/MediaProbe.ts |
 | `F_X264` | `fallback` | 阶段 0-2: 多源采集与时钟对齐 | 软件编码兜底 (libx264) | **[✓ 自动回退]** src/capture/ScreenRecorder.ts:146 |
-| `M_CoreV20` | `action` | 阶段 1 / Wave B: 核心算法与上游对齐 | 上游 v0.2.0 核心对齐 | 补齐 CameraBeauty / RecordingSource / ScreenCardAppearance 等 9 个模块并升级 Schema 28 |
+| `M_CoreV20` | `action` | 阶段 1 / Wave B: 核心算法与上游对齐 | 上游 v0.2.0 核心对齐 | **[✓ 53模块 v28]** docs/V020_DIFF_MAP.md |
 | `M_CoreV18` | `action` | 阶段 1 / Wave B: 核心算法与上游对齐 | RecorderCore 核心算法 | **[✓ 44模块 v27]** src/core/FrameScene.ts |
 | `A_Frames` | `artifact` | 阶段 1 / Wave B: 核心算法与上游对齐 | 源视频预解码帧序列 | **[✓ %06d.jpg]** src/capture/FrameExtractor.ts |
 | `M_FramePlan` | `action` | 阶段 1 / Wave B: 核心算法与上游对齐 | 输出帧调度与有效时长夹取 | **[✓ 零尾帧复帧]** src/render/FramePlan.ts |
@@ -107,8 +107,8 @@ flowchart LR
 | `M_AudioMux` | `action` | 阶段 3 / Wave C-D: WebGL2 渲染与导出 | 多音轨混音与多规格导出 | 支持系统声+麦克风多轨延迟对齐混音及 1080p/1440p/4K/M4A 规格切换 |
 | `X_ExpFail` | `block` | 阶段 3 / Wave C-D: WebGL2 渲染与导出 | 导出看门狗阻断 | **[✓ 30s/409 熔断]** src/server/ExportServer.ts:265 |
 | `M_EditorUI` | `action` | Wave E-F: 质检门禁、编辑器与交付 | 交互式编辑器与录制岛 | 支持时间线拆分/裁切/变速/缩放拖拽与原子保存 project.json，严格零假开关 |
-| `G_Verify` | `gate` | Wave E-F: 质检门禁、编辑器与交付 | 自动质检与真同步门禁 | **[✓ G1+G2]** scripts/verify-export.ts |
+| `G_Verify` | `gate` | Wave E-F: 质检门禁、编辑器与交付 | 自动质检与真同步门禁 | **[✓ G1+G2+G3]** scripts/verify-export.ts |
 | `M_ShellPkg` | `action` | Wave E-F: 质检门禁、编辑器与交付 | Windows 桌面外壳与打包 | 需用户拍板打包选型 D2 并完成 Win10/11 硬件设备矩阵实测 |
-| `H_Review` | `human` | Wave E-F: 质检门禁、编辑器与交付 | 人工与浏览器视觉终审 | 当前等待修复首帧 406ms 残差并由用户/视觉终审后勾选 T11.7 |
-| `Deliver` | `endpoint` | Wave E-F: 质检门禁、编辑器与交付 | 最终交付产物 | **[✓ Wave A 原型]** Wave A export.mp4 实机成片 → v1.0.0-windows |
+| `H_Review` | `human` | Wave E-F: 质检门禁、编辑器与交付 | 人工与浏览器视觉终审 | T12.9 showinfo 时钟修复已落地，待用户/视觉终审成片后勾选 T11.7 |
+| `Deliver` | `endpoint` | Wave E-F: 质检门禁、编辑器与交付 | 最终交付产物 | **[✓ Wave A+B 就绪]** Wave A+B 引擎与53模块对齐 → v1.0.0-windows |
 | `X_Term` | `block` | Wave E-F: 质检门禁、编辑器与交付 | 统一异常收口终端 | **[✓ 异常收口]** scripts/export.ts:186 |

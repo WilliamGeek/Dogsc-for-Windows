@@ -1,10 +1,10 @@
 {
   "title": "DogSC Windows · 项目级全栈架构与开发进度看板",
-  "subtitle": "高亮绿流 = Wave A 已落地与自动门禁闭环模块 | 虚化节点 (opacity 0.65) = 待开发 Wave B-F 与 T11.7 人工终审",
+  "subtitle": "高亮绿流 = Wave A + Wave B (v0.2.0 53模块) 已落地模块 | 虚化节点 (opacity 0.65) = 待开发 Wave C-F 与 T11.7 人工终审",
   "mode": "instance",
   "run_meta": {
     "run_id": "dogsc-win-v0.3.1",
-    "duration": "Wave A 已闭环 / Wave B-F 待开发",
+    "duration": "Wave A+B 已完成 / Wave C-F 待开发",
     "status": "in_progress"
   },
   "spine_y": 500,
@@ -21,12 +21,12 @@
       "type": "endpoint",
       "badge_id": "START",
       "label": "录制与重构总入口 (CLI)",
-      "subtitle": "record.ts / export.ts / 247单测基线",
+      "subtitle": "record.ts / export.ts / 298通过 (303单测)",
       "stage": "阶段 0-2: 多源采集与时钟对齐",
       "col": 0,
       "y": 500,
       "executed": true,
-      "execution_badge": "✓ v0.3.1 / 247单测",
+      "execution_badge": "✓ 53模块 / 298单测",
       "details": {
         "inputs": "CLI 参数 (--seconds / --fps / --display) 或 recordings/<id>",
         "outputs": "四件套会话产物与 MP4 成片",
@@ -101,7 +101,7 @@
     {
       "id": "X_CapFail",
       "type": "block",
-      "badge_id": "BLOCK · T12.2",
+      "badge_id": "BLOCK · T12.2/10",
       "label": "采集异常熔断与原子清理",
       "subtitle": "无效显示器 / ffmpeg 非0退出删脏目录",
       "stage": "阶段 0-2: 多源采集与时钟对齐",
@@ -110,7 +110,7 @@
       "executed": true,
       "execution_badge": "✓ exit=1 清理",
       "details": {
-        "gate_rule": "--display 9 等失败直接 reject 并 rmSync 清理半成品目录",
+        "gate_rule": "--display 9 等失败直接 reject 并安全异步清理半成品目录 (T12.10 防误删)",
         "code_anchor": "src/capture/RecordingSession.ts:371"
       }
     },
@@ -133,16 +133,16 @@
     {
       "id": "G_MediaProbe",
       "type": "gate",
-      "badge_id": "GATE · T12.1/7",
+      "badge_id": "GATE · T12.1/7/9",
       "label": "媒体探针与首帧时钟门禁",
-      "subtitle": "MediaProbe ffprobe 真实时长 + showinfo 首帧修复中",
+      "subtitle": "MediaProbe ffprobe + showinfo 首帧精确时钟",
       "stage": "阶段 0-2: 多源采集与时钟对齐",
       "col": 2,
       "y": 500,
       "executed": true,
       "execution_badge": "✓ 0.000s",
       "details": {
-        "gate_rule": "ffprobe 替代墙钟时长 (0.000s 误差)；T12.9 将用 showinfo 修复首帧 406ms 残差",
+        "gate_rule": "ffprobe 替代墙钟时长 (0.000s) + showinfo 实测首帧 pts 修复 406ms 残差 (T12.9 已落地)",
         "code_anchor": "src/capture/MediaProbe.ts"
       }
     },
@@ -171,10 +171,12 @@
       "stage": "阶段 1 / Wave B: 核心算法与上游对齐",
       "col": 3,
       "y": 350,
-      "executed": false,
-      "execution_badge": "○ 未开发 Wave B",
+      "executed": true,
+      "execution_badge": "✓ 53模块 v28",
       "details": {
-        "gate_rule": "补齐 CameraBeauty / RecordingSource / ScreenCardAppearance 等 9 个模块并升级 Schema 28"
+        "inputs": "v27/v28 RecorderProject + 多源时间线/后期轨/美颜配置",
+        "outputs": "53/53 上游 v0.2.0 核心算法对齐 + SchemaInterop 黄金夹具",
+        "code_anchor": "docs/V020_DIFF_MAP.md"
       }
     },
     {
@@ -324,16 +326,16 @@
     {
       "id": "G_Verify",
       "type": "gate",
-      "badge_id": "GATE · G1+G2",
+      "badge_id": "GATE · G1-G3",
       "label": "自动质检与真同步门禁",
-      "subtitle": "verify-export.ts 时长/帧数/闪帧对齐 + 247单测",
+      "subtitle": "verify-export --sync + SchemaInterop G3 + 298单测",
       "stage": "Wave E-F: 质检门禁、编辑器与交付",
       "col": 7,
       "y": 500,
       "executed": true,
-      "execution_badge": "✓ G1+G2",
+      "execution_badge": "✓ G1+G2+G3",
       "details": {
-        "gate_rule": "T12.9 将把 verify-export --sync 升级为校验 pointer 点击 vs 源视频绿帧 onset ≤ 1-2 帧",
+        "gate_rule": "G1/G2 导出与 showinfo 真同步校验 + G3 v27/v28 双向无损互操作全部自动验证",
         "code_anchor": "scripts/verify-export.ts"
       }
     },
@@ -364,7 +366,7 @@
       "executed": false,
       "execution_badge": "⏳ 待复核 T11.7",
       "details": {
-        "gate_rule": "当前等待修复首帧 406ms 残差并由用户/视觉终审后勾选 T11.7"
+        "gate_rule": "T12.9 showinfo 时钟修复已落地，待用户/视觉终审成片后勾选 T11.7"
       }
     },
     {
@@ -372,14 +374,14 @@
       "type": "endpoint",
       "badge_id": "DELIVER",
       "label": "最终交付产物",
-      "subtitle": "Wave A export.mp4 实机成片 → v1.0.0-windows",
+      "subtitle": "Wave A+B 引擎与53模块对齐 → v1.0.0-windows",
       "stage": "Wave E-F: 质检门禁、编辑器与交付",
       "col": 9,
       "y": 500,
       "executed": true,
-      "execution_badge": "✓ Wave A 原型",
+      "execution_badge": "✓ Wave A+B 就绪",
       "details": {
-        "outputs": "当前交付真实可信 CLI 录屏导出引擎；Wave B-F 完成后交付桌面完整版"
+        "outputs": "已落地真实录屏导出 + 上游 v0.2.0 53/53 核心算法对齐；Wave C-F 完成后交付桌面完整版"
       }
     },
     {
@@ -413,10 +415,10 @@
     { "id": "e_capfail_term", "source": "X_CapFail", "target": "X_Term", "label": "exit=1 删脏目录", "className": "edge-block", "executed": false, "route": { "busY": 1005 } },
     { "id": "e_probe_v18", "source": "G_MediaProbe", "target": "M_CoreV18", "label": "ffprobe真实时长", "className": "edge-main", "executed": true },
     { "id": "e_x264_v18", "source": "F_X264", "target": "M_CoreV18", "label": "软件H.264兜底流", "className": "edge-fallback", "executed": true },
-    { "id": "e_probe_v20", "source": "G_MediaProbe", "target": "M_CoreV20", "label": "Schema v28", "className": "edge-main", "executed": false },
+    { "id": "e_probe_v20", "source": "G_MediaProbe", "target": "M_CoreV20", "label": "Schema v28", "className": "edge-main", "executed": true },
     { "id": "e_session_frames", "source": "A_Session", "target": "A_Frames", "label": "ffmpeg预解码", "className": "edge-artifact", "executed": true, "route": { "busY": 120 } },
     { "id": "e_v18_plan", "source": "M_CoreV18", "target": "M_FramePlan", "label": "FrameScene求值", "className": "edge-main", "executed": true },
-    { "id": "e_v20_plan", "source": "M_CoreV20", "target": "M_FramePlan", "label": "53模块/多源映射", "className": "edge-main", "executed": false },
+    { "id": "e_v20_plan", "source": "M_CoreV20", "target": "M_FramePlan", "label": "53模块/多源映射", "className": "edge-main", "executed": true },
     { "id": "e_frames_glbase", "source": "A_Frames", "target": "M_WebGLBase", "className": "edge-artifact", "executed": true },
     { "id": "e_plan_glbase", "source": "M_FramePlan", "target": "M_WebGLBase", "label": "逐帧场景", "className": "edge-main", "executed": true },
     { "id": "e_plan_glfull", "source": "M_FramePlan", "target": "M_WebGLFull", "label": "全通道场景", "className": "edge-main", "executed": false },
