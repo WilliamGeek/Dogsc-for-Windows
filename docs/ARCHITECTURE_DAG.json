@@ -1,10 +1,10 @@
 {
   "title": "DogSC Windows · 项目级全栈架构与开发进度看板",
-  "subtitle": "高亮绿流 = Wave A + Wave B (v0.2.0 53模块) 已落地模块 | 虚化节点 (opacity 0.65) = 待开发 Wave C-F 与 T11.7 人工终审",
+  "subtitle": "高亮绿流 = Wave A + Wave B (53模块) + Wave C (WebGL2全通道) 已落地 | 虚化节点 (opacity 0.65) = 待开发 Wave D-F 与 T11.7 人工终审",
   "mode": "instance",
   "run_meta": {
     "run_id": "dogsc-win-v0.3.1",
-    "duration": "Wave A+B 已完成 / Wave C-F 待开发",
+    "duration": "Wave A-C 已完成 / Wave D-F 待开发",
     "status": "in_progress"
   },
   "spine_y": 500,
@@ -21,12 +21,12 @@
       "type": "endpoint",
       "badge_id": "START",
       "label": "录制与重构总入口 (CLI)",
-      "subtitle": "record.ts / export.ts / 298通过 (303单测)",
+      "subtitle": "record.ts / export.ts / 312通过 (317单测)",
       "stage": "阶段 0-2: 多源采集与时钟对齐",
       "col": 0,
       "y": 500,
       "executed": true,
-      "execution_badge": "✓ 53模块 / 298单测",
+      "execution_badge": "✓ 53模块 / 312单测",
       "details": {
         "inputs": "CLI 参数 (--seconds / --fps / --display) 或 recordings/<id>",
         "outputs": "四件套会话产物与 MP4 成片",
@@ -238,10 +238,12 @@
       "stage": "阶段 3 / Wave C-D: WebGL2 渲染与导出",
       "col": 5,
       "y": 350,
-      "executed": false,
-      "execution_badge": "○ 未开发 Wave C",
+      "executed": true,
+      "execution_badge": "✓ 全通道 Pass",
       "details": {
-        "gate_rule": "模块化 web/passes/* 消费 FrameScene 全量通道，未实现前 UI 严禁暴露假开关"
+        "inputs": "FrameScene 全通道 (background/screen/chrome/focus/spotlight/camera/stickers/cursor)",
+        "outputs": "web/passes/{glUtils,background,screen,chrome,focus,spotlight,camera,stickers,cursor}.ts 动态 layerOrder 调度",
+        "code_anchor": "web/renderer.ts"
       }
     },
     {
@@ -328,7 +330,7 @@
       "type": "gate",
       "badge_id": "GATE · G1-G3",
       "label": "自动质检与真同步门禁",
-      "subtitle": "verify-export --sync + SchemaInterop G3 + 298单测",
+      "subtitle": "verify-export --sync + SchemaInterop G3 + 312单测",
       "stage": "Wave E-F: 质检门禁、编辑器与交付",
       "col": 7,
       "y": 500,
@@ -374,14 +376,14 @@
       "type": "endpoint",
       "badge_id": "DELIVER",
       "label": "最终交付产物",
-      "subtitle": "Wave A+B 引擎与53模块对齐 → v1.0.0-windows",
+      "subtitle": "Wave A-C 全通道渲染引擎就绪 → v1.0.0-windows",
       "stage": "Wave E-F: 质检门禁、编辑器与交付",
       "col": 9,
       "y": 500,
       "executed": true,
-      "execution_badge": "✓ Wave A+B 就绪",
+      "execution_badge": "✓ Wave A-C 就绪",
       "details": {
-        "outputs": "已落地真实录屏导出 + 上游 v0.2.0 53/53 核心算法对齐；Wave C-F 完成后交付桌面完整版"
+        "outputs": "已完成录屏导出 + v0.2.0 53模块 + WebGL2 全通道 Pass；Wave D-F 完成后交付桌面完整版"
       }
     },
     {
@@ -421,16 +423,16 @@
     { "id": "e_v20_plan", "source": "M_CoreV20", "target": "M_FramePlan", "label": "53模块/多源映射", "className": "edge-main", "executed": true },
     { "id": "e_frames_glbase", "source": "A_Frames", "target": "M_WebGLBase", "className": "edge-artifact", "executed": true },
     { "id": "e_plan_glbase", "source": "M_FramePlan", "target": "M_WebGLBase", "label": "逐帧场景", "className": "edge-main", "executed": true },
-    { "id": "e_plan_glfull", "source": "M_FramePlan", "target": "M_WebGLFull", "label": "全通道场景", "className": "edge-main", "executed": false },
+    { "id": "e_plan_glfull", "source": "M_FramePlan", "target": "M_WebGLFull", "label": "全通道场景", "className": "edge-main", "executed": true },
     { "id": "e_glbase_expsrv", "source": "M_WebGLBase", "target": "M_ExportSrv", "label": "gl.readPixels RGBA", "className": "edge-main", "executed": true },
-    { "id": "e_glfull_expsrv", "source": "M_WebGLFull", "target": "M_ExportSrv", "label": "多通道RGBA", "className": "edge-main", "executed": false },
+    { "id": "e_glfull_expsrv", "source": "M_WebGLFull", "target": "M_ExportSrv", "label": "多通道RGBA", "className": "edge-main", "executed": true },
     { "id": "e_audio_mux", "source": "C_Audio", "target": "M_AudioMux", "label": "混音与时钟延迟对齐", "className": "edge-artifact", "executed": false, "route": { "busY": 765 } },
     { "id": "e_expsrv_expfail", "source": "M_ExportSrv", "target": "X_ExpFail", "label": "30s超时/少帧409", "className": "edge-block", "executed": false, "route": { "busY": 795 } },
     { "id": "e_expfail_term", "source": "X_ExpFail", "target": "X_Term", "label": "kill进程树+删残片", "className": "edge-block", "executed": false, "route": { "busY": 1035 } },
     { "id": "e_expsrv_verify", "source": "M_ExportSrv", "target": "G_Verify", "label": "export.mp4", "className": "edge-main", "executed": true },
     { "id": "e_mux_verify", "source": "M_AudioMux", "target": "G_Verify", "label": "多规格MP4/M4A", "className": "edge-main", "executed": false },
     { "id": "e_expsrv_editor", "source": "M_ExportSrv", "target": "M_EditorUI", "label": "StudioServer对接", "className": "edge-main", "executed": false },
-    { "id": "e_verify_review", "source": "G_Verify", "target": "H_Review", "label": "G1+G2通过→待肉眼", "className": "edge-main", "executed": false },
+    { "id": "e_verify_review", "source": "G_Verify", "target": "H_Review", "label": "G1-G3通过→待肉眼", "className": "edge-main", "executed": false },
     { "id": "e_verify_deliver", "source": "G_Verify", "target": "Deliver", "label": "Wave A 自动闭环成片", "className": "edge-main", "executed": true, "route": { "busY": 620 } },
     { "id": "e_editor_pkg", "source": "M_EditorUI", "target": "M_ShellPkg", "label": "GUI工作台就绪", "className": "edge-main", "executed": false },
     { "id": "e_editor_review", "source": "M_EditorUI", "target": "H_Review", "className": "edge-main", "executed": false },

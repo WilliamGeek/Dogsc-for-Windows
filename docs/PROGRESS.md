@@ -98,8 +98,9 @@
 2026-11-23 04:10 | T14.4 | DONE | 新增 web/passes/stickers.ts（StickerPass + BackdropBlurRelay + computeStickerRenderPlan + buildRotatedQuadVertices），实现 9-tap 可分离高斯模糊 FBO 两段接力（beforeCamera / beforeStickers 防转场背景透穿帮）、layerIndex 排序与贴纸旋转/圆角/边框/软阴影渲染；接入 renderer.ts 并新增 1 项单测 | 308 pass / 313 total (0 fail, 5 skip E2E)
 2026-11-23 04:18 | T14.5 | DONE | 新增 web/passes/chrome.ts（ChromePass + computeChromePassGeometry 覆盖窗口/浏览器/手机竖横屏/平板竖横屏 6 类 3D 透视外框及内嵌 contentVertices 与红黄绿灯/地址栏/灵动岛细节，同步修正 Screen/Spotlight/Cursor 对外框投影基准的适配）与 web/passes/focus.ts（FocusPass FBO 模糊与径向/旋转线性聚焦圈外部暗化混合），完成轻3D/聚拢/侧滑开场序列几何与零 NaN 单测校验（新增 3 项单测） | 311 pass / 316 total (0 fail, 5 skip E2E)
 2026-11-23 04:21 | T14.6 | DONE | 全量升级 web/passes/cursor.ts（resolveCursorShape / computeCursorRenderParams / buildCursorShapeTriangles / computeClickShaderUniforms），补齐 arrow/pointingHand/crosshair 光标形态、velocity 倾斜角 rotationRadians、pressScale 按压缩放、闲置/hidden 隐藏与 ripple/glow/pulse/burst 四种点击特效 GLSL 渲染（含 glow 光晕与 8 方位 burst 散射粒）；收官 Wave C 全通道扩展渲染并新增 1 项单测 | 312 pass / 317 total (0 fail, 5 skip E2E)
+2026-11-23 04:24 | ARCH-DAG-WaveC | DONE | 刷新 docs/ARCHITECTURE_DAG.json 并通过 cli.py validate --strict 与 render --strict（24 节点 / 35 路径 / 0 警告）重建 docs/WORKFLOW.html（488.6 KB）与 docs/WORKFLOW.md；点亮 M_WebGLFull（✓ 全通道 Pass）、e_plan_glfull、e_glfull_expsrv，同步 Start/G_Verify 312 通过单测计数与 e_verify_review 文案，保持 Wave D-F 与 T11.7 虚化（opacity 0.65） | cli.py --strict 0 warnings
 
-下一个任务：ARCH-DAG-WaveC（刷新架构看板同步 Wave C 全通道渲染收官）
+下一个任务：T15.1（Wave D Windows 全源采集与区域/窗口录制）
 
 
 
