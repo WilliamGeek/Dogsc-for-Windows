@@ -101,8 +101,9 @@
 2026-11-23 04:24 | ARCH-DAG-WaveC | DONE | 刷新 docs/ARCHITECTURE_DAG.json 并通过 cli.py validate --strict 与 render --strict（24 节点 / 35 路径 / 0 警告）重建 docs/WORKFLOW.html（488.6 KB）与 docs/WORKFLOW.md；点亮 M_WebGLFull（✓ 全通道 Pass）、e_plan_glfull、e_glfull_expsrv，同步 Start/G_Verify 312 通过单测计数与 e_verify_review 文案，保持 Wave D-F 与 T11.7 虚化（opacity 0.65） | cli.py --strict 0 warnings
 2026-11-23 04:58 | T15.1 | DONE | 新增 src/capture/WindowEnumeration.ts（Per-Monitor V2 DPI 窗口枚举与 BOM/最小化过滤解析），扩展 ScreenRecorder.ts（alignEvenRegion + ddagrab 偶对齐区域与 gdigrab -draw_mouse 0 单窗口采集参数）及 RecordingSession.ts（多屏物理区域/窗口坐标映射与 CaptureSource 联动），新增 4 项单测；同步完成 Chromium 实时 WebGL2 全通道着色器/画布与刷新后 WORKFLOW.html 双重视觉验收 PASS | 316 pass / 321 total (0 fail, 5 skip E2E)
 2026-11-23 05:01 | T15.2 | DONE | 新增 tools/wasapi-loopback.ps1（纯内联 C# COM Interop 零第三方依赖 WASAPI 回环 WAV 录制与 RIFF/data 块头闭合）与 src/capture/SystemAudioRecorder.ts（buildWasapiCommand 无 Bypass / parseWasapiHeaderLine / computeAudioOffsetSeconds / startSystemAudioRecording），已实测 Add-Type C# 在 Win PowerShell 5.1 下编译通过（WASAPI_CS_COMPILED=True）并新增 4 项单测 | 320 pass / 325 total (0 fail, 5 skip E2E)
+2026-11-23 05:05 | T15.3 | DONE | 新增 src/capture/MediaDevices.ts（兼容 FFmpeg 8.x [in#0] 与传统 [dshow] 节的 DirectShow 设备枚举解析，实机检出 1 摄像头与 9 麦克风含中文设备名）与 src/capture/MicRecorder.ts（buildMicFfmpegArgs / -progress pipe:1 首样本时钟对齐 / startMicRecording 启停与故障拒收），新增 3 项单测 | 323 pass / 328 total (0 fail, 5 skip E2E)
 
-下一个任务：T15.3（DirectShow 音视频设备枚举 MediaDevices 与麦克风录制 MicRecorder）
+下一个任务：T15.4（DirectShow 摄像头同步录制 CameraRecorder + camera_frames 预解码）
 
 
 
