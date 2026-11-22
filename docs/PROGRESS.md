@@ -87,7 +87,9 @@
 2026-11-23 02:30 | T13.5a | DONE | 同步 Schema v28 持久化模型（ProjectSchema v28、CursorStyle.pressesOnClick、ScreenFrameDefaults、RecordingMarker.sourceID、ExportSettings videoCodec/quality/4096 限幅、OverlayTimeline MotionElementEdit/AnimationClip、ProjectTimeline InsertedMedia/多源片段/图层组织、ProjectMediaModel v27->v28 自动冻结旧外观与 _unknownFields 无损保留、ExportPolicy 多源介质/码率阶梯与 CaptureEncodingPolicy、ProjectValidator 悬空源校验），消除 RecorderProject 扩展环依赖 | 271 pass (5 skip E2E)
 2026-11-23 02:33 | T13.6 | DONE | 构建上游 v27 单源与 v28 全量多源黄金夹具 (test/fixtures/schema/) 与门禁 G3 SchemaInterop 测试（验证 v27->v28 迁移、v27<28 旧外观冻结幂等性、未知字段无损保留、v28 多源双向编码幂等与 v22/v29/悬空源拒收） | 275 pass (5 skip E2E)
 2026-11-23 02:54 | T13.5b-1 | DONE | 同步 TimelineMap（多源 duration map / 重复源片段 / sourceID / sceneStyle / crop）、TimelineMediaPlan（Slice sourceID/media 与多源媒体映射）、ProjectTimelineRetime（多源片段保持与全轨重定时+修复马赛克timing映射）、ProjectTimelineEditingTransforms（动画轨/跨源场景错误/sticker sourceStart/全轨 ripple 与 remap/timelineInsertionTime/timelineSplitEdits）与 ProjectTimelineEditing（insertMediaSegment/insertPrimarySegments/movePrimarySegments/多源merge检查），新增 5 项单测且 zero node:* 校验通过 | 280 pass (5 skip E2E)
+2026-11-23 02:59 | T13.3 | DONE | 移植 RecordingSourceEditing（projectStabilizeRecordingColors / usageCount / insertingFullRecording / removing / droppingMissingSources），新增 5 项单测（含范围插入分割跨 boundary 动效与音频、删源颜色稳定及唯一源拦截、缺源容错恢复与 fullRecording 回退），zero node:* 校验通过 | 285 pass (5 skip E2E)
 
-下一个任务：T13.3（移植 RecordingSourceEditing.ts 及单元测试）
+下一个任务：T13.4（移植 VisualTrackTransfer.ts 与 RecordingProjectImport.ts 及单元测试，达成 53/53 模块全齐）
+
 
 
