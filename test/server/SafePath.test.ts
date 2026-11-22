@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
-import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdirSync, writeFileSync, rmSync, symlinkSync } from 'node:fs';
 import { resolveSafeChildPath } from '../../src/server/SafePath.ts';
 
 const root = resolve('out/safe-path-root');
@@ -32,4 +32,28 @@ test('T12.8: SafePath returns root for slash and keeps nested path contained', (
   assert.equal(resolveSafeChildPath(root, '/'), root);
   const nested = resolveSafeChildPath(root, '/a/b/c.txt');
   assert.ok(nested && nested.startsWith(root));
+});
+
+test('T12.10: SafePath rejects symlinks or junctions pointing outside rootDir', (t) => {
+  const base = resolve('out/safe-path-symlink-test');
+  const insideRoot = resolve(base, 'inside');
+  const outsideDir = resolve(base, 'outside');
+  const linkPath = resolve(insideRoot, 'escape-link');
+  rmSync(base, { recursive: true, force: true });
+  mkdirSync(insideRoot, { recursive: true });
+  mkdirSync(outsideDir, { recursive: true });
+  writeFileSync(resolve(outsideDir, 'secret.txt'), 'top-secret', 'utf-8');
+
+  try {
+    try {
+      symlinkSync(outsideDir, linkPath, 'junction');
+    } catch {
+      t.skip('Symlink/junction creation not permitted in this environment');
+      return;
+    }
+    assert.equal(resolveSafeChildPath(insideRoot, '/escape-link/secret.txt'), null);
+    assert.equal(resolveSafeChildPath(insideRoot, '/escape-link'), null);
+  } finally {
+    rmSync(base, { recursive: true, force: true });
+  }
 });

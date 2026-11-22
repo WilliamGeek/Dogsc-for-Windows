@@ -6,12 +6,13 @@
  * helper uses path.relative and rejects any result that escapes the root.
  */
 
-import { isAbsolute, relative, resolve, sep } from 'node:path';
+import { existsSync, realpathSync } from 'node:fs';
+import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 
 /**
  * Resolves a URL pathname under rootDir, returning null when the path is
- * absolute, contains a parent segment, uses backslashes, or resolves to a
- * sibling whose name merely shares the root prefix.
+ * absolute, contains a parent segment, uses backslashes, resolves to a
+ * sibling whose name merely shares the root prefix, or traverses via symlink/junction.
  */
 export function resolveSafeChildPath(rootDir: string, urlPathname: string): string | null {
   let decoded: string;
@@ -26,13 +27,28 @@ export function resolveSafeChildPath(rootDir: string, urlPathname: string): stri
   const root = resolve(rootDir);
   const relativeUrl = decoded.replace(/^\/+/, '');
   if (isAbsolute(relativeUrl)) return null;
-  if (relativeUrl.length === 0) return root;
+  const target = relativeUrl.length === 0 ? root : resolve(root, relativeUrl);
 
-  const target = resolve(root, relativeUrl);
   const rel = relative(root, target);
-
   if (rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
     return null;
+  }
+
+  if (existsSync(root)) {
+    const realRoot = realpathSync(root);
+    let probe = target;
+    while (!existsSync(probe)) {
+      const parent = dirname(probe);
+      if (parent === probe) break;
+      probe = parent;
+    }
+    if (existsSync(probe)) {
+      const realProbe = realpathSync(probe);
+      const realRel = relative(realRoot, realProbe);
+      if (realRel === '..' || realRel.startsWith(`..${sep}`) || isAbsolute(realRel)) {
+        return null;
+      }
+    }
   }
 
   return target;

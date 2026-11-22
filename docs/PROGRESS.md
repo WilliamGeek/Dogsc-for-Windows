@@ -64,14 +64,21 @@
 2026-11-14 20:21 | T11.5d | DONE | 矢量光标多边形与点击涟漪特效渲染 (shadow+outline+fill箭头三角形与SDF点击波纹，实机截图 out/t115d.png 276KB 验收完美) | 198 pass (4 skip E2E)
 2026-11-14 20:27 | T11.6 | DONE | 无头浏览器批量导出引擎 (ExportServer顺序帧长度/序号严格校验与ffmpeg流式管道、web/exporter.ts、scripts/export.ts、200单测全绿) | 200 pass (4 skip E2E)
 2026-11-14 22:35 | T11.7 | NEED-USER-E2E | 实机录制导出 export.mp4 完成 (518帧/1920x1080/60fps/8.63s/6.13MB/h264_nvenc，首张放大抽检帧 out/t117_check.png 已验证正立/背景/圆角阴影/1.8x缩放/矢量光标与点击涟漪，待用户肉眼验收) | 200 pass (4 skip E2E)
+2026-11-20 15:43 | PLAN-V2 | DONE | 基于 2026-11-20 实测对齐审计报告完成宏微观全栈重构总计划 V2 (新增 docs/MASTER_REFACTOR_PLAN_V2.md，升级 AGENTS/CONTRACTS/TASKS 共34张原子卡 T12.1~T17.4 与 G1~G6 / Computer Use 审核手册)；暂停 T11.7 验收，优先执行 Wave A 止血修复 P0-01~03 与 P1-01~07 | 200 pass (4 skip E2E)
+2026-11-20 16:56 | T12.1 | DONE | MediaProbe 以 ffprobe 建立真实媒体真相；RecordingSession 写入真实 duration/frameCount/width/height；export 与 FramePlan 改用真实源时长。实机复导出 20261120-140843 为 588 帧/9.800s（旧成片 743 帧/12.383s），尾部复帧消除；`DOGSC_E2E=1 npm test` 213/213 全绿 | 213 pass (0 skip E2E)
+2026-11-20 17:01 | T12.2 | DONE | ScreenRecorder 暴露 exited/stderr，stop 对 spawn error/超时/非零退出强制 reject；RecordingSession 增加 allocateUniqueSessionDir、早期崩溃 Promise.race 与失败目录递归清理，await finished(pointer.jsonl)；无效显示器 `--display 9` 实测 EXIT=1、stderr 含 `Failed to enumerate DXGI output 9`，recordings 无新增脏目录 | 216 pass (0 skip E2E)
+2026-11-20 17:03 | T12.3 | DONE | ddagrab 默认 draw_mouse=0，WebGL 矢量光标成为唯一光标；detectEncoder 增加 1 帧 h264_nvenc 真机探活与 libx264 回退。实机 4 秒录制 `20261120-170249` 为 249 帧/4.150s，源帧 `out/t123_source_2_5.png` 无系统光标烘焙；E2E 218/218 全绿 | 218 pass (0 skip E2E)
+2026-11-20 17:09 | T12.4 | DONE | ExportServer 增加 inactivity(30s)/total 双看门狗、`/api/error` 秒报、`/api/done` 总帧数强校验与半成品删除；web/exporter 单帧 AbortController 超时重试且失败上报；scripts/export Windows 下 taskkill Edge 进程树。真实导出 20261120-140843 全量 588 帧/9.800s，耗时 62.91s，无 headless Edge 残留；E2E 221/221 全绿 | 221 pass (0 skip E2E)
+2026-11-20 17:13 | T12.5 | DONE | 新增 DisplayEnumeration（Per-Monitor V2 DPI + 负坐标/主屏排序/显式 index），mousehook 支持 -ScreenX/Y/W/H 并优先 SetProcessDpiAwarenessContext(-4)，RecordingSession 枚举显示器、索引越界前置报错并把 displayDescriptor 写入 meta。实机录制 20261120-171216：DISPLAY5 2176×1812，pointer 表头与 screen.mp4 分辨率一致，125 帧/2.083s；默认测试 222 pass/5 skip | 222 pass (5 skip 默认)
 2026-11-20 17:16 | T12.6 | DONE | ProjectMediaModel 删除重复 CaptureConfiguration 与英文假默认值，改为导入统一中文 rawValue 模型；decodeRecorderProject 兼容旧英文 source/codec/resolution/systemAudioScope 并归一化 frameRate；buildProjectFromRecording 接收真实 captureOptions，recordSession 写入 source/displayID/displayName/真实 fps/H.264/三项音频与摄像头 false。真实 30fps 录制 20261120-171556 的 project.capture 为 30fps/H.264/recordsSystemAudio=false/displayID=0；默认测试 224 pass/5 skip | 224 pass (5 skip 默认)
 
 2026-11-20 17:43 | T12.7 | DONE | ScreenRecorder 解析 `-progress pipe:1` 的 frame/out_time_us 生成 ready 与 firstFrameUnixMs；RecordingSession 等首帧后再计时并把 spawn/firstFrame 写入 meta；calibrate 增加严格双点击 evaluateCalibration；新增 tools/e2e-testcard.html、scripts/verify-export.ts 与 VerifyExport 单测。真实 8.6s 测试卡录制 20261120-173816：两个点击视频时刻 1.935s/4.182s，导出 517 帧/8.616s；verify-export 全部通过（时长差 0.000s、帧数一致、captureFrameRate 60、无音频声明、点击帧非黑可读）。默认 226 pass/5 skip；E2E 236/236。已知：导出画面顶部未出现测试卡 48px 闪帧条，闪帧≤1帧尚未通过自动/视觉门禁 | 236 pass (E2E 全绿)
 
 2026-11-20 18:20 | T12.8 | DONE | `SafePath` 以 `path.relative` 替换 DevServer/ExportServer 的 `startsWith`，同名前缀兄弟目录返回 403；补根 README / MIT LICENSE / THIRD_PARTY_NOTICES；package 0.3.1 / Node >=22.18；PLAN 修正 53 文件/14,380 行。修 T12.7 闪帧验收缺陷：自动运镜会裁掉顶部 48px 条，测试卡改为点击目标整圆同步闪绿，`verify-export --sync` 对源/导出 green run 做 onset ≤1 帧校验；导出总超时从 500ms/帧提高到 1.5s/帧。真实录制 20261120-175917：2176x1812/60fps/568 帧/9.466s，点击 2.620s/5.006s，导出 568 帧/9.466s/3,681,926B，`verify-export --sync` 退出 0（时长差 0.000s、帧数 568/568、captureFrameRate 60、recordsSystemAudio false、闪帧 source/export onset 均 143/286 帧、maxDelta 0）。T11.7 仍按 D4 等用户肉眼复核，未勾选 | 默认 247 项 (242 pass / 5 skip)；E2E 247/247
 2026-11-23 01:38 | T12.9 | DONE | ScreenRecorder 在编码前插入 showinfo 滤镜并用 -bf 0 -rc-lookahead 0 消除 NVENC 管线延迟，解析 n: 0 即刻测定 firstFrameUnixMs；verify-export 补齐 evaluatePointerToFlashSync 指针真同步检验、子进程 30s 超时与 --report 输出；e2e-testcard 移除顶部条 60ms CSS 渐变（247 pass / 5 skip） | 247 pass (5 skip E2E)
+2026-11-23 01:43 | T12.10 | DONE | SafePath 增加 realpathSync 符号链接/junction 外逸拦截，ExportServer 异步等待进程退出兜底清理残片，RecordingSession 增加 stoppingNormally 守卫，还原丢失的 PLAN-V2 与 T12.1~T12.5 进度历史并隔离无效旧录制目录 | 248 pass (5 skip E2E)
 
 阶段 2 验收通过
 
-下一个任务：T12.10（Wave A.5 收尾：SafePath 符号链接防护、ExportServer 异步删残片、RecordingSession 正常停止守卫与历史 PROGRESS 还原）
+下一个任务：T13.1（Wave B 首卡：只读克隆 F:\dogsc-v0.2.0 并生成 docs/V020_DIFF_MAP.md 53模块差异审计表）
 

@@ -298,8 +298,10 @@ export async function recordSession(o: RecordSessionOptions): Promise<string> {
     // Step 4: Wait for requested duration. If ffmpeg dies early (invalid
     // display, encoder unavailable, permission error), fail immediately
     // instead of sleeping through the entire requested duration.
+    let stoppingNormally = false;
     const requestedWait = sleep(Math.max(o.seconds, 0.5) * 1000);
     const earlyExit = recorder.exited.then((result) => {
+      if (stoppingNormally) return;
       if (result.spawnError) {
         throw new Error(`ffmpeg 启动失败: ${result.spawnError.message}`);
       }
@@ -315,6 +317,7 @@ export async function recordSession(o: RecordSessionOptions): Promise<string> {
       );
     });
     await Promise.race([requestedWait, earlyExit]);
+    stoppingNormally = true;
 
     // Step 4: Stop screen recorder and hook.
     await recorder.stop();

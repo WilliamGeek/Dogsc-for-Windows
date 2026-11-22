@@ -255,11 +255,16 @@ export async function startExportServer(o: ExportServerOptions): Promise<ExportS
   function removePartialOutput(): void {
     // A fake encoder is a test seam and may deliberately not create outFile.
     if (o.ffmpegCommand) return;
-    try {
-      rmSync(o.outFile, { force: true });
-    } catch {
-      // Best-effort cleanup only.
-    }
+    const cleanup = () => {
+      try {
+        rmSync(o.outFile, { force: true });
+      } catch {
+        // Ignore if still locked; final retry happens on procExitPromise.
+      }
+    };
+    cleanup();
+    // On Windows ffmpeg may still hold the file handle immediately after SIGKILL; retry after close.
+    void procExitPromise.then(cleanup, cleanup);
   }
 
   function failExport(error: Error): void {
