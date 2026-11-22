@@ -19,6 +19,7 @@ import {
   createProgram,
   safeCanvasDimensions,
 } from './glUtils.ts';
+import { computeChromePassGeometry } from './chrome.ts';
 
 export const MAX_BLUR_MOSAICS = 8;
 export const MAX_SPOTLIGHT_REGIONS = 8;
@@ -163,7 +164,15 @@ export function computeSpotlightPassUniforms(
     return null;
   }
 
+  const chrome =
+    screen.decoration.kind === 'chrome' ? screen.decoration.chrome : null;
   const screenUniforms = computeScreenShaderUniforms(screen);
+  const screenSize: [number, number] = chrome
+    ? [Math.max(chrome.contentRect.width, 1), Math.max(chrome.contentRect.height, 1)]
+    : screenUniforms.screenSize;
+  const cornerRadius = chrome
+    ? Math.max(chrome.contentCornerRadius, 0)
+    : screenUniforms.cornerRadius;
   const rectsFlat = new Float32Array(MAX_SPOTLIGHT_REGIONS * 4);
   const paramsFlat = new Float32Array(MAX_SPOTLIGHT_REGIONS * 4);
   for (let i = 0; i < regions.length; i++) {
@@ -179,8 +188,8 @@ export function computeSpotlightPassUniforms(
     count: regions.length,
     dimmingAlpha: maxDimmingAlpha,
     opacity: effectiveOpacity,
-    screenSize: screenUniforms.screenSize,
-    cornerRadius: screenUniforms.cornerRadius,
+    screenSize,
+    cornerRadius,
     sourceCrop: [
       screen.sourceCrop.x,
       screen.sourceCrop.y,
@@ -341,12 +350,15 @@ export class SpotlightPass {
 
     const gl = this.gl;
     const { width, height } = safeCanvasDimensions(canvasWidth, canvasHeight);
-    const vertices = buildProjectedQuadVertices(
-      scene.screen.projectedQuad,
-      scene.screen.finalRect,
-      width,
-      height
-    );
+    const chromeGeo = computeChromePassGeometry(scene.screen, width, height);
+    const vertices =
+      chromeGeo?.contentVertices ??
+      buildProjectedQuadVertices(
+        scene.screen.projectedQuad,
+        scene.screen.finalRect,
+        width,
+        height
+      );
 
     gl.useProgram(this.program);
     gl.bindVertexArray(this.vao);

@@ -40,6 +40,14 @@ import {
   computeStickerRenderPlan,
   buildRotatedQuadVertices,
 } from '../../web/passes/stickers.ts';
+import {
+  computeChromePassGeometry,
+} from '../../web/passes/chrome.ts';
+import {
+  computeFocusPassUniforms,
+  evaluateFocusOutsideFactor,
+} from '../../web/passes/focus.ts';
+import { buildProjectedQuadVertices } from '../../web/passes/screen.ts';
 import * as rendererExports from '../../web/renderer.ts';
 import {
   makeCompositionRect,
@@ -47,6 +55,8 @@ import {
   CompositionSceneEvaluator,
 } from '../../src/core/CompositionScene.ts';
 import {
+  FrameSceneEvaluator,
+  makeCompositionSize,
   makeFrameScreenScene,
   makeFrameCameraScene,
   makeFrameMosaicScene,
@@ -55,9 +65,22 @@ import {
 } from '../../src/core/FrameScene.ts';
 import { CameraContentFill } from '../../src/core/CameraContentFill.ts';
 import { makeCameraBeautySettings } from '../../src/core/CameraBeauty.ts';
-import { makeNormalizedCrop, makeCameraStyle } from '../../src/core/ProjectModel.ts';
+import {
+  makeNormalizedCrop,
+  makeCanvasStyle,
+  makeCameraStyle,
+  makeMotionStyle,
+  makeCursorStyle,
+  makeOpeningSequence,
+  type OpeningSequencePreset,
+  type ScreenFrameStyle,
+} from '../../src/core/ProjectModel.ts';
 import { makeHexColor } from '../../src/core/HexColor.ts';
 import { ScreenProjection } from '../../src/core/ScreenProjection.ts';
+import { makeFocusEffect, FocusEffectEvaluator } from '../../src/core/FocusEffect.ts';
+import { makeProjectTimeline } from '../../src/core/ProjectTimeline.ts';
+import { makeRecorderProject } from '../../src/core/ProjectMediaModel.ts';
+import { makeZoomAnimationClip, makeNormalizedPoint } from '../../src/core/ZoomAnimation.ts';
 import {
   makeFrameStickerBackdropScene,
   StickerTransitionTrack,
@@ -183,6 +206,9 @@ test('T14.1: web/renderer.ts preserves exact re-exports from modular passes', ()
   assert.equal(rendererExports.evaluateSpotlightOutsideMask, evaluateSpotlightOutsideMask);
   assert.equal(rendererExports.computeStickerRenderPlan, computeStickerRenderPlan);
   assert.equal(rendererExports.buildRotatedQuadVertices, buildRotatedQuadVertices);
+  assert.equal(rendererExports.computeChromePassGeometry, computeChromePassGeometry);
+  assert.equal(rendererExports.computeFocusPassUniforms, computeFocusPassUniforms);
+  assert.equal(rendererExports.evaluateFocusOutsideFactor, evaluateFocusOutsideFactor);
 });
 
 test('T14.2: computeCameraShaderUniforms enforces circle mask clamping, AspectFill uvRect, beauty, and suppression', () => {
@@ -582,4 +608,216 @@ test('T14.4: computeStickerRenderPlan routes blurStage, sorts layerIndex, and pr
   assert.ok(shadowRotVerts[3] < 0);
   assert.ok(shadowRotVerts[10] > 1);
   assert.ok(shadowRotVerts[11] > 1);
+});
+
+test('T14.5: computeChromePassGeometry insets content quads across all 6 chrome kinds and preserves perspective w > 0', () => {
+  const styles: Array<{ style: ScreenFrameStyle; aspect: number; expectedKind: string; expectedCode: number }> = [
+    { style: 'windowLight', aspect: 16 / 9, expectedKind: 'window', expectedCode: 0 },
+    { style: 'browserDark', aspect: 16 / 9, expectedKind: 'browser', expectedCode: 1 },
+    { style: 'devicePhone', aspect: 9 / 16, expectedKind: 'devicePhonePortrait', expectedCode: 2 },
+    { style: 'devicePhone', aspect: 16 / 9, expectedKind: 'devicePhoneLandscape', expectedCode: 3 },
+    { style: 'deviceTablet', aspect: 3 / 4, expectedKind: 'deviceTabletPortrait', expectedCode: 4 },
+    { style: 'deviceTablet', aspect: 4 / 3, expectedKind: 'deviceTabletLandscape', expectedCode: 5 },
+  ];
+
+  for (const { style, aspect, expectedKind, expectedCode } of styles) {
+    const proj = makeRecorderProject({
+      canvas: makeCanvasStyle({
+        screenFrame: style,
+        padding: 120,
+        screenFrameTitle: 'DogSC Studio',
+        screenFrameBrowserAddress: 'https://dogsc.app',
+      }),
+      camera: makeCameraStyle(),
+      motion: makeMotionStyle(),
+      cursorStyle: makeCursorStyle(),
+      openingSequence: makeOpeningSequence({ isEnabled: false }),
+      timeline: makeProjectTimeline(),
+      zoomAnimations: [],
+    });
+    const scene = FrameSceneEvaluator.scene(
+      proj,
+      0.5,
+      5,
+      makeCompositionSize(1920, 1080),
+      aspect
+    );
+    assert.equal(scene.screen.decoration.kind, 'chrome');
+    if (scene.screen.decoration.kind === 'chrome') {
+      assert.equal(scene.screen.decoration.chrome.kind, expectedKind);
+    }
+
+    const geo = computeChromePassGeometry(scene.screen, 1920, 1080);
+    assert.ok(geo !== null);
+    assert.equal(geo.kindCode, expectedCode);
+    assert.equal(geo.outerVertices.length, 30);
+    assert.equal(geo.contentVertices.length, 30);
+    for (let v = 0; v < 6; v++) {
+      assert.ok(geo.contentVertices[v * 5 + 2] > 0);
+    }
+    // Inset content quad must stay within projected outer bounds
+    assert.ok(geo.contentQuad.topLeft.x >= scene.screen.projectedQuad.topLeft.x - 1e-4);
+    assert.ok(geo.contentQuad.topLeft.y >= scene.screen.projectedQuad.topLeft.y - 1e-4);
+    assert.ok(geo.contentQuad.bottomRight.x <= scene.screen.projectedQuad.bottomRight.x + 1e-4);
+    assert.ok(geo.contentQuad.bottomRight.y <= scene.screen.projectedQuad.bottomRight.y + 1e-4);
+  }
+});
+
+test('T14.5: computeFocusPassUniforms and evaluateFocusOutsideFactor evaluate radial & rotated linear bands accurately', () => {
+  const rect = makeCompositionRect(160, 90, 1600, 900);
+  const quad = ScreenProjection.project(rect, 0, 0, 0, 1);
+
+  const radialFocus = makeFocusEffect(false, {
+    shape: 'radial',
+    target: 'fixed',
+    center: { x: 0.5, y: 0.5 },
+    size: 0.3,
+    softness: 0.4,
+    blur: 0.6,
+    dimming: 0.25,
+  });
+  const screenRadial = makeFrameScreenScene({
+    sourceCrop: makeNormalizedCrop(),
+    baseRect: rect,
+    finalRect: rect,
+    projectedQuad: quad,
+    cornerRadius: 24,
+    borderWidth: 0,
+    borderColor: makeHexColor(0xffffff),
+    borderOpacity: 0,
+    shadow: null,
+    focusEffect: { effect: radialFocus, center: { x: 0.5, y: 0.5 }, progress: 1.0 },
+  });
+  const uRad = computeFocusPassUniforms(screenRadial, null);
+  assert.ok(uRad !== null);
+  assert.equal(uRad.shapeMode, 0);
+  assert.equal(evaluateFocusOutsideFactor(0.5, 0.5, uRad), 0);
+  assert.equal(evaluateFocusOutsideFactor(0.02, 0.02, uRad), 1);
+
+  const linearFocus = makeFocusEffect(true, {
+    shape: 'linear',
+    angleDegrees: 45,
+    center: { x: 0.5, y: 0.5 },
+    size: 0.2,
+    softness: 0.2,
+    blur: 0.5,
+    dimming: 0.3,
+  });
+  const zoomWithFocus = makeZoomAnimationClip({
+    id: 'z-focus',
+    startTime: 0,
+    endTime: 2.0,
+    enterDuration: 0.2,
+    exitDuration: 0.2,
+    scale: 1.5,
+    focus: makeNormalizedPoint(0.5, 0.5),
+    focusEffect: linearFocus,
+  });
+  const evaluatedFocus = FocusEffectEvaluator.scene(
+    zoomWithFocus,
+    null,
+    { x: 0.5, y: 0.5 },
+    makeNormalizedCrop(),
+    null,
+    1.0,
+    makeMotionStyle()
+  );
+  assert.ok(evaluatedFocus !== null);
+  const screenLinear = makeFrameScreenScene({
+    sourceCrop: makeNormalizedCrop(),
+    baseRect: rect,
+    finalRect: rect,
+    projectedQuad: quad,
+    cornerRadius: 24,
+    borderWidth: 0,
+    borderColor: makeHexColor(0xffffff),
+    borderOpacity: 0,
+    shadow: null,
+    focusEffect: evaluatedFocus,
+  });
+  const uLin = computeFocusPassUniforms(screenLinear, null);
+  assert.ok(uLin !== null);
+  assert.equal(uLin.shapeMode, 1);
+  // Center is clear (0); point off the 45 deg diagonal is outside (1)
+  assert.equal(evaluateFocusOutsideFactor(0.5, 0.5, uLin), 0);
+  assert.equal(evaluateFocusOutsideFactor(0.05, 0.95, uLin), 1);
+  // Sticker suppression hides focus overlay cleanly
+  assert.equal(
+    computeFocusPassUniforms(screenLinear, makeFrameStickerBackdropScene({ screenSuppression: 1 })),
+    null
+  );
+});
+
+test('T14.5: opening sequence 3D presets keep positive perspective weights and zero NaNs across Render Passes', () => {
+  const presets: OpeningSequencePreset[] = ['轻 3D', '聚拢', '侧滑'];
+  const times = [0.0, 0.25, 0.6, 1.3];
+
+  for (const preset of presets) {
+    const project = makeRecorderProject({
+      canvas: makeCanvasStyle({ padding: 100, screenFrame: 'windowDark' }),
+      camera: makeCameraStyle({ shape: 'circle', position: { x: 0.9, y: 0.85 }, size: 0.22 }),
+      motion: makeMotionStyle(),
+      cursorStyle: makeCursorStyle(),
+      openingSequence: makeOpeningSequence({
+        isEnabled: true,
+        preset,
+        duration: 1.2,
+        elements: ['屏幕', '摄像头', '贴图'],
+      }),
+      timeline: makeProjectTimeline({
+        stickerClips: [
+          makeStickerClip({
+            id: 'open-st',
+            timing: makeOverlayTiming(0, 3),
+            relativePath: 'badge.png',
+            opacity: 1,
+          }),
+        ],
+      }),
+      zoomAnimations: [],
+    });
+
+    const opacities: number[] = [];
+    for (const t of times) {
+      const scene = FrameSceneEvaluator.scene(
+        project,
+        t,
+        5,
+        makeCompositionSize(1920, 1080),
+        16 / 9,
+        makeCompositionSize(1280, 720)
+      );
+      opacities.push(scene.screen.opacity);
+
+      const verts = buildProjectedQuadVertices(
+        scene.screen.projectedQuad,
+        scene.screen.decoration.kind === 'chrome'
+          ? scene.screen.decoration.chrome.outerRect
+          : scene.screen.finalRect,
+        1920,
+        1080
+      );
+      assert.equal(verts.length, 30);
+      for (let i = 0; i < 6; i++) {
+        assert.ok(verts[i * 5 + 2] > 0 && Number.isFinite(verts[i * 5 + 2]));
+      }
+      for (let i = 0; i < verts.length; i++) {
+        assert.ok(Number.isFinite(verts[i]));
+      }
+
+      if (scene.camera && scene.camera.opacity > 0.001) {
+        const camUniforms = computeCameraShaderUniforms(scene.camera, scene.stickerBackdrop);
+        assert.ok(camUniforms !== null && Number.isFinite(camUniforms.cornerRadius));
+      }
+
+      const stickerPlan = computeStickerRenderPlan(scene, 1920, 1080);
+      for (const item of stickerPlan.items) {
+        assert.ok(Number.isFinite(item.centerPx[0]) && Number.isFinite(item.sizePx[0]));
+      }
+    }
+
+    // Opening opacity monotonically reaches settled 1.0 after sequence ends
+    assert.ok(opacities[0] <= opacities[2]);
+    assert.equal(opacities[3], 1.0);
+  }
 });

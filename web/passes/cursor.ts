@@ -33,10 +33,14 @@ export function computeCursorClickEffectPass(
   cursor: FrameCursorScene,
   screen: FrameScreenScene
 ): CursorClickEffectPass {
+  const projectionRect =
+    screen.decoration.kind === 'chrome'
+      ? screen.decoration.chrome.outerRect
+      : screen.finalRect;
   const projected = projectedScreenQuadProject(
     screen.projectedQuad,
     cursor.layout.pointer,
-    screen.finalRect
+    projectionRect
   );
   const tipPx = projected ?? cursor.layout.pointer;
 

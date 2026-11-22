@@ -67,6 +67,17 @@ import {
   type StickerRenderPlan,
 } from './passes/stickers.ts';
 import {
+  ChromePass,
+  computeChromePassGeometry,
+  type ChromePassGeometry,
+} from './passes/chrome.ts';
+import {
+  FocusPass,
+  computeFocusPassUniforms,
+  evaluateFocusOutsideFactor,
+  type FocusPassUniforms,
+} from './passes/focus.ts';
+import {
   createTexture2D,
   resolveLayerRenderOrder,
   dispatchSceneLayers,
@@ -89,6 +100,9 @@ export {
   evaluateSpotlightOutsideMask,
   computeStickerRenderPlan,
   buildRotatedQuadVertices,
+  computeChromePassGeometry,
+  computeFocusPassUniforms,
+  evaluateFocusOutsideFactor,
   resolveLayerRenderOrder,
   dispatchSceneLayers,
 };
@@ -104,6 +118,8 @@ export type {
   StickerBlurStage,
   StickerDrawItem,
   StickerRenderPlan,
+  ChromePassGeometry,
+  FocusPassUniforms,
 };
 
 export interface RendererPlanContext {
@@ -422,6 +438,8 @@ async function bootstrapBrowser(): Promise<void> {
 
   const bgPass = new BackgroundPass(gl);
   const screenPass = new ScreenPass(gl);
+  const chromePass = new ChromePass(gl);
+  const focusPass = new FocusPass(gl);
   const spotlightPass = new SpotlightPass(gl);
   const cursorPass = new CursorPass(gl);
   const cameraPass = new CameraPass(gl);
@@ -501,7 +519,12 @@ async function bootstrapBrowser(): Promise<void> {
 
     dispatchSceneLayers(scene, {
       background: () => bgPass.render(scene, ctx.width, ctx.height),
-      screen: () => screenPass.render(scene, screenTex, ctx.width, ctx.height),
+      screen: () => {
+        screenPass.renderShadow(scene, ctx.width, ctx.height);
+        chromePass.render(scene, ctx.width, ctx.height);
+        screenPass.renderContent(scene, screenTex, ctx.width, ctx.height);
+        focusPass.render(scene, screenTex, ctx.width, ctx.height);
+      },
       cursor: () => cursorPass.render(scene, ctx.width, ctx.height),
       spotlight: () => spotlightPass.render(scene, ctx.width, ctx.height),
       camera: () => {

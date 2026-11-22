@@ -21,6 +21,7 @@ import {
   MAX_BLUR_MOSAICS,
   computeBlurMosaicUniforms,
 } from './spotlight.ts';
+import { computeChromePassGeometry } from './chrome.ts';
 
 export {
   SCREEN_VERTEX_SHADER,
@@ -207,23 +208,27 @@ export class ScreenPass {
     gl.vertexAttribPointer(2, 2, gl.FLOAT, false, stride, 3 * 4);
   }
 
-  render(
-    scene: FrameScene,
-    screenTex: WebGLTexture,
-    canvasWidth: number,
-    canvasHeight: number
-  ): void {
+  renderShadow(scene: FrameScene, canvasWidth: number, canvasHeight: number): void {
     const effectiveOpacity = computeEffectiveScreenOpacity(scene.screen, scene.stickerBackdrop);
-    if (effectiveOpacity <= 0.001) {
+    if (effectiveOpacity <= 0.001 || !scene.screen.shadow) {
       return;
     }
 
     const gl = this.gl;
     const { width, height } = safeCanvasDimensions(canvasWidth, canvasHeight);
-    const screenUniforms = computeScreenShaderUniforms(scene.screen);
+    const chrome =
+      scene.screen.decoration.kind === 'chrome' ? scene.screen.decoration.chrome : null;
+    const shadowScreen = chrome
+      ? {
+          ...scene.screen,
+          finalRect: chrome.outerRect,
+          cornerRadius: chrome.outerCornerRadius,
+        }
+      : scene.screen;
+    const screenUniforms = computeScreenShaderUniforms(shadowScreen);
 
-    const shadowVerts = buildShadowQuadVertices(scene.screen, width, height);
-    if (shadowVerts && scene.screen.shadow) {
+    const shadowVerts = buildShadowQuadVertices(shadowScreen, width, height);
+    if (shadowVerts) {
       const sRgb = hexColorComponents(scene.screen.shadow.color);
       gl.useProgram(this.shadowProgram);
       gl.bindVertexArray(this.vao);
@@ -243,13 +248,37 @@ export class ScreenPass {
       );
       gl.drawArrays(gl.TRIANGLES, 0, 6);
     }
+  }
 
-    const vertices = buildProjectedQuadVertices(
-      scene.screen.projectedQuad,
-      scene.screen.finalRect,
-      width,
-      height
-    );
+  renderContent(
+    scene: FrameScene,
+    screenTex: WebGLTexture,
+    canvasWidth: number,
+    canvasHeight: number
+  ): void {
+    const effectiveOpacity = computeEffectiveScreenOpacity(scene.screen, scene.stickerBackdrop);
+    if (effectiveOpacity <= 0.001) {
+      return;
+    }
+
+    const gl = this.gl;
+    const { width, height } = safeCanvasDimensions(canvasWidth, canvasHeight);
+    const chromeGeo = computeChromePassGeometry(scene.screen, width, height);
+    const screenUniforms = computeScreenShaderUniforms(scene.screen);
+    const vertices = chromeGeo
+      ? chromeGeo.contentVertices
+      : buildProjectedQuadVertices(
+          scene.screen.projectedQuad,
+          scene.screen.finalRect,
+          width,
+          height
+        );
+    const screenSize: [number, number] = chromeGeo
+      ? [chromeGeo.chrome.contentRect.width, chromeGeo.chrome.contentRect.height]
+      : screenUniforms.screenSize;
+    const cornerRadius = chromeGeo
+      ? chromeGeo.contentCornerRadius
+      : screenUniforms.cornerRadius;
     const blurBatch = computeBlurMosaicUniforms(scene.screen);
 
     gl.useProgram(this.screenProgram);
@@ -268,21 +297,31 @@ export class ScreenPass {
       scene.screen.sourceCrop.height
     );
     gl.uniform1f(this.uOpacity, effectiveOpacity);
-    gl.uniform2f(this.uScreenSize, screenUniforms.screenSize[0], screenUniforms.screenSize[1]);
-    gl.uniform1f(this.uCornerRadius, screenUniforms.cornerRadius);
-    gl.uniform1f(this.uBorderWidth, screenUniforms.effectiveBorderWidth);
+    gl.uniform2f(this.uScreenSize, screenSize[0], screenSize[1]);
+    gl.uniform1f(this.uCornerRadius, cornerRadius);
+    gl.uniform1f(this.uBorderWidth, chromeGeo ? 0 : screenUniforms.effectiveBorderWidth);
     gl.uniform4f(
       this.uBorderColor,
       screenUniforms.borderColor[0],
       screenUniforms.borderColor[1],
       screenUniforms.borderColor[2],
-      screenUniforms.borderColor[3]
+      chromeGeo ? 0 : screenUniforms.borderColor[3]
     );
     gl.uniform1i(this.uBlurMosaicCount, blurBatch.count);
     gl.uniform4fv(this.uBlurMosaicRects, blurBatch.rectsFlat);
     gl.uniform4fv(this.uBlurMosaicParams, blurBatch.paramsFlat);
 
     gl.drawArrays(gl.TRIANGLES, 0, 6);
+  }
+
+  render(
+    scene: FrameScene,
+    screenTex: WebGLTexture,
+    canvasWidth: number,
+    canvasHeight: number
+  ): void {
+    this.renderShadow(scene, canvasWidth, canvasHeight);
+    this.renderContent(scene, screenTex, canvasWidth, canvasHeight);
   }
 
   dispose(): void {
