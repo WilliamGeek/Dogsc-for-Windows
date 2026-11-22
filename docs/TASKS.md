@@ -163,7 +163,7 @@
 - [x] T14.3 马赛克像素化/模糊与聚光灯通道 `web/passes/spotlight.ts` 及对应屏幕遮罩。
 - [x] T14.4 贴纸图层与防穿帮背景模糊接力通道 `web/passes/stickers.ts`。
 - [x] T14.5 窗口/浏览器/手机平板设备外框 Chrome、聚焦外围虚化 FBO 与开场 3D 序列视觉校验。
-- [ ] T14.6 光标素材样式、速度倾斜、闲置渐隐与 4 种点击动效（ripple/ring/dot/combo）全量对齐。
+- [x] T14.6 光标素材样式、速度倾斜、闲置渐隐与 4 种点击动效（ripple/ring/dot/combo）全量对齐。
 
 ### Wave D：Windows 全源采集、零依赖音视频多轨与暂停标记（P2-01~03）
 - [ ] T15.1 支持自选区域（`ddagrab` GPU `offset_x/y + video_size` 偶对齐）与单个窗口（`gdigrab -draw_mouse 0` + 窗口枚举）。

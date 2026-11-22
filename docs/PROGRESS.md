@@ -97,8 +97,9 @@
 2026-11-23 04:03 | T14.3 | DONE | 新增 web/passes/spotlight.ts（SpotlightPass / computeBlurMosaicUniforms / computeSpotlightPassUniforms / evaluateSpotlightOutsideMask）并扩展 web/passes/screen.ts 片元着色器实现截屏矩形圆角模糊+像素化马赛克（防跨界采样泄露）与 3D 透视对齐多区域聚光灯并集遮罩（共享至 glUtils.ts 保持无环依赖）；接入 renderer.ts 并新增 2 项单测 | 307 pass / 312 total (0 fail, 5 skip E2E)
 2026-11-23 04:10 | T14.4 | DONE | 新增 web/passes/stickers.ts（StickerPass + BackdropBlurRelay + computeStickerRenderPlan + buildRotatedQuadVertices），实现 9-tap 可分离高斯模糊 FBO 两段接力（beforeCamera / beforeStickers 防转场背景透穿帮）、layerIndex 排序与贴纸旋转/圆角/边框/软阴影渲染；接入 renderer.ts 并新增 1 项单测 | 308 pass / 313 total (0 fail, 5 skip E2E)
 2026-11-23 04:18 | T14.5 | DONE | 新增 web/passes/chrome.ts（ChromePass + computeChromePassGeometry 覆盖窗口/浏览器/手机竖横屏/平板竖横屏 6 类 3D 透视外框及内嵌 contentVertices 与红黄绿灯/地址栏/灵动岛细节，同步修正 Screen/Spotlight/Cursor 对外框投影基准的适配）与 web/passes/focus.ts（FocusPass FBO 模糊与径向/旋转线性聚焦圈外部暗化混合），完成轻3D/聚拢/侧滑开场序列几何与零 NaN 单测校验（新增 3 项单测） | 311 pass / 316 total (0 fail, 5 skip E2E)
+2026-11-23 04:21 | T14.6 | DONE | 全量升级 web/passes/cursor.ts（resolveCursorShape / computeCursorRenderParams / buildCursorShapeTriangles / computeClickShaderUniforms），补齐 arrow/pointingHand/crosshair 光标形态、velocity 倾斜角 rotationRadians、pressScale 按压缩放、闲置/hidden 隐藏与 ripple/glow/pulse/burst 四种点击特效 GLSL 渲染（含 glow 光晕与 8 方位 burst 散射粒）；收官 Wave C 全通道扩展渲染并新增 1 项单测 | 312 pass / 317 total (0 fail, 5 skip E2E)
 
-下一个任务：T14.6（对齐光标全形态、速度倾斜、按压缩放与 4 种点击动效）
+下一个任务：ARCH-DAG-WaveC（刷新架构看板同步 Wave C 全通道渲染收官）
 
 
 

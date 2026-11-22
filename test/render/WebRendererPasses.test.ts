@@ -22,6 +22,10 @@ import {
 import {
   buildCursorArrowTriangles as passBuildCursorTriangles,
   computeCursorClickEffectPass as passComputeClickEffectPass,
+  resolveCursorShape,
+  computeCursorRenderParams,
+  buildCursorShapeTriangles,
+  computeClickShaderUniforms,
 } from '../../web/passes/cursor.ts';
 import {
   computeCameraShaderUniforms,
@@ -78,6 +82,8 @@ import {
 import { makeHexColor } from '../../src/core/HexColor.ts';
 import { ScreenProjection } from '../../src/core/ScreenProjection.ts';
 import { makeFocusEffect, FocusEffectEvaluator } from '../../src/core/FocusEffect.ts';
+import { CursorRenderGeometry, makeCursorAssetMetrics } from '../../src/core/CursorRenderGeometry.ts';
+import { makePointerClickPhase } from '../../src/core/PointerTrack.ts';
 import { makeProjectTimeline } from '../../src/core/ProjectTimeline.ts';
 import { makeRecorderProject } from '../../src/core/ProjectMediaModel.ts';
 import { makeZoomAnimationClip, makeNormalizedPoint } from '../../src/core/ZoomAnimation.ts';
@@ -89,6 +95,9 @@ import {
   makeStickerClip,
   makeOverlayTiming,
 } from '../../src/core/OverlayTimeline.ts';
+
+// Need FrameCursorScene builder too
+import { makeFrameCursorScene } from '../../src/core/FrameScene.ts';
 
 test('T14.1: resolveLayerRenderOrder preserves deduplicated order and falls back when empty', () => {
   assert.deepEqual(
@@ -209,6 +218,10 @@ test('T14.1: web/renderer.ts preserves exact re-exports from modular passes', ()
   assert.equal(rendererExports.computeChromePassGeometry, computeChromePassGeometry);
   assert.equal(rendererExports.computeFocusPassUniforms, computeFocusPassUniforms);
   assert.equal(rendererExports.evaluateFocusOutsideFactor, evaluateFocusOutsideFactor);
+  assert.equal(rendererExports.resolveCursorShape, resolveCursorShape);
+  assert.equal(rendererExports.computeCursorRenderParams, computeCursorRenderParams);
+  assert.equal(rendererExports.buildCursorShapeTriangles, buildCursorShapeTriangles);
+  assert.equal(rendererExports.computeClickShaderUniforms, computeClickShaderUniforms);
 });
 
 test('T14.2: computeCameraShaderUniforms enforces circle mask clamping, AspectFill uvRect, beauty, and suppression', () => {
@@ -820,4 +833,106 @@ test('T14.5: opening sequence 3D presets keep positive perspective weights and z
     assert.ok(opacities[0] <= opacities[2]);
     assert.equal(opacities[3], 1.0);
   }
+});
+
+test('T14.6: cursor shapes, pressScale, motion tilt rotation, idle hide, and all 4 click effect uniforms work accurately', () => {
+  // 1. AssetID resolution
+  assert.equal(resolveCursorShape('systemArrow'), 'arrow');
+  assert.equal(resolveCursorShape('system.arrow'), 'arrow');
+  assert.equal(resolveCursorShape('systemPointingHand'), 'pointingHand');
+  assert.equal(resolveCursorShape('system.pointingHand'), 'pointingHand');
+  assert.equal(resolveCursorShape('systemCrosshair'), 'crosshair');
+  assert.equal(resolveCursorShape('system.crosshair'), 'crosshair');
+  assert.equal(resolveCursorShape('hidden'), 'hidden');
+  assert.equal(resolveCursorShape('system.hidden'), 'hidden');
+
+  // 2. Geometry triangles across arrow / pointingHand / crosshair with pressScale & tilt
+  const tip = makeCompositionPoint(500, 300);
+  const arrowVerts = buildCursorShapeTriangles('arrow', tip, 40, 0.25, 0.82);
+  const handVerts = buildCursorShapeTriangles('pointingHand', tip, 40, -0.15, 0.82);
+  const crossVerts = buildCursorShapeTriangles('crosshair', tip, 40, 0, 1.0);
+
+  assert.equal(arrowVerts.length, 30);
+  assert.equal(handVerts.length, 84);
+  assert.equal(crossVerts.length, 48);
+  for (const arr of [arrowVerts, handVerts, crossVerts]) {
+    for (let i = 0; i < arr.length; i++) {
+      assert.ok(Number.isFinite(arr[i]));
+    }
+  }
+  // Pointing hand fingertip is anchored at exact hotspot tip when un-offset & scaleMultiplier=1
+  assert.equal(handVerts[0], 500);
+  assert.equal(handVerts[1], 300);
+
+  // 3. computeCursorRenderParams handles idle-hidden (null), explicit hidden, pressScale & tilt
+  const rect = makeCompositionRect(0, 0, 1920, 1080);
+  const screen = makeFrameScreenScene({
+    sourceCrop: makeNormalizedCrop(),
+    baseRect: rect,
+    finalRect: rect,
+    projectedQuad: ScreenProjection.project(rect, 0, 0, 0, 1),
+    cornerRadius: 0,
+    borderWidth: 0,
+    borderColor: makeHexColor(0xffffff),
+    borderOpacity: 0,
+    shadow: null,
+  });
+  assert.equal(computeCursorRenderParams(null, screen), null);
+
+  const metrics = makeCursorAssetMetrics({
+    hotspot: { x: 0, y: 0 },
+    intrinsicSize: { width: 32, height: 32 },
+    clickColor: makeHexColor(0x38bdf8),
+  });
+  const layout = CursorRenderGeometry.layout(tip, 1080, 1.0, metrics)!;
+  const hiddenCursor = makeFrameCursorScene({
+    assetID: 'hidden',
+    metrics,
+    layout,
+    isClicking: false,
+    shadow: null,
+  });
+  assert.equal(computeCursorRenderParams(hiddenCursor, screen), null);
+
+  const activeCursor = makeFrameCursorScene({
+    assetID: 'systemPointingHand',
+    metrics,
+    layout,
+    isClicking: true,
+    pressScale: 0.82,
+    rotationRadians: 0.25,
+    clickPhase: makePointerClickPhase(0.25, 0.09, 0.36, 'leftClick'),
+    clickStyle: 'burst',
+    shadow: null,
+  });
+  const params = computeCursorRenderParams(activeCursor, screen);
+  assert.ok(params !== null);
+  assert.equal(params.shape, 'pointingHand');
+  assert.ok(Math.abs(params.pressScale - 0.82) < 1e-9);
+  assert.ok(Math.abs(params.rotationRadians - 0.25) < 1e-9);
+
+  // 4. All 4 click styles produce finite, distinct shader uniforms (plus 'none' -> null)
+  assert.equal(CursorRenderGeometry.clickGeometry('none', 0.25, 44, 0.9, 1.0), null);
+
+  const ripple = computeClickShaderUniforms(CursorRenderGeometry.clickGeometry('ripple', 0.2, 44, 0.9, 1.0)!);
+  assert.equal(ripple.primaryIsFilled, 0);
+  assert.equal(ripple.secondaryIsFilled, 1);
+  assert.equal(ripple.accentOpacity, 0);
+
+  const glow = computeClickShaderUniforms(CursorRenderGeometry.clickGeometry('glow', 0.2, 44, 0.9, 1.0)!);
+  assert.equal(glow.primaryIsFilled, 1);
+  assert.ok(glow.primaryGlowRadius > 0);
+
+  const pulse = computeClickShaderUniforms(CursorRenderGeometry.clickGeometry('pulse', 0.25, 44, 0.9, 1.0)!);
+  assert.equal(pulse.primaryIsFilled, 0);
+  assert.equal(pulse.secondaryIsFilled, 1);
+  assert.ok(pulse.secondaryRadius > 0);
+
+  const burst = computeClickShaderUniforms(CursorRenderGeometry.clickGeometry('burst', 0.25, 44, 0.9, 1.0)!);
+  assert.equal(burst.primaryIsFilled, 1);
+  assert.equal(burst.secondaryIsFilled, 0);
+  assert.ok(burst.secondaryLineWidth > 0);
+  assert.ok(burst.accentOffset > 0);
+  assert.ok(burst.accentSize > 0);
+  assert.ok(burst.accentOpacity > 0);
 });
