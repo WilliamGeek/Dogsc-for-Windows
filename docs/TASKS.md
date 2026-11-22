@@ -155,7 +155,7 @@
 - [ ] T13.3 移植 `RecordingSource`、`RecordingSourceEditing`、`RecordingAspectTransitions` 及单测。
 - [ ] T13.4 移植 `PostProductionModel`、`VisualTrackTransfer`、`RecordingProjectImport` 及单测（44→53 模块）。
 - [ ] T13.5 同步原有 44 模块在 `v0.1.8..v0.2.0` 的增量改动，`ProjectSchema.currentVersion` 升至 28，支持 v27 自动迁移与未知字段无损保留。
-- [ ] T13.6 构建上游 v27/v28 双向 Golden Fixture 与 `test/core/SchemaInterop.test.ts`（通过门禁 G3）。
+- [x] T13.6 构建上游 v27/v28 双向 Golden Fixture 与 `test/core/SchemaInterop.test.ts`（通过门禁 G3）。
 
 ### Wave C：WebGL2 全通道视觉渲染补齐（P1-08, P2-10，零假开关前置条件）
 - [ ] T14.1 模块化拆分 `web/passes/{background,screen,cursor}.ts`，按 `scene.layerOrder` 动态调度渲染。

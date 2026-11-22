@@ -1,0 +1,144 @@
+{
+  "version": 27,
+  "title": "Upstream v0.1.8 Single Recording",
+  "createdAt": "2026-11-19T08:30:00.000Z",
+  "futurePluginMeta": {
+    "owner": "upstream-v0.2.x",
+    "enabled": true
+  },
+  "capture": {
+    "source": "整块屏幕",
+    "displayID": 0,
+    "displayName": "Built-in Retina Display",
+    "captureFrameRate": 60,
+    "captureCodec": "H.264",
+    "captureResolutionLimit": "原始分辨率",
+    "systemAudioScope": "全部系统声音",
+    "recordsSystemAudio": true,
+    "recordsMicrophone": true,
+    "recordsCamera": true
+  },
+  "canvas": {
+    "aspectRatio": "16:9",
+    "customAspectRatio": { "width": 16, "height": 9 },
+    "backgroundSource": { "kind": "pattern", "preset": "黑曜石网格" },
+    "padding": 100,
+    "contentScale": 1,
+    "contentPosition": { "x": 0.5, "y": 0.5 },
+    "crop": { "x": 0, "y": 0, "width": 1, "height": 1 },
+    "cornerRadius": 24,
+    "borderWidth": 2,
+    "borderColor": "#FFFFFF",
+    "shadowStrength": 0.32,
+    "backgroundBlur": 0,
+    "insetOpacity": 0.125,
+    "screenFrame": "windowDark",
+    "screenFrameScale": 1,
+    "screenFrameToolbarScale": 0.96,
+    "screenFrameOuterCornerRadius": 22,
+    "screenFrameContentCornerRadius": 0,
+    "screenFrameTitle": "v27 Window",
+    "screenFrameBrowserAddress": "",
+    "patternScale": 1,
+    "patternOpacity": 1
+  },
+  "camera": {
+    "shape": "方形",
+    "position": { "x": 0.92, "y": 0.85 },
+    "size": 0.25,
+    "borderWidth": 3,
+    "shadowStrength": 0.25,
+    "roundness": 0.5,
+    "isMirrored": true,
+    "isHidden": false,
+    "scaleDuringZoom": 0.7,
+    "contentPosition": { "x": 0.5, "y": 0.5 },
+    "contentScale": 1
+  },
+  "audio": {
+    "systemVolume": 0.82,
+    "microphoneVolume": 0.9,
+    "isSystemMuted": false,
+    "isMicrophoneMuted": false
+  },
+  "motion": {
+    "screen": "聚焦",
+    "cursor": "平滑",
+    "screenSpringMass": 2.4,
+    "screenSpringStiffness": 210,
+    "screenSpringDamping": 42,
+    "cursorSpringMass": 2.8,
+    "cursorSpringStiffness": 450,
+    "cursorSpringDamping": 66,
+    "defaultZoomEasing": "弹簧",
+    "defaultZoomTransitionDuration": 0.7,
+    "defaultZoomScale": 1.8,
+    "defaultScreenMotion": null
+  },
+  "openingSequence": {
+    "isEnabled": false,
+    "preset": "轻 3D",
+    "motionCurve": "swift",
+    "duration": 2.2,
+    "stagger": 0.16,
+    "includedElements": ["屏幕", "摄像头", "贴图"],
+    "elementOrder": ["屏幕", "摄像头", "贴图"]
+  },
+  "cursorStyle": {
+    "assetID": "system.automatic",
+    "size": 1.25,
+    "hideWhenIdle": false,
+    "idleDelay": 1.2,
+    "clickEffectStyle": "ripple",
+    "clickColor": "#FF5500",
+    "clickOpacity": 0.8,
+    "clickScale": 1,
+    "motionTiltStrength": 2
+  },
+  "exportSettings": {
+    "frameRate": 60,
+    "resolution": "1080p"
+  },
+  "media": {
+    "screen": { "relativePath": "screen.mov", "startOffset": 0 },
+    "camera": { "relativePath": "camera.mov", "startOffset": 0.04 },
+    "microphone": { "relativePath": "mic.m4a", "startOffset": 0 },
+    "pointerEvents": { "relativePath": "pointer.jsonl", "startOffset": 0 }
+  },
+  "recordingMarkers": [
+    {
+      "id": "11111111-1111-1111-1111-111111111111",
+      "sourceTime": 3.25,
+      "number": 1
+    }
+  ],
+  "timeline": {
+    "sourceSequence": { "kind": "fullRecording" },
+    "primarySegmentAudioOverrides": {},
+    "zoomClips": [
+      {
+        "id": "22222222-2222-2222-2222-222222222222",
+        "startTime": 1,
+        "endTime": 4,
+        "scale": 2,
+        "focus": { "x": 0.4, "y": 0.6 },
+        "enterDuration": 0.7,
+        "exitDuration": 0.7
+      }
+    ],
+    "screenMotionClips": [],
+    "cameraMotionClips": [],
+    "mosaicClips": [],
+    "stickerClips": [
+      {
+        "id": "33333333-3333-3333-3333-333333333333",
+        "timing": { "startTime": 0.5, "duration": 2.5 },
+        "relativePath": "stickers/logo.png",
+        "position": { "x": 0.5, "y": 0.5 },
+        "width": 0.3,
+        "borderColor": "#EEEEEE",
+        "animation": "pop"
+      }
+    ]
+  }
+}

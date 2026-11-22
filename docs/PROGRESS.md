@@ -85,6 +85,7 @@
 2026-11-23 02:07 | T13.3 | REORDER | REORDER: T13.3(RecordingSourceEditing) / T13.4(VisualTrackTransfer, RecordingProjectImport) 依赖 T13.5 的 ProjectTimeline/OverlayTimeline/TimelineMap/ProjectTimelineEditing v0.2.0 多源接口，先完成叶子模型 T13.3a，禁止写临时 stub | 258 pass (5 skip E2E)
 2026-11-23 02:08 | T13.3a | DONE | 移植 RecordingSource（核心结构）、RecordingAspectTransitions（240ms 兼容外框比例平滑插值与中途抢占重定位）与 PostProductionModel（MediaAsset / VideoClip / AudioClip / Subtitle* / MainTrackVisualStyle / VisualClipSound），新增 7 项核心单测且 zero node:* 校验通过 | 265 pass (5 skip E2E)
 2026-11-23 02:30 | T13.5a | DONE | 同步 Schema v28 持久化模型（ProjectSchema v28、CursorStyle.pressesOnClick、ScreenFrameDefaults、RecordingMarker.sourceID、ExportSettings videoCodec/quality/4096 限幅、OverlayTimeline MotionElementEdit/AnimationClip、ProjectTimeline InsertedMedia/多源片段/图层组织、ProjectMediaModel v27->v28 自动冻结旧外观与 _unknownFields 无损保留、ExportPolicy 多源介质/码率阶梯与 CaptureEncodingPolicy、ProjectValidator 悬空源校验），消除 RecorderProject 扩展环依赖 | 271 pass (5 skip E2E)
+2026-11-23 02:33 | T13.6 | DONE | 构建上游 v27 单源与 v28 全量多源黄金夹具 (test/fixtures/schema/) 与门禁 G3 SchemaInterop 测试（验证 v27->v28 迁移、v27<28 旧外观冻结幂等性、未知字段无损保留、v28 多源双向编码幂等与 v22/v29/悬空源拒收） | 275 pass (5 skip E2E)
 
-下一个任务：T13.6（构建 v27/v28 双向 Schema 黄金夹具与门禁 G3 test/core/SchemaInterop.test.ts 互操作验证）
+下一个任务：T13.5b（同步 TimelineMap / TimelineMediaPlan / FrameScene / CompositionScene / CameraMotion / PointerTrack / EditingTransforms 等剩余共享运行时模块至 v0.2.0，随后完成 T13.3b/T13.4 收官 Wave B 53/53 并刷新架构 DAG）
 

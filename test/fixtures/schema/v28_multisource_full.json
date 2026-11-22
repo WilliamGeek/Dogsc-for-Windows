@@ -1,0 +1,311 @@
+{
+  "version": 28,
+  "title": "Upstream v0.2.0 Multi-Source Full Project",
+  "createdAt": "2026-11-22T10:00:00.000Z",
+  "capture": {
+    "source": "整块屏幕",
+    "displayID": 1,
+    "displayName": "\\\\.\\DISPLAY1",
+    "captureFrameRate": 60,
+    "captureCodec": "H.264",
+    "captureResolutionLimit": "原始分辨率",
+    "systemAudioScope": "全部系统声音",
+    "recordsSystemAudio": true,
+    "recordsMicrophone": false,
+    "recordsCamera": true
+  },
+  "canvas": {
+    "aspectRatio": "1:2.39",
+    "customAspectRatio": { "width": 16, "height": 9 },
+    "backgroundSource": { "kind": "dynamicFlow", "preset": "极光流体星云" },
+    "padding": 96,
+    "contentScale": 1,
+    "contentPosition": { "x": 0.5, "y": 0.5 },
+    "crop": { "x": 0, "y": 0, "width": 1, "height": 1 },
+    "cornerRadius": 24,
+    "borderWidth": 2,
+    "borderColor": "#224466",
+    "shadowStrength": 0.28,
+    "backgroundBlur": 4,
+    "insetOpacity": 0.125,
+    "screenFrame": "browserLight",
+    "screenFrameScale": 1,
+    "screenFrameToolbarScale": 1.08,
+    "screenFrameOuterCornerRadius": 22,
+    "screenFrameContentCornerRadius": 0,
+    "screenFrameTitle": "Primary Browser",
+    "screenFrameBrowserAddress": "https://dogsc.app",
+    "patternScale": 1,
+    "patternOpacity": 1
+  },
+  "camera": {
+    "shape": "圆形",
+    "position": { "x": 0.9, "y": 0.8 },
+    "size": 0.24,
+    "borderWidth": 2,
+    "shadowStrength": 0.25,
+    "roundness": 1,
+    "isMirrored": true,
+    "isHidden": false,
+    "scaleDuringZoom": 0.7,
+    "contentPosition": { "x": 0.5, "y": 0.5 },
+    "contentScale": 1.1,
+    "beauty": {
+      "smoothing": 0.45,
+      "whitening": 0.25
+    }
+  },
+  "audio": {
+    "systemVolume": 0.85,
+    "microphoneVolume": 0.8,
+    "isSystemMuted": false,
+    "isMicrophoneMuted": false
+  },
+  "motion": {
+    "screen": "聚焦",
+    "cursor": "快速",
+    "screenSpringMass": 2.4,
+    "screenSpringStiffness": 210,
+    "screenSpringDamping": 42,
+    "cursorSpringMass": 2.8,
+    "cursorSpringStiffness": 450,
+    "cursorSpringDamping": 66,
+    "defaultZoomEasing": "弹簧",
+    "defaultZoomTransitionDuration": 0.7,
+    "defaultZoomScale": 2,
+    "defaultScreenMotion": null
+  },
+  "openingSequence": {
+    "isEnabled": true,
+    "preset": "轻 3D",
+    "motionCurve": "swift",
+    "duration": 2.0,
+    "stagger": 0.15,
+    "includedElements": ["屏幕", "摄像头"],
+    "elementOrder": ["屏幕", "摄像头", "贴图"]
+  },
+  "cursorStyle": {
+    "assetID": "system.automatic",
+    "size": 1.5,
+    "hideWhenIdle": false,
+    "idleDelay": 1.2,
+    "clickEffectStyle": "ring",
+    "clickColor": "#00AAFF",
+    "clickOpacity": 0.9,
+    "clickScale": 1.2,
+    "motionTiltStrength": 3,
+    "pressesOnClick": false
+  },
+  "exportSettings": {
+    "frameRate": 60,
+    "resolution": "4K",
+    "videoCodec": "hevc",
+    "quality": "maximum"
+  },
+  "media": {
+    "screen": { "relativePath": "primary_screen.mp4", "startOffset": 0 },
+    "camera": { "relativePath": "primary_camera.mp4", "startOffset": 0.02 },
+    "microphone": null,
+    "pointerEvents": { "relativePath": "primary_pointer.jsonl", "startOffset": 0 }
+  },
+  "additionalSources": [
+    {
+      "id": "AAAAAAAA-1111-2222-3333-BBBBBBBBBBBB",
+      "name": "Mobile Companion",
+      "media": {
+        "screen": { "relativePath": "sources/mobile/screen.mp4", "startOffset": 0 },
+        "camera": null,
+        "microphone": { "relativePath": "sources/mobile/mic.wav", "startOffset": 0 },
+        "pointerEvents": { "relativePath": "sources/mobile/pointer.jsonl", "startOffset": 0 }
+      },
+      "capture": {
+        "source": "整块屏幕",
+        "displayID": 2,
+        "displayName": "iPhone Mirror",
+        "captureFrameRate": 30,
+        "captureCodec": "HEVC",
+        "captureResolutionLimit": "最高 1080p",
+        "systemAudioScope": "全部系统声音",
+        "recordsSystemAudio": false,
+        "recordsMicrophone": true,
+        "recordsCamera": false
+      },
+      "crop": { "x": 0.05, "y": 0.05, "width": 0.9, "height": 0.9 },
+      "colorIndex": 1,
+      "screenAppearance": {
+        "cornerRadius": 40,
+        "borderWidth": 0,
+        "borderColor": "#AABBCC",
+        "shadowStrength": 0.24,
+        "insetOpacity": 0,
+        "screenFrame": "devicePhonePortrait",
+        "screenFrameScale": 1,
+        "screenFrameToolbarScale": 1,
+        "screenFrameOuterCornerRadius": 64,
+        "screenFrameContentCornerRadius": 40,
+        "screenFrameTitle": "",
+        "screenFrameBrowserAddress": ""
+      }
+    }
+  ],
+  "recordingMarkers": [
+    {
+      "id": "M1111111-1111-1111-1111-111111111111",
+      "sourceTime": 1.5,
+      "number": 1,
+      "sourceID": null
+    },
+    {
+      "id": "M2222222-2222-2222-2222-222222222222",
+      "sourceTime": 0.8,
+      "number": 2,
+      "sourceID": "AAAAAAAA-1111-2222-3333-BBBBBBBBBBBB"
+    }
+  ],
+  "timeline": {
+    "sourceSequence": {
+      "kind": "edited",
+      "segments": [
+        {
+          "id": "SEG-PRIMARY-1",
+          "sourceStart": 0,
+          "sourceDuration": 4,
+          "playbackRate": 1,
+          "media": null,
+          "sourceID": null,
+          "sceneStyle": null,
+          "crop": null
+        },
+        {
+          "id": "SEG-EXTRA-2",
+          "sourceStart": 0,
+          "sourceDuration": 3,
+          "playbackRate": 2,
+          "media": null,
+          "sourceID": "AAAAAAAA-1111-2222-3333-BBBBBBBBBBBB",
+          "crop": { "x": 0.1, "y": 0.1, "width": 0.8, "height": 0.8 },
+          "sceneStyle": {
+            "canvas": {
+              "padding": 64,
+              "borderColor": "#112233",
+              "screenFrame": "devicePhonePortrait"
+            },
+            "camera": {
+              "isHidden": true,
+              "beauty": { "smoothing": 0.2, "whitening": 0.1 }
+            },
+            "cursor": { "pressesOnClick": false },
+            "motion": { "defaultZoomScale": 1.5 },
+            "presetID": "PRESET-MOBILE",
+            "presetName": "Phone Card"
+          }
+        },
+        {
+          "id": "SEG-INSERT-3",
+          "sourceStart": 0,
+          "sourceDuration": 2,
+          "playbackRate": 1,
+          "sourceID": null,
+          "crop": null,
+          "media": {
+            "path": "inserts/standin.mp4",
+            "fileDuration": 2,
+            "name": "Title Motion",
+            "usesFrameStyle": true,
+            "motionPath": "motions/intro.dmhtml",
+            "soundPath": "inserts/chime.wav",
+            "sourceAspectRatio": 1.7777777777777777,
+            "properties": {
+              "title": { "string": { "_0": "Release 0.2.0" } }
+            },
+            "elementEdits": {
+              "badge": { "dx": 12, "dy": -4, "fontWeight": 700, "color": "#FFFFFF" }
+            },
+            "screenAppearance": {
+              "cornerRadius": 20,
+              "borderColor": "#336699",
+              "screenFrame": "windowLight"
+            }
+          }
+        }
+      ]
+    },
+    "primarySegmentAudioOverrides": {
+      "SEG-EXTRA-2": {
+        "systemVolume": null,
+        "microphoneVolume": 0.75,
+        "isSystemMuted": true,
+        "isMicrophoneMuted": false
+      }
+    },
+    "zoomClips": [],
+    "screenMotionClips": [],
+    "cameraMotionClips": [],
+    "mosaicClips": [],
+    "stickerClips": [],
+    "animationClips": [
+      {
+        "id": "ANIM-1",
+        "timing": { "startTime": 1, "duration": 2.5 },
+        "sourcePath": "motions/lower_third.dmhtml",
+        "position": { "x": 0.5, "y": 0.85 },
+        "width": 0.4,
+        "opacity": 1,
+        "layerIndex": 0,
+        "properties": {
+          "accent": { "color": { "_0": "#00FFAA" } }
+        },
+        "soundtrack": { "path": "audio/pop.wav", "volume": 0.9, "fadeIn": 0, "fadeOut": 0.1 }
+      }
+    ],
+    "audioClips": [
+      {
+        "id": "AUD-1",
+        "timing": { "startTime": 0, "duration": 7.5 },
+        "sourcePath": "audio/bgm.mp3",
+        "kind": "music",
+        "volume": 0.35
+      }
+    ],
+    "videoClips": [
+      {
+        "id": "VID-1",
+        "timing": { "startTime": 4, "duration": 1.5 },
+        "sourcePath": "overlays/pip.mp4",
+        "position": { "x": 0.8, "y": 0.2 },
+        "width": 0.3,
+        "aspect": 0.5625,
+        "opacity": 1,
+        "volume": 0,
+        "layerIndex": 1
+      }
+    ],
+    "subtitleCues": [
+      {
+        "id": "SUB-1",
+        "timing": { "startTime": 0.5, "duration": 2 },
+        "text": "Welcome to DogSC",
+        "secondaryText": "欢迎使用"
+      }
+    ],
+    "subtitleStyle": {
+      "fontScale": 0.035,
+      "bottomMargin": 0.06,
+      "textColor": "#FFFFFF",
+      "backgroundOpacity": 0.85,
+      "showsSecondary": true,
+      "font": "rounded",
+      "bold": true,
+      "entrance": "fade"
+    },
+    "mediaAssets": [
+      {
+        "id": "ASSET-1",
+        "path": "motions/intro.dmhtml",
+        "kind": "animation",
+        "name": "intro.dmhtml",
+        "importedAt": "2026-11-22T09:55:00.000Z"
+      }
+    ]
+  }
+}
