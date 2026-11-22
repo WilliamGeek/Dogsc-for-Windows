@@ -93,8 +93,9 @@
 2026-11-23 03:35 | T13.5 | DONE | 同步 CompositionScene（3.6%/4.6% 设备边框、cameraEdgeInset 安全边距与 cameraMotionBase，并修复 evaluateCameraWithAspect 误传位置参数调用 makeCameraMotionState 改用 makeCameraMotionStateFromBase）与 FrameScene（多源 sourceContentRect / beauty / pressScale / insertedMedia / post 音字动轨 / layerOrder 与 refreshingCursor），完成上游 v0.2.0 全部 53/53 RecorderCore 模块对齐并收官 Wave B；新增 2 项单测，zero node:* 与 53/53 文件存在性校验通过 | 298 pass / 303 total (0 fail, 5 skip E2E)
 2026-11-23 03:36 | ARCH-DAG-WaveB | DONE | 刷新 docs/ARCHITECTURE_DAG.json 并通过 cli.py validate --strict 与 render --strict（24 节点 / 35 路径 / 0 警告）重建 docs/WORKFLOW.html（488.4 KB）与 docs/WORKFLOW.md；同步点亮 M_CoreV20（✓ 53模块 v28）、e_probe_v20/e_v20_plan、G_MediaProbe（T12.9 showinfo）、X_CapFail（T12.10）、G_Verify（G1-G3），保持 Wave C-F 与 T11.7 虚化（opacity 0.65） | cli.py --strict 0 warnings
 2026-11-23 03:57 | T14.1 | DONE | 将 web/renderer.ts 单体着色器拆分为 web/passes/{glUtils,background,screen,cursor}.ts，新增 resolveLayerRenderOrder/dispatchSceneLayers 按 scene.layerOrder 动态调度、computeEffectiveScreenOpacity 抑制计算及 OffscreenRenderTarget FBO 基础设施；保持 renderer.ts 向后兼容导出并新增 5 项单测，zero node:* 与 stripTypeScriptTypes 全过 | 303 pass / 308 total (0 fail, 5 skip E2E)
+2026-11-23 03:59 | T14.2 | DONE | 新增 web/passes/camera.ts（CameraPass + computeCameraShaderUniforms/sampleCameraUV/buildCameraQuadVertices/buildCameraShadowVertices），实现水平镜像、AspectFill uvRect 裁剪、SDF 圆角/圆形遮罩、柔和阴影与边框、缩放避让、贴纸 cameraSuppression/不透明度淡出与保边磨皮美白；接入 renderer.ts 调度并新增 2 项单测 | 305 pass / 310 total (0 fail, 5 skip E2E)
 
-下一个任务：T14.2（实现摄像头画中画 WebGL2 通道 web/passes/camera.ts）
+下一个任务：T14.3（实现马赛克像素化/模糊与聚光灯通道 web/passes/spotlight.ts）
 
 
 

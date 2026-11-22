@@ -40,6 +40,14 @@ import {
   type CursorClickEffectPass,
 } from './passes/cursor.ts';
 import {
+  CameraPass,
+  computeCameraShaderUniforms,
+  sampleCameraUV,
+  buildCameraQuadVertices,
+  buildCameraShadowVertices,
+  type CameraShaderUniforms,
+} from './passes/camera.ts';
+import {
   createTexture2D,
   resolveLayerRenderOrder,
   dispatchSceneLayers,
@@ -53,6 +61,10 @@ export {
   computeEffectiveScreenOpacity,
   computeCursorClickEffectPass,
   buildCursorArrowTriangles,
+  computeCameraShaderUniforms,
+  sampleCameraUV,
+  buildCameraQuadVertices,
+  buildCameraShadowVertices,
   resolveLayerRenderOrder,
   dispatchSceneLayers,
 };
@@ -60,6 +72,7 @@ export type {
   BackgroundShaderParams,
   ScreenShaderUniforms,
   CursorClickEffectPass,
+  CameraShaderUniforms,
 };
 
 export interface RendererPlanContext {
@@ -70,6 +83,7 @@ export interface RendererPlanContext {
   sourceFrameCount: number;
   durationSeconds: number;
   framesBaseUrl: string | null;
+  cameraFramesBaseUrl?: string | null;
   plan: FramePlanResult;
 }
 
@@ -203,6 +217,8 @@ async function loadPlanContext(params: URLSearchParams): Promise<RendererPlanCon
         sourceFrameCount,
         durationSeconds,
         framesBaseUrl: typeof payload.framesBaseUrl === 'string' ? payload.framesBaseUrl : '/frames',
+        cameraFramesBaseUrl:
+          typeof payload.cameraFramesBaseUrl === 'string' ? payload.cameraFramesBaseUrl : null,
         plan,
       };
     }
@@ -376,9 +392,12 @@ async function bootstrapBrowser(): Promise<void> {
   const bgPass = new BackgroundPass(gl);
   const screenPass = new ScreenPass(gl);
   const cursorPass = new CursorPass(gl);
+  const cameraPass = new CameraPass(gl);
   const screenTex = createTexture2D(gl, true);
+  let cameraTex: WebGLTexture | null = null;
 
   let cachedFileNum = -1;
+  let cachedCameraFileNum = -1;
 
   const renderFrameAt = async (n: number): Promise<void> => {
     const { scene, sourceFrameFile } = ctx.plan.frameAt(n);
@@ -409,6 +428,26 @@ async function bootstrapBrowser(): Promise<void> {
       cachedFileNum = sourceFrameFile;
     }
 
+    if (scene.camera && ctx.cameraFramesBaseUrl && sourceFrameFile !== cachedCameraFileNum) {
+      const padded = String(sourceFrameFile).padStart(6, '0');
+      const camUrl = `${ctx.cameraFramesBaseUrl}/${padded}.jpg`;
+      const camImg = await loadFrameBitmap(camUrl);
+      if (camImg) {
+        try {
+          if (!cameraTex) {
+            cameraTex = createTexture2D(gl, true);
+          }
+          gl.bindTexture(gl.TEXTURE_2D, cameraTex);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, camImg);
+        } finally {
+          if ('close' in camImg && typeof camImg.close === 'function') {
+            camImg.close();
+          }
+        }
+      }
+      cachedCameraFileNum = sourceFrameFile;
+    }
+
     gl.viewport(0, 0, ctx.width, ctx.height);
     gl.clearColor(0.0, 0.0, 0.0, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT);
@@ -417,6 +456,7 @@ async function bootstrapBrowser(): Promise<void> {
       background: () => bgPass.render(scene, ctx.width, ctx.height),
       screen: () => screenPass.render(scene, screenTex, ctx.width, ctx.height),
       cursor: () => cursorPass.render(scene, ctx.width, ctx.height),
+      camera: () => cameraPass.render(scene, cameraTex, ctx.width, ctx.height),
     });
 
     gl.finish();
