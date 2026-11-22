@@ -125,13 +125,17 @@ test('T7.2: TimelineMap validation and error cases', () => {
     (err: any) => err instanceof TimelineMapError && err.kind === 'segmentOutsideSource'
   );
 
-  // Overlapping / non-monotonic segments
-  const overlap1 = makeRecordingSegment({ id: 's1', sourceStart: 1, sourceDuration: 4 }); // 1..5
-  const overlap2 = makeRecordingSegment({ id: 's2', sourceStart: 3, sourceDuration: 4 }); // 3..7
-  assert.throws(
-    () => new TimelineMap(makeSourceSequenceEdited([overlap1, overlap2]), 10),
-    (err: any) => err instanceof TimelineMapError && err.kind === 'nonMonotonicSegments'
-  );
+  // Repeated / overlapping source intervals are valid in v0.2.0 and disambiguated by segmentID
+  const overlap1 = makeRecordingSegment({ id: 's1', sourceStart: 1, sourceDuration: 4 }); // output 0..4
+  const overlap2 = makeRecordingSegment({ id: 's2', sourceStart: 3, sourceDuration: 4 }); // output 4..8
+  const repeatedMap = new TimelineMap(makeSourceSequenceEdited([overlap1, overlap2]), 10);
+  assert.equal(repeatedMap.outputDuration, 8);
+  const positions = repeatedMap.outputPositions(3.5, '00000000-0000-0000-0000-000000000001');
+  assert.equal(positions.length, 2);
+  assert.equal(positions[0].segmentID, 's1');
+  assert.equal(positions[0].time, 2.5);
+  assert.equal(positions[1].segmentID, 's2');
+  assert.equal(positions[1].time, 4.5);
 });
 
 test('T7.2: TimelineMap mapPointerEventSegments seeds move and scales time', () => {

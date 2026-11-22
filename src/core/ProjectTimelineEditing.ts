@@ -1,9 +1,10 @@
 // Port of: F:\dogsc\Sources\RecorderCore\ProjectTimelineEditing.swift
 
-import { min, max, clamp } from './swift.ts';
+import { min, max, clamp, newUUID } from './swift.ts';
 import {
   type ProjectTimeline,
   type SourceSequence,
+  type InsertedMedia,
   type RecordingSegment,
   type TransitionTiming,
   type PrimarySegmentAudioOverrides,
@@ -13,7 +14,12 @@ import {
   makeSourceSequenceEdited,
   makeTransitionTiming,
 } from './ProjectTimeline.ts';
-import { TimelineMap } from './TimelineMap.ts';
+import {
+  type TimelineSourceDurationsInput,
+  TimelineMap,
+  toSourceDurationsMap,
+} from './TimelineMap.ts';
+import { RecordingSourcePrimaryID } from './RecordingSource.ts';
 import {
   type ZoomAnimationClip,
   makeZoomAnimationClip,
@@ -40,24 +46,61 @@ import {
   insertingCameraMotion,
   insertingMosaic,
   insertingSticker,
+  insertingAnimation,
+  insertingTimed,
   remappedZoomClips,
   remappedScreenMotionClips,
   remappedCameraMotionClips,
   remappedMosaicClips,
   remappedStickerClips,
+  remappedAnimationClips,
+  remappedTimed,
   sortZoom,
   sortScreenMotion,
   sortCameraMotion,
   authoredSegment,
   primarySegmentIDs,
+  prunedPrimarySegmentAudioOverrides,
   validateProjectTimeline,
   validateProjectTimelineWithSourceDuration,
+  validateAnimationClips,
+  timelineInsertionTime,
+  timelineSplitEdits,
 } from './ProjectTimelineEditingTransforms.ts';
 
 // Re-export transforms and types for a unified ProjectTimelineEditing module
 export * from './ProjectTimelineEditingTransforms.ts';
 
 const epsilon = PROJECT_TIMELINE_EDITING_EPSILON;
+
+function valuesEqual(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if (a == null || b == null || typeof a !== typeof b) return false;
+  if (Array.isArray(a)) {
+    if (!Array.isArray(b) || a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (!valuesEqual(a[i], b[i])) return false;
+    }
+    return true;
+  }
+  if (typeof a === 'object') {
+    const objA = a as Record<string, unknown>;
+    const objB = b as Record<string, unknown>;
+    const keysA = Object.keys(objA).filter(
+      k => objA[k] !== undefined && typeof objA[k] !== 'function'
+    );
+    const keysB = Object.keys(objB).filter(
+      k => objB[k] !== undefined && typeof objB[k] !== 'function'
+    );
+    if (keysA.length !== keysB.length) return false;
+    for (const k of keysA) {
+      if (!Object.prototype.hasOwnProperty.call(objB, k)) return false;
+      if (!valuesEqual(objA[k], objB[k])) return false;
+    }
+    return true;
+  }
+  return false;
+}
 
 // MARK: - Audio Overrides
 
@@ -94,12 +137,13 @@ export function settingPrimarySegmentAudioOverrides(
 
 export function materialized(
   timeline: ProjectTimeline,
-  fullSourceDuration: number
+  fullSourceDuration: TimelineSourceDurationsInput
 ): ProjectTimeline {
-  validateProjectTimelineWithSourceDuration(timeline, fullSourceDuration);
+  const durations = toSourceDurationsMap(fullSourceDuration);
+  validateProjectTimelineWithSourceDuration(timeline, durations);
   const map = new TimelineMap({
     sourceSequence: timeline.sourceSequence,
-    fullSourceDuration,
+    sourceDurations: durations,
   });
   const result: ProjectTimeline = {
     ...timeline,
@@ -122,12 +166,15 @@ export function repairingPersistedRippleTransitions(
   let output = 0.0;
   const gapJunctions: number[] = [];
   for (let index = 0; index < segments.length; index++) {
-    output += segments[index].outputDuration;
+    const cur = segments[index];
+    output += cur.outputDuration;
+    const nxt = index + 1 < segments.length ? segments[index + 1] : null;
     if (
-      index + 1 < segments.length &&
-      segments[index + 1].sourceStart -
-        (segments[index].sourceStart + segments[index].sourceDuration) >
-        epsilon
+      nxt &&
+      cur.media == null &&
+      nxt.media == null &&
+      (cur.sourceID ?? RecordingSourcePrimaryID) === (nxt.sourceID ?? RecordingSourcePrimaryID) &&
+      nxt.sourceStart - (cur.sourceStart + cur.sourceDuration) > epsilon
     ) {
       gapJunctions.push(output);
     }
@@ -251,12 +298,13 @@ export function splitPrimarySegment(
   timeline: ProjectTimeline,
   outputTime: number,
   newRightSegmentID: string,
-  fullSourceDuration: number
+  sourceDurations: TimelineSourceDurationsInput
 ): ProjectTimeline {
-  validateProjectTimelineWithSourceDuration(timeline, fullSourceDuration);
+  const durations = toSourceDurationsMap(sourceDurations);
+  validateProjectTimelineWithSourceDuration(timeline, durations);
   const map = new TimelineMap({
     sourceSequence: timeline.sourceSequence,
-    fullSourceDuration,
+    sourceDurations: durations,
   });
   const resolved = Number.isFinite(outputTime) ? map.segmentAtOutputTime(outputTime) : null;
   if (
@@ -280,11 +328,18 @@ export function splitPrimarySegment(
     throw new ProjectTimelineEditingError('segmentNotFound', { segmentID: resolved.id });
   }
 
+  const resolvedSourceID =
+    resolved.sourceID === RecordingSourcePrimaryID ? null : resolved.sourceID;
+
   segments[index] = makeRecordingSegment({
     id: segments[index].id,
     sourceStart: segments[index].sourceStart,
     sourceDuration: splitSourceOffset,
     playbackRate: resolved.playbackRate,
+    media: resolved.media,
+    sourceID: resolvedSourceID,
+    sceneStyle: resolved.sceneStyle,
+    crop: resolved.crop,
   });
 
   segments.splice(
@@ -295,6 +350,10 @@ export function splitPrimarySegment(
       sourceStart: resolved.sourceStart + splitSourceOffset,
       sourceDuration: resolved.sourceDuration - splitSourceOffset,
       playbackRate: resolved.playbackRate,
+      media: resolved.media,
+      sourceID: resolvedSourceID,
+      sceneStyle: resolved.sceneStyle,
+      crop: resolved.crop,
     })
   );
 
@@ -310,7 +369,7 @@ export function splitPrimarySegment(
     primarySegmentAudioOverrides,
   };
 
-  validateProjectTimelineWithSourceDuration(result, fullSourceDuration);
+  validateProjectTimelineWithSourceDuration(result, durations);
   return result;
 }
 
@@ -321,13 +380,14 @@ export function trimPrimarySegment(
   segmentID: string,
   edge: RecordingSegmentTrimEdge,
   outputTime: number,
-  fullSourceDuration: number,
+  sourceDurations: TimelineSourceDurationsInput,
   defaultTransitionDuration: number = 0.7
 ): ProjectTimeline {
-  validateProjectTimelineWithSourceDuration(timeline, fullSourceDuration);
+  const durations = toSourceDurationsMap(sourceDurations);
+  validateProjectTimelineWithSourceDuration(timeline, durations);
   const map = new TimelineMap({
     sourceSequence: timeline.sourceSequence,
-    fullSourceDuration,
+    sourceDurations: durations,
   });
   const resolved = map.segments.find(s => s.id === segmentID);
   if (!resolved) {
@@ -352,12 +412,7 @@ export function trimPrimarySegment(
       }
       if (outputTime < resolved.outputStart - epsilon) {
         // Extending left
-        let previousSourceEnd = 0;
-        for (let i = 0; i < segments.length; i++) {
-          if (i !== index && segments[i].sourceEnd <= resolved.sourceStart + epsilon) {
-            previousSourceEnd = max(previousSourceEnd, segments[i].sourceEnd);
-          }
-        }
+        const previousSourceEnd = 0;
         const available = max(resolved.sourceStart - previousSourceEnd, 0);
         const outputAmount = resolved.outputStart - outputTime;
         const sourceAmount = outputAmount * resolved.playbackRate;
@@ -365,7 +420,7 @@ export function trimPrimarySegment(
           throw new ProjectTimelineEditingError('trimOutsideSegment', { segmentID });
         }
         segments[index] = makeRecordingSegment({
-          id: segments[index].id,
+          ...segments[index],
           sourceStart: segments[index].sourceStart - sourceAmount,
           sourceDuration: segments[index].sourceDuration + sourceAmount,
           playbackRate: resolved.playbackRate,
@@ -386,6 +441,18 @@ export function trimPrimarySegment(
         const stickerClips = timeline.stickerClips.map(c =>
           insertingSticker(c, resolved.outputStart, outputAmount)
         );
+        const animationClips = timeline.animationClips.map(c =>
+          insertingAnimation(c, resolved.outputStart, outputAmount)
+        );
+        const audioClips = timeline.audioClips.map(c =>
+          insertingTimed(c, resolved.outputStart, outputAmount)
+        );
+        const videoClips = timeline.videoClips.map(c =>
+          insertingTimed(c, resolved.outputStart, outputAmount)
+        );
+        const subtitleCues = timeline.subtitleCues.map(c =>
+          insertingTimed(c, resolved.outputStart, outputAmount)
+        );
         sortZoom(zoomClips);
         sortScreenMotion(screenMotionClips);
         sortCameraMotion(cameraMotionClips);
@@ -398,8 +465,12 @@ export function trimPrimarySegment(
           cameraMotionClips,
           mosaicClips,
           stickerClips,
+          animationClips,
+          audioClips,
+          videoClips,
+          subtitleCues,
         };
-        validateProjectTimelineWithSourceDuration(result, fullSourceDuration);
+        validateProjectTimelineWithSourceDuration(result, durations);
         return result;
       }
       if (
@@ -410,7 +481,7 @@ export function trimPrimarySegment(
       }
       const sourceAmount = (outputTime - resolved.outputStart) * resolved.playbackRate;
       segments[index] = makeRecordingSegment({
-        id: segments[index].id,
+        ...segments[index],
         sourceStart: segments[index].sourceStart + sourceAmount,
         sourceDuration: segments[index].sourceDuration - sourceAmount,
         playbackRate: resolved.playbackRate,
@@ -425,12 +496,9 @@ export function trimPrimarySegment(
       }
       if (outputTime > resolved.outputEnd + epsilon) {
         // Extending right
-        let nextSourceStart = fullSourceDuration;
-        for (let i = 0; i < segments.length; i++) {
-          if (i !== index && segments[i].sourceStart >= resolved.sourceEnd - epsilon) {
-            nextSourceStart = min(nextSourceStart, segments[i].sourceStart);
-          }
-        }
+        const availableDuration =
+          resolved.media?.fileDuration ?? durations.get(resolved.sourceID) ?? 0;
+        const nextSourceStart = availableDuration;
         const available = max(nextSourceStart - resolved.sourceEnd, 0);
         const outputAmount = outputTime - resolved.outputEnd;
         const sourceAmount = outputAmount * resolved.playbackRate;
@@ -438,7 +506,7 @@ export function trimPrimarySegment(
           throw new ProjectTimelineEditingError('trimOutsideSegment', { segmentID });
         }
         segments[index] = makeRecordingSegment({
-          id: segments[index].id,
+          ...segments[index],
           sourceStart: segments[index].sourceStart,
           sourceDuration: segments[index].sourceDuration + sourceAmount,
           playbackRate: resolved.playbackRate,
@@ -459,6 +527,18 @@ export function trimPrimarySegment(
         const stickerClips = timeline.stickerClips.map(c =>
           insertingSticker(c, resolved.outputEnd, outputAmount)
         );
+        const animationClips = timeline.animationClips.map(c =>
+          insertingAnimation(c, resolved.outputEnd, outputAmount)
+        );
+        const audioClips = timeline.audioClips.map(c =>
+          insertingTimed(c, resolved.outputEnd, outputAmount)
+        );
+        const videoClips = timeline.videoClips.map(c =>
+          insertingTimed(c, resolved.outputEnd, outputAmount)
+        );
+        const subtitleCues = timeline.subtitleCues.map(c =>
+          insertingTimed(c, resolved.outputEnd, outputAmount)
+        );
         sortZoom(zoomClips);
         sortScreenMotion(screenMotionClips);
         sortCameraMotion(cameraMotionClips);
@@ -471,8 +551,12 @@ export function trimPrimarySegment(
           cameraMotionClips,
           mosaicClips,
           stickerClips,
+          animationClips,
+          audioClips,
+          videoClips,
+          subtitleCues,
         };
-        validateProjectTimelineWithSourceDuration(result, fullSourceDuration);
+        validateProjectTimelineWithSourceDuration(result, durations);
         return result;
       }
       if (
@@ -482,7 +566,7 @@ export function trimPrimarySegment(
         throw new ProjectTimelineEditingError('trimOutsideSegment', { segmentID });
       }
       segments[index] = makeRecordingSegment({
-        id: segments[index].id,
+        ...segments[index],
         sourceStart: segments[index].sourceStart,
         sourceDuration: (outputTime - resolved.outputStart) * resolved.playbackRate,
         playbackRate: resolved.playbackRate,
@@ -497,7 +581,7 @@ export function trimPrimarySegment(
     makeSourceSequenceEdited(segments),
     deletion,
     deletion.end >= map.outputDuration - epsilon,
-    fullSourceDuration,
+    durations,
     defaultTransitionDuration
   );
 }
@@ -507,13 +591,14 @@ export function trimPrimarySegment(
 export function removePrimarySegment(
   timeline: ProjectTimeline,
   segmentID: string,
-  fullSourceDuration: number,
+  sourceDurations: TimelineSourceDurationsInput,
   defaultTransitionDuration: number = 0.7
 ): ProjectTimeline {
-  validateProjectTimelineWithSourceDuration(timeline, fullSourceDuration);
+  const durations = toSourceDurationsMap(sourceDurations);
+  validateProjectTimelineWithSourceDuration(timeline, durations);
   const map = new TimelineMap({
     sourceSequence: timeline.sourceSequence,
-    fullSourceDuration,
+    sourceDurations: durations,
   });
   const removed = map.segments.find(s => s.id === segmentID);
   if (!removed) {
@@ -528,38 +613,57 @@ export function removePrimarySegment(
     makeSourceSequenceEdited(retained),
     makeOutputDeletion(removed.outputStart, removed.outputEnd),
     removed.outputEnd >= map.outputDuration - epsilon,
-    fullSourceDuration,
+    durations,
     defaultTransitionDuration
   );
 }
 
-// MARK: - Move Primary Segment
+// MARK: - Move Primary Segment(s)
 
 export function movePrimarySegment(
   timeline: ProjectTimeline,
   segmentID: string,
   requestedIndex: number,
-  fullSourceDuration: number
+  sourceDurations: TimelineSourceDurationsInput
 ): ProjectTimeline {
-  validateProjectTimelineWithSourceDuration(timeline, fullSourceDuration);
+  return movePrimarySegments(timeline, [segmentID], requestedIndex, sourceDurations);
+}
+
+export function movePrimarySegments(
+  timeline: ProjectTimeline,
+  segmentIDs: Iterable<string>,
+  requestedIndex: number,
+  sourceDurations: TimelineSourceDurationsInput
+): ProjectTimeline {
+  const durations = toSourceDurationsMap(sourceDurations);
+  validateProjectTimelineWithSourceDuration(timeline, durations);
   const oldMap = new TimelineMap({
     sourceSequence: timeline.sourceSequence,
-    fullSourceDuration,
+    sourceDurations: durations,
   });
-  const oldIndex = oldMap.segments.findIndex(s => s.id === segmentID);
-  if (oldIndex < 0) {
-    throw new ProjectTimelineEditingError('segmentNotFound', { segmentID });
-  }
-  const finalIndex = min(max(requestedIndex, 0), oldMap.segments.length - 1);
-  if (finalIndex === oldIndex) return timeline;
+  const idSet = new Set(segmentIDs);
+  if (idSet.size === 0) return timeline;
 
-  const segments = oldMap.segments.map(authoredSegment);
-  const [moved] = segments.splice(oldIndex, 1);
-  segments.splice(finalIndex, 0, moved);
+  const existingIDs = new Set(oldMap.segments.map(s => s.id));
+  for (const id of idSet) {
+    if (!existingIDs.has(id)) {
+      throw new ProjectTimelineEditingError('segmentNotFound', { segmentID: id });
+    }
+  }
+
+  const selected = oldMap.segments.filter(s => idSet.has(s.id)).map(authoredSegment);
+  const segments = oldMap.segments.filter(s => !idSet.has(s.id)).map(authoredSegment);
+  const finalIndex = min(max(requestedIndex, 0), segments.length);
+  segments.splice(finalIndex, 0, ...selected);
+
+  const unchanged =
+    segments.length === oldMap.segments.length &&
+    segments.every((s, i) => s.id === oldMap.segments[i].id);
+  if (unchanged) return timeline;
 
   const newMap = new TimelineMap({
     sourceSequence: makeSourceSequenceEdited(segments),
-    fullSourceDuration,
+    sourceDurations: durations,
   });
   const newStarts = new Map(newMap.segments.map(s => [s.id, s.outputStart]));
 
@@ -586,9 +690,18 @@ export function movePrimarySegment(
       newStarts,
       newMap.outputDuration
     ),
+    animationClips: remappedAnimationClips(
+      timeline.animationClips,
+      oldMap,
+      newStarts,
+      newMap.outputDuration
+    ),
+    audioClips: remappedTimed(timeline.audioClips, oldMap, newStarts, newMap.outputDuration),
+    videoClips: remappedTimed(timeline.videoClips, oldMap, newStarts, newMap.outputDuration),
+    subtitleCues: remappedTimed(timeline.subtitleCues, oldMap, newStarts, newMap.outputDuration),
   };
 
-  validateProjectTimelineWithSourceDuration(result, fullSourceDuration);
+  validateProjectTimelineWithSourceDuration(result, durations);
   return result;
 }
 
@@ -599,12 +712,13 @@ export function restorePrimaryGap(
   previousSegmentID: string,
   nextSegmentID: string,
   restoredSegmentID: string,
-  fullSourceDuration: number
+  sourceDurations: TimelineSourceDurationsInput
 ): ProjectTimeline {
-  validateProjectTimelineWithSourceDuration(timeline, fullSourceDuration);
+  const durations = toSourceDurationsMap(sourceDurations);
+  validateProjectTimelineWithSourceDuration(timeline, durations);
   const map = new TimelineMap({
     sourceSequence: timeline.sourceSequence,
-    fullSourceDuration,
+    sourceDurations: durations,
   });
   if (map.segments.some(s => s.id === restoredSegmentID)) {
     throw new ProjectTimelineEditingError('duplicateSegmentID', {
@@ -626,7 +740,12 @@ export function restorePrimaryGap(
   const previous = map.segments[previousIndex];
   const next = map.segments[previousIndex + 1];
   const restoredDuration = next.sourceStart - previous.sourceEnd;
-  if (restoredDuration <= epsilon) {
+  if (
+    previous.media != null ||
+    next.media != null ||
+    previous.sourceID !== next.sourceID ||
+    restoredDuration <= epsilon
+  ) {
     throw new ProjectTimelineEditingError('noRestorableSourceGap', {
       firstID: previousSegmentID,
       secondID: nextSegmentID,
@@ -641,6 +760,9 @@ export function restorePrimaryGap(
       id: restoredSegmentID,
       sourceStart: previous.sourceEnd,
       sourceDuration: restoredDuration,
+      sourceID: previous.sourceID === RecordingSourcePrimaryID ? null : previous.sourceID,
+      sceneStyle: previous.sceneStyle,
+      crop: previous.crop,
     })
   );
 
@@ -666,6 +788,18 @@ export function restorePrimaryGap(
   const stickerClips = timeline.stickerClips.map(c =>
     insertingSticker(c, insertionTime, restoredDuration)
   );
+  const animationClips = timeline.animationClips.map(c =>
+    insertingAnimation(c, insertionTime, restoredDuration)
+  );
+  const audioClips = timeline.audioClips.map(c =>
+    insertingTimed(c, insertionTime, restoredDuration)
+  );
+  const videoClips = timeline.videoClips.map(c =>
+    insertingTimed(c, insertionTime, restoredDuration)
+  );
+  const subtitleCues = timeline.subtitleCues.map(c =>
+    insertingTimed(c, insertionTime, restoredDuration)
+  );
   sortZoom(zoomClips);
   sortScreenMotion(screenMotionClips);
   sortCameraMotion(cameraMotionClips);
@@ -679,24 +813,29 @@ export function restorePrimaryGap(
     cameraMotionClips,
     mosaicClips,
     stickerClips,
+    animationClips,
+    audioClips,
+    videoClips,
+    subtitleCues,
   };
 
-  validateProjectTimelineWithSourceDuration(result, fullSourceDuration);
+  validateProjectTimelineWithSourceDuration(result, durations);
   return result;
 }
 
 export function restorePrimaryLeadingGap(
   timeline: ProjectTimeline,
   restoredSegmentID: string,
-  fullSourceDuration: number
+  sourceDurations: TimelineSourceDurationsInput
 ): ProjectTimeline {
-  validateProjectTimelineWithSourceDuration(timeline, fullSourceDuration);
+  const durations = toSourceDurationsMap(sourceDurations);
+  validateProjectTimelineWithSourceDuration(timeline, durations);
   const map = new TimelineMap({
     sourceSequence: timeline.sourceSequence,
-    fullSourceDuration,
+    sourceDurations: durations,
   });
   const first = map.segments[0];
-  if (!first || first.sourceStart <= epsilon) {
+  if (!first || first.media != null || first.sourceStart <= epsilon) {
     throw new ProjectTimelineEditingError('noRestorableLeadingSourceGap', {
       segmentID: first?.id ?? restoredSegmentID,
     });
@@ -714,6 +853,9 @@ export function restorePrimaryLeadingGap(
       id: restoredSegmentID,
       sourceStart: 0,
       sourceDuration: restoredDuration,
+      sourceID: first.sourceID === RecordingSourcePrimaryID ? null : first.sourceID,
+      sceneStyle: first.sceneStyle,
+      crop: first.crop,
     })
   );
 
@@ -732,6 +874,12 @@ export function restorePrimaryLeadingGap(
   );
   const mosaicClips = timeline.mosaicClips.map(c => insertingMosaic(c, 0, restoredDuration));
   const stickerClips = timeline.stickerClips.map(c => insertingSticker(c, 0, restoredDuration));
+  const animationClips = timeline.animationClips.map(c =>
+    insertingAnimation(c, 0, restoredDuration)
+  );
+  const audioClips = timeline.audioClips.map(c => insertingTimed(c, 0, restoredDuration));
+  const videoClips = timeline.videoClips.map(c => insertingTimed(c, 0, restoredDuration));
+  const subtitleCues = timeline.subtitleCues.map(c => insertingTimed(c, 0, restoredDuration));
   sortZoom(zoomClips);
   sortScreenMotion(screenMotionClips);
   sortCameraMotion(cameraMotionClips);
@@ -745,24 +893,30 @@ export function restorePrimaryLeadingGap(
     cameraMotionClips,
     mosaicClips,
     stickerClips,
+    animationClips,
+    audioClips,
+    videoClips,
+    subtitleCues,
   };
 
-  validateProjectTimelineWithSourceDuration(result, fullSourceDuration);
+  validateProjectTimelineWithSourceDuration(result, durations);
   return result;
 }
 
 export function restorePrimaryTrailingGap(
   timeline: ProjectTimeline,
   restoredSegmentID: string,
-  fullSourceDuration: number
+  sourceDurations: TimelineSourceDurationsInput
 ): ProjectTimeline {
-  validateProjectTimelineWithSourceDuration(timeline, fullSourceDuration);
+  const durations = toSourceDurationsMap(sourceDurations);
+  validateProjectTimelineWithSourceDuration(timeline, durations);
   const map = new TimelineMap({
     sourceSequence: timeline.sourceSequence,
-    fullSourceDuration,
+    sourceDurations: durations,
   });
   const last = map.segments[map.segments.length - 1];
-  if (!last || fullSourceDuration - last.sourceEnd <= epsilon) {
+  const sourceAvailableDuration = last ? (durations.get(last.sourceID) ?? 0) : 0;
+  if (!last || last.media != null || sourceAvailableDuration - last.sourceEnd <= epsilon) {
     throw new ProjectTimelineEditingError('noRestorableTrailingSourceGap', {
       segmentID: last?.id ?? restoredSegmentID,
     });
@@ -778,7 +932,10 @@ export function restorePrimaryTrailingGap(
     makeRecordingSegment({
       id: restoredSegmentID,
       sourceStart: last.sourceEnd,
-      sourceDuration: fullSourceDuration - last.sourceEnd,
+      sourceDuration: sourceAvailableDuration - last.sourceEnd,
+      sourceID: last.sourceID === RecordingSourcePrimaryID ? null : last.sourceID,
+      sceneStyle: last.sceneStyle,
+      crop: last.crop,
     })
   );
 
@@ -794,7 +951,7 @@ export function restorePrimaryTrailingGap(
     primarySegmentAudioOverrides,
   };
 
-  validateProjectTimelineWithSourceDuration(result, fullSourceDuration);
+  validateProjectTimelineWithSourceDuration(result, durations);
   return result;
 }
 
@@ -804,12 +961,13 @@ export function mergeAdjacentPrimarySegments(
   timeline: ProjectTimeline,
   previousSegmentID: string,
   nextSegmentID: string,
-  fullSourceDuration: number
+  sourceDurations: TimelineSourceDurationsInput
 ): ProjectTimeline {
-  validateProjectTimelineWithSourceDuration(timeline, fullSourceDuration);
+  const durations = toSourceDurationsMap(sourceDurations);
+  validateProjectTimelineWithSourceDuration(timeline, durations);
   const map = new TimelineMap({
     sourceSequence: timeline.sourceSequence,
-    fullSourceDuration,
+    sourceDurations: durations,
   });
   const previousIndex = map.segments.findIndex(s => s.id === previousSegmentID);
   if (
@@ -826,7 +984,16 @@ export function mergeAdjacentPrimarySegments(
   const previous = map.segments[previousIndex];
   const next = map.segments[previousIndex + 1];
 
-  if (Math.abs(next.sourceStart - previous.sourceEnd) > epsilon) {
+  if (previous.sourceID !== next.sourceID) {
+    throw new ProjectTimelineEditingError('cannotMergeDifferentSources', {
+      firstID: previousSegmentID,
+      secondID: nextSegmentID,
+    });
+  }
+  if (
+    (previous.media?.path ?? null) !== (next.media?.path ?? null) ||
+    Math.abs(next.sourceStart - previous.sourceEnd) > epsilon
+  ) {
     throw new ProjectTimelineEditingError('cannotMergeDeletedGap', {
       firstID: previousSegmentID,
       secondID: nextSegmentID,
@@ -837,6 +1004,9 @@ export function mergeAdjacentPrimarySegments(
       firstID: previousSegmentID,
       secondID: nextSegmentID,
     });
+  }
+  if (!valuesEqual(previous.sceneStyle, next.sceneStyle)) {
+    throw new ProjectTimelineEditingError('cannotMergeDifferentSceneStyles');
   }
 
   const prevAudio = primarySegmentAudioOverrides(timeline, previousSegmentID);
@@ -855,6 +1025,7 @@ export function mergeAdjacentPrimarySegments(
 
   const segments = map.segments.map(authoredSegment);
   segments[previousIndex] = makeRecordingSegment({
+    ...segments[previousIndex],
     id: previous.id,
     sourceStart: previous.sourceStart,
     sourceDuration: next.sourceEnd - previous.sourceStart,
@@ -871,7 +1042,162 @@ export function mergeAdjacentPrimarySegments(
     primarySegmentAudioOverrides: nextOverrides,
   };
 
-  validateProjectTimelineWithSourceDuration(result, fullSourceDuration);
+  validateProjectTimelineWithSourceDuration(result, durations);
+  return result;
+}
+
+// MARK: - Insert Media & Primary Segments
+
+/**
+ * EDT-054: inserts an outside media clip into the main track at an output
+ * time. A segment under that time is split; downstream tracks ripple later.
+ */
+export function insertMediaSegment(
+  timeline: ProjectTimeline,
+  media: InsertedMedia,
+  requestedTime: number,
+  requestedDuration: number,
+  newSegmentID: string,
+  sourceDurations: TimelineSourceDurationsInput,
+  requestedSourceStart: number = 0
+): ProjectTimeline {
+  const sourceStart = min(max(requestedSourceStart, 0), max(media.fileDuration - 0.1, 0));
+  const duration = min(max(requestedDuration, 0.1), max(media.fileDuration - sourceStart, 0.1));
+  return insertPrimarySegments(
+    timeline,
+    [
+      makeRecordingSegment({
+        id: newSegmentID,
+        sourceStart,
+        sourceDuration: duration,
+        media,
+      }),
+    ],
+    requestedTime,
+    sourceDurations,
+    { splitEffectsAtInsertion: false }
+  );
+}
+
+/**
+ * Inserts authored recording/media segments without losing source ranges,
+ * playback rates or per-segment appearance. Existing tracks ripple once.
+ */
+export function insertPrimarySegments(
+  original: ProjectTimeline,
+  inserted: readonly RecordingSegment[],
+  requestedTime: number,
+  sourceDurations: TimelineSourceDurationsInput,
+  options: {
+    audioOverrides?: Record<string, PrimarySegmentAudioOverrides>;
+    splitEffectsAtInsertion?: boolean;
+  } = {}
+): ProjectTimeline {
+  const durations = toSourceDurationsMap(sourceDurations);
+  const map = new TimelineMap(original.sourceSequence, durations);
+  const snappedTime = timelineInsertionTime(requestedTime, map);
+  const splitEffectsAtInsertion = options.splitEffectsAtInsertion ?? true;
+  const audioOverrides = options.audioOverrides ?? {};
+  const timeline = splitEffectsAtInsertion ? timelineSplitEdits(original, snappedTime) : original;
+  validateProjectTimelineWithSourceDuration(timeline, durations);
+
+  const duration = inserted.reduce((acc, seg) => acc + seg.outputDuration, 0);
+  if (inserted.length === 0 || !Number.isFinite(duration) || !(duration > 0)) {
+    throw new ProjectTimelineEditingError('invalidSourceSequence');
+  }
+
+  const segments = map.segments.map(authoredSegment);
+  const overrides: Record<string, PrimarySegmentAudioOverrides> = {
+    ...timeline.primarySegmentAudioOverrides,
+  };
+
+  let insertIndex = segments.length;
+  let insertionTime = map.outputDuration;
+  const resolved = map.segment(clamp(snappedTime, 0, map.outputDuration));
+  if (resolved) {
+    const index = segments.findIndex(s => s.id === resolved.id);
+    if (snappedTime - resolved.outputStart < 1.0 / 60) {
+      insertIndex = index >= 0 ? index : segments.length;
+      insertionTime = resolved.outputStart;
+    } else if (resolved.outputEnd - snappedTime < 1.0 / 60) {
+      insertIndex = index >= 0 ? index + 1 : segments.length;
+      insertionTime = resolved.outputEnd;
+    } else if (index >= 0) {
+      const sourceOffset = (snappedTime - resolved.outputStart) * resolved.playbackRate;
+      segments[index] = makeRecordingSegment({
+        ...segments[index],
+        sourceDuration: sourceOffset,
+      });
+      const rightID = newUUID();
+      segments.splice(
+        index + 1,
+        0,
+        makeRecordingSegment({
+          id: rightID,
+          sourceStart: resolved.sourceStart + sourceOffset,
+          sourceDuration: resolved.sourceDuration - sourceOffset,
+          playbackRate: resolved.playbackRate,
+          media: resolved.media,
+          sourceID: resolved.sourceID === RecordingSourcePrimaryID ? null : resolved.sourceID,
+          sceneStyle: resolved.sceneStyle,
+          crop: resolved.crop,
+        })
+      );
+      if (overrides[resolved.id]) {
+        overrides[rightID] = overrides[resolved.id];
+      }
+      insertIndex = index + 1;
+      insertionTime = snappedTime;
+    }
+  }
+
+  segments.splice(insertIndex, 0, ...inserted);
+  for (const seg of inserted) {
+    const ov = audioOverrides[seg.id];
+    if (ov && !primarySegmentAudioOverridesIsEmpty(ov)) {
+      overrides[seg.id] = ov;
+    } else {
+      delete overrides[seg.id];
+    }
+  }
+
+  const zoomClips = timeline.zoomClips.map(c => insertingZoom(c, insertionTime, duration));
+  const screenMotionClips = timeline.screenMotionClips.map(c =>
+    insertingScreenMotion(c, insertionTime, duration)
+  );
+  const cameraMotionClips = timeline.cameraMotionClips.map(c =>
+    insertingCameraMotion(c, insertionTime, duration)
+  );
+  const mosaicClips = timeline.mosaicClips.map(c => insertingMosaic(c, insertionTime, duration));
+  const stickerClips = timeline.stickerClips.map(c =>
+    insertingSticker(c, insertionTime, duration)
+  );
+  const animationClips = timeline.animationClips.map(c =>
+    insertingAnimation(c, insertionTime, duration)
+  );
+  const audioClips = timeline.audioClips.map(c => insertingTimed(c, insertionTime, duration));
+  const videoClips = timeline.videoClips.map(c => insertingTimed(c, insertionTime, duration));
+  const subtitleCues = timeline.subtitleCues.map(c => insertingTimed(c, insertionTime, duration));
+  sortZoom(zoomClips);
+  sortScreenMotion(screenMotionClips);
+  sortCameraMotion(cameraMotionClips);
+
+  const result: ProjectTimeline = {
+    ...timeline,
+    primarySegmentAudioOverrides: overrides,
+    sourceSequence: makeSourceSequenceEdited(segments),
+    zoomClips,
+    screenMotionClips,
+    cameraMotionClips,
+    mosaicClips,
+    stickerClips,
+    animationClips,
+    audioClips,
+    videoClips,
+    subtitleCues,
+  };
+
+  validateProjectTimelineWithSourceDuration(result, durations);
   return result;
 }
 
@@ -1091,9 +1417,12 @@ export function replacingCameraMotionClip(
 
 // MARK: - Validation
 
-export function validate(timeline: ProjectTimeline, fullSourceDuration?: number): void {
-  if (fullSourceDuration != null) {
-    validateProjectTimelineWithSourceDuration(timeline, fullSourceDuration);
+export function validate(
+  timeline: ProjectTimeline,
+  sourceDurations?: TimelineSourceDurationsInput
+): void {
+  if (sourceDurations != null) {
+    validateProjectTimelineWithSourceDuration(timeline, sourceDurations);
   } else {
     validateProjectTimeline(timeline);
   }
@@ -1105,21 +1434,28 @@ export const ProjectTimelineEditing = Object.freeze({
   epsilon: PROJECT_TIMELINE_EDITING_EPSILON,
   primarySegmentAudioOverrides,
   settingPrimarySegmentAudioOverrides,
+  prunedPrimarySegmentAudioOverrides,
   materialized,
   repairingPersistedRippleTransitions,
   splitPrimarySegment,
   trimPrimarySegment,
   removePrimarySegment,
   movePrimarySegment,
+  movePrimarySegments,
   restorePrimaryGap,
   restorePrimaryLeadingGap,
   restorePrimaryTrailingGap,
   mergeAdjacentPrimarySegments,
+  insertMediaSegment,
+  insertPrimarySegments,
   insertingScreenMotion: insertingScreenMotionClip,
   removingScreenMotion: removingScreenMotionClip,
   replacingScreenMotion: replacingScreenMotionClip,
   insertingCameraMotion: insertingCameraMotionClip,
   removingCameraMotion: removingCameraMotionClip,
   replacingCameraMotion: replacingCameraMotionClip,
+  validateAnimationClips,
+  timelineInsertionTime,
+  timelineSplitEdits,
   validate,
 });

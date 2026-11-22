@@ -1,6 +1,6 @@
 // Port of: F:\dogsc\Sources\RecorderCore\ProjectTimelineEditingTransforms.swift
 
-import { min, max, clamp } from './swift.ts';
+import { min, max, clamp, newUUID } from './swift.ts';
 import {
   type ProjectTimeline,
   type SourceSequence,
@@ -11,7 +11,13 @@ import {
   makeRecordingSegment,
   makeTransitionTiming,
 } from './ProjectTimeline.ts';
-import { type ResolvedRecordingSegment, TimelineMap } from './TimelineMap.ts';
+import {
+  type ResolvedRecordingSegment,
+  type TimelineSourceDurationsInput,
+  TimelineMap,
+  toSourceDurationsMap,
+} from './TimelineMap.ts';
+import { RecordingSourcePrimaryID } from './RecordingSource.ts';
 import {
   type ZoomAnimationClip,
   makeZoomAnimationClip,
@@ -23,6 +29,7 @@ import {
 import { type ScreenMotionClip } from './ScreenMotion.ts';
 import { type CameraMotionClip } from './CameraMotion.ts';
 import {
+  type AnimationClip,
   type MosaicClip,
   type StickerClip,
   type OverlayTiming,
@@ -30,6 +37,7 @@ import {
   makeOverlayTiming,
   normalizedOverlayRectClamped,
 } from './OverlayTimeline.ts';
+import type { AudioClip, SubtitleCue, TimedOverlayClip, VideoClip } from './PostProductionModel.ts';
 import { zoomSequenceIsValid } from './ProjectTimelineRetime.ts';
 
 // MARK: - Constants
@@ -47,7 +55,8 @@ export type ProjectTimelineTrack =
   | 'screenMotion'
   | 'cameraMotion'
   | 'mosaic'
-  | 'sticker';
+  | 'sticker'
+  | 'animation';
 
 export function projectTimelineTrackUserFacingName(track: ProjectTimelineTrack): string {
   switch (track) {
@@ -63,6 +72,8 @@ export function projectTimelineTrackUserFacingName(track: ProjectTimelineTrack):
       return '打码';
     case 'sticker':
       return '贴图';
+    case 'animation':
+      return '动效';
   }
 }
 
@@ -80,6 +91,8 @@ export type ProjectTimelineEditingErrorKind =
   | 'noRestorableLeadingSourceGap'
   | 'noRestorableTrailingSourceGap'
   | 'cannotMergeDeletedGap'
+  | 'cannotMergeDifferentSources'
+  | 'cannotMergeDifferentSceneStyles'
   | 'cannotMergeDifferentPlaybackRates'
   | 'cannotMergeDifferentAudioOverrides'
   | 'invalidPrimarySegmentAudioOverrides'
@@ -114,7 +127,7 @@ export class ProjectTimelineEditingError extends Error {
     let message = kind;
     switch (kind) {
       case 'invalidSourceSequence':
-        message = '主录屏片段必须有效、不重复使用源素材且至少保留一段。';
+        message = '主录屏片段必须有效且至少保留一段。';
         break;
       case 'segmentNotFound':
         message = '找不到要编辑的主片段。';
@@ -145,6 +158,12 @@ export class ProjectTimelineEditingError extends Error {
         break;
       case 'cannotMergeDeletedGap':
         message = '该剪切点包含已删除素材，应先还原而不是直接合并。';
+        break;
+      case 'cannotMergeDifferentSources':
+        message = '不同录制的片段无法合并。';
+        break;
+      case 'cannotMergeDifferentSceneStyles':
+        message = '这两个片段的场景外观不同，不能合并。';
         break;
       case 'cannotMergeDifferentPlaybackRates':
         message = '相邻片段速度不同，无法直接合并。';
@@ -280,6 +299,10 @@ export function authoredSegment(segment: ResolvedRecordingSegment): RecordingSeg
     sourceStart: segment.sourceStart,
     sourceDuration: segment.sourceDuration,
     playbackRate: segment.playbackRate,
+    media: segment.media,
+    sourceID: segment.sourceID === RecordingSourcePrimaryID ? null : segment.sourceID,
+    sceneStyle: segment.sceneStyle,
+    crop: segment.crop,
   });
 }
 
@@ -411,18 +434,7 @@ export function validateSourceSequence(sequence: SourceSequence): void {
       throw new ProjectTimelineEditingError('invalidSourceSequence');
     }
   }
-  for (const current of segments) {
-    if (
-      segments.some(
-        other =>
-          other.id !== current.id &&
-          current.sourceStart < other.sourceEnd - epsilon &&
-          current.sourceEnd > other.sourceStart + epsilon
-      )
-    ) {
-      throw new ProjectTimelineEditingError('invalidSourceSequence');
-    }
-  }
+  // Every occurrence owns a unique segment ID; source intervals may repeat.
 }
 
 export function validateZoomClips(clips: readonly ZoomAnimationClip[]): void {
@@ -647,8 +659,11 @@ export function validateStickerClips(clips: readonly StickerClip[]): void {
     const components = clip.relativePath.split('/');
     if (
       !validOverlayTiming(clip.timing) ||
+      !Number.isFinite(clip.sourceStart) ||
+      clip.sourceStart < 0 ||
+      !Number.isFinite(clip.playbackRate) ||
+      !(clip.playbackRate > 0) ||
       clip.relativePath.length === 0 ||
-      clip.relativePath.startsWith('/') ||
       components.includes('..') ||
       !validNormalizedPoint(clip.position) ||
       !Number.isFinite(clip.width) ||
@@ -692,6 +707,27 @@ export function validateStickerClips(clips: readonly StickerClip[]): void {
   }
 }
 
+export function validateAnimationClips(clips: readonly AnimationClip[]): void {
+  for (const clip of clips) {
+    if (
+      !validOverlayTiming(clip.timing) ||
+      !Number.isFinite(clip.width) ||
+      !(clip.width > 0) ||
+      !Number.isFinite(clip.opacity) ||
+      clip.opacity < 0 ||
+      clip.opacity > 1 ||
+      !Number.isFinite(clip.playbackRate) ||
+      !(clip.playbackRate > 0) ||
+      clip.sourcePath.length === 0
+    ) {
+      throw new ProjectTimelineEditingError('invalidClip', {
+        track: 'animation',
+        clipID: clip.id,
+      });
+    }
+  }
+}
+
 export function validateProjectTimeline(timeline: ProjectTimeline): void {
   validateSourceSequence(timeline.sourceSequence);
   validatePrimarySegmentAudioOverrides(
@@ -703,16 +739,14 @@ export function validateProjectTimeline(timeline: ProjectTimeline): void {
   validateCameraMotionClips(timeline.cameraMotionClips);
   validateMosaicClips(timeline.mosaicClips);
   validateStickerClips(timeline.stickerClips);
+  validateAnimationClips(timeline.animationClips ?? []);
 }
 
 export function validateProjectTimelineWithSourceDuration(
   timeline: ProjectTimeline,
-  fullSourceDuration: number
+  fullSourceDurationOrDurations: TimelineSourceDurationsInput
 ): void {
-  new TimelineMap({
-    sourceSequence: timeline.sourceSequence,
-    fullSourceDuration,
-  });
+  new TimelineMap(timeline.sourceSequence, toSourceDurationsMap(fullSourceDurationOrDurations));
   validateProjectTimeline(timeline);
 }
 
@@ -821,6 +855,28 @@ export function insertingSticker(
   };
 }
 
+export function insertingAnimation(
+  clip: AnimationClip,
+  insertionTime: number,
+  duration: number
+): AnimationClip {
+  return {
+    ...clip,
+    timing: insertingOverlayTiming(clip.timing, insertionTime, duration),
+  };
+}
+
+export function insertingTimed<C extends TimedOverlayClip>(
+  clip: C,
+  insertionTime: number,
+  duration: number
+): C {
+  return {
+    ...clip,
+    timing: insertingOverlayTiming(clip.timing, insertionTime, duration),
+  };
+}
+
 // MARK: - Ripple Overloads
 
 export function rippleOverlayTiming(
@@ -875,6 +931,82 @@ export function rippleSticker(
   deletion: OutputDeletion,
   deletesOutputTail: boolean
 ): StickerClip | null {
+  const timing = rippleOverlayTiming(clip.timing, deletion, deletesOutputTail);
+  if (!timing) return null;
+  let sourceStart = clip.sourceStart;
+  if (clip.timing.startTime >= deletion.start && clip.timing.startTime < deletion.end) {
+    sourceStart += (deletion.end - clip.timing.startTime) * clip.playbackRate;
+  }
+  return {
+    ...clip,
+    timing,
+    sourceStart,
+  };
+}
+
+export function rippleAnimation(
+  clip: AnimationClip,
+  deletion: OutputDeletion,
+  deletesOutputTail: boolean
+): AnimationClip | null {
+  const timing = rippleOverlayTiming(clip.timing, deletion, deletesOutputTail);
+  if (!timing) return null;
+  let timeOffset = clip.timeOffset;
+  if (clip.timing.startTime >= deletion.start && clip.timing.startTime < deletion.end) {
+    timeOffset += (deletion.end - clip.timing.startTime) * clip.playbackRate;
+  }
+  return {
+    ...clip,
+    timing,
+    timeOffset,
+  };
+}
+
+export function rippleAudioClip(
+  clip: AudioClip,
+  deletion: OutputDeletion,
+  deletesOutputTail: boolean
+): AudioClip | null {
+  const timing = rippleOverlayTiming(clip.timing, deletion, deletesOutputTail);
+  if (!timing) return null;
+  let sourceStart = clip.sourceStart;
+  let fadeIn = clip.fadeIn;
+  if (clip.timing.startTime >= deletion.start && clip.timing.startTime < deletion.end) {
+    const removedPrefix = deletion.end - clip.timing.startTime;
+    sourceStart += removedPrefix * clip.playbackRate;
+    fadeIn = max(fadeIn - removedPrefix, 0);
+  }
+  return {
+    ...clip,
+    timing,
+    sourceStart,
+    fadeIn,
+  };
+}
+
+export function rippleVideoClip(
+  clip: VideoClip,
+  deletion: OutputDeletion,
+  deletesOutputTail: boolean
+): VideoClip | null {
+  const timing = rippleOverlayTiming(clip.timing, deletion, deletesOutputTail);
+  if (!timing) return null;
+  let sourceStart = clip.sourceStart;
+  if (clip.timing.startTime >= deletion.start && clip.timing.startTime < deletion.end) {
+    sourceStart += (deletion.end - clip.timing.startTime) * clip.playbackRate;
+  }
+  return {
+    ...clip,
+    timing,
+    sourceStart,
+  };
+}
+
+export function rippleTimed<C extends TimedOverlayClip>(
+  clip: C,
+  deletion: OutputDeletion,
+  deletesOutputTail: boolean
+): C | null {
   const timing = rippleOverlayTiming(clip.timing, deletion, deletesOutputTail);
   if (!timing) return null;
   return {
@@ -1598,6 +1730,236 @@ export function remappedStickerClips(
   });
 }
 
+export function remappedAnimationClips(
+  clips: readonly AnimationClip[],
+  oldMap: TimelineMap,
+  newStarts: ReadonlyMap<string, number> | Record<string, number>,
+  outputDuration: number
+): AnimationClip[] {
+  return compactMap(clips, clip => {
+    const delta = reorderedOutputOffset(clip.timing.startTime, oldMap, newStarts);
+    const startTime = min(max(clip.timing.startTime + delta, 0), outputDuration);
+    const duration = min(clip.timing.duration, max(outputDuration - startTime, 0));
+    if (duration <= epsilon) return null;
+    return {
+      ...clip,
+      timing: makeOverlayTiming({
+        startTime,
+        duration,
+      }),
+    };
+  }).sort((a, b) => {
+    if (a.layerIndex !== b.layerIndex) return a.layerIndex - b.layerIndex;
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  });
+}
+
+export function remappedTimed<C extends TimedOverlayClip>(
+  clips: readonly C[],
+  oldMap: TimelineMap,
+  newStarts: ReadonlyMap<string, number> | Record<string, number>,
+  outputDuration: number
+): C[] {
+  return compactMap(clips, clip => {
+    const delta = reorderedOutputOffset(clip.timing.startTime, oldMap, newStarts);
+    const startTime = min(max(clip.timing.startTime + delta, 0), outputDuration);
+    const duration = min(clip.timing.duration, max(outputDuration - startTime, 0));
+    if (duration <= epsilon) return null;
+    return {
+      ...clip,
+      timing: makeOverlayTiming({
+        startTime,
+        duration,
+      }),
+    };
+  });
+}
+
+// MARK: - Insertion Split Helpers (shared with RecordingSourceEditing & RecordingProjectImport)
+
+export function timelineInsertionTime(requested: number, map: TimelineMap): number {
+  const safeRequested = Number.isFinite(requested) ? requested : map.outputDuration;
+  const time = min(max(safeRequested, 0), map.outputDuration);
+  const seg = map.segment(time);
+  if (!seg) return map.outputDuration;
+  if (time - seg.outputStart < 1.0 / 60) return seg.outputStart;
+  if (seg.outputEnd - time < 1.0 / 60) return seg.outputEnd;
+  return time;
+}
+
+function continuedSplitPhase(phase: number, elapsed: number, duration: number): number {
+  return duration > 0 ? min(phase + ((1 - phase) * elapsed) / duration, 1) : 1;
+}
+
+function splitTransitionsAtTime<C extends { id: string; timing: TransitionTiming }>(
+  clips: readonly C[],
+  time: number,
+): C[] {
+  const result: C[] = [];
+  for (const old of clips) {
+    const before = old.timing;
+    if (!(before.startTime < time)) {
+      result.push(old);
+      continue;
+    }
+    const leftDur = min(before.duration, time - before.startTime);
+    const leftEnd = before.startTime + leftDur;
+    const leftRet = min(before.returnDuration, max(time - leftEnd, 0));
+    result.push({
+      ...old,
+      timing: makeTransitionTiming({
+        ...before,
+        duration: leftDur,
+        returnDuration: leftRet,
+      }),
+    });
+    if (before.endTime > time) {
+      const elapsed = time - before.startTime;
+      result.push({
+        ...old,
+        id: newUUID(),
+        timing: makeTransitionTiming({
+          ...before,
+          startTime: time,
+          duration: before.endTime - time,
+          leadInProgressOffset: continuedSplitPhase(
+            before.leadInProgressOffset,
+            elapsed,
+            before.leadInDuration,
+          ),
+          leadInDuration: max(before.leadInDuration - elapsed, 0),
+        }),
+      });
+    }
+  }
+  return result;
+}
+
+function splitOverlaysAtTime<C extends { id: string; timing: OverlayTiming }>(
+  clips: readonly C[],
+  time: number,
+  adjusting?: (clip: C, offset: number) => C,
+): C[] {
+  const result: C[] = [];
+  for (const old of clips) {
+    const before = old.timing;
+    if (!(before.startTime < time && before.endTime > time)) {
+      result.push(old);
+      continue;
+    }
+    let left: C = {
+      ...old,
+      timing: makeOverlayTiming(before.startTime, time - before.startTime),
+    };
+    if (adjusting) left = adjusting(left, 0);
+    let right: C = {
+      ...old,
+      id: newUUID(),
+      timing: makeOverlayTiming(time, before.endTime - time),
+    };
+    if (adjusting) right = adjusting(right, time - before.startTime);
+    result.push(left, right);
+  }
+  return result;
+}
+
+/// A programme inserted through an existing effect splits that effect.
+/// The right fragment resumes its original media/animation phase after
+/// the imported interval rather than stretching music or covering it.
+export function timelineSplitEdits(original: ProjectTimeline, time: number): ProjectTimeline {
+  const zoomClips: ZoomAnimationClip[] = [];
+  for (const old of original.zoomClips) {
+    if (!(old.startTime < time)) {
+      zoomClips.push(old);
+      continue;
+    }
+    const leftEnd = min(old.endTime, time);
+    const leftExit = min(old.exitDuration, max(time - leftEnd, 0));
+    zoomClips.push(
+      makeZoomAnimationClip({
+        ...old,
+        endTime: leftEnd,
+        exitDuration: leftExit,
+      }),
+    );
+    if (old.endTime > time) {
+      const elapsed = max(time - old.startTime, 0);
+      zoomClips.push(
+        makeZoomAnimationClip({
+          ...old,
+          id: newUUID(),
+          startTime: time,
+          enterProgressOffset: continuedSplitPhase(
+            old.enterProgressOffset,
+            elapsed,
+            old.enterDuration,
+          ),
+          enterDuration: max(old.enterDuration - elapsed, 0),
+        }),
+      );
+    }
+  }
+
+  const originalMotionIDs = new Set<string>([
+    ...original.screenMotionClips.map((c) => c.id),
+    ...original.cameraMotionClips.map((c) => c.id),
+  ]);
+  const rightGroups = new Map<string, string>();
+  const splitGroup = (group: string | null, clipID: string): string | null => {
+    if (group === null || originalMotionIDs.has(clipID)) return group;
+    const existing = rightGroups.get(group);
+    if (existing !== undefined) return existing;
+    const nextID = newUUID();
+    rightGroups.set(group, nextID);
+    return nextID;
+  };
+
+  const screenMotionClips = splitTransitionsAtTime(original.screenMotionClips, time).map(
+    (clip) => ({
+      ...clip,
+      groupID: splitGroup(clip.groupID, clip.id),
+    }),
+  );
+  const cameraMotionClips = splitTransitionsAtTime(original.cameraMotionClips, time).map(
+    (clip) => ({
+      ...clip,
+      groupID: splitGroup(clip.groupID, clip.id),
+    }),
+  );
+  const mosaicClips = splitOverlaysAtTime(original.mosaicClips, time);
+  const stickerClips = splitOverlaysAtTime(original.stickerClips, time, (c, offset) =>
+    offset > 0 ? { ...c, enterDuration: 0 } : { ...c, exitDuration: 0 },
+  );
+  const animationClips = splitOverlaysAtTime(original.animationClips, time, (c, offset) => ({
+    ...c,
+    timeOffset: c.timeOffset + offset * c.playbackRate,
+  }));
+  const audioClips = splitOverlaysAtTime(original.audioClips, time, (c, offset) => ({
+    ...c,
+    sourceStart: c.sourceStart + offset * c.playbackRate,
+    fadeIn: offset > 0 ? 0 : c.fadeIn,
+    fadeOut: offset > 0 ? c.fadeOut : 0,
+  }));
+  const videoClips = splitOverlaysAtTime(original.videoClips, time, (c, offset) => ({
+    ...c,
+    sourceStart: c.sourceStart + offset * c.playbackRate,
+  }));
+  const subtitleCues = splitOverlaysAtTime(original.subtitleCues, time);
+
+  return {
+    ...original,
+    zoomClips,
+    screenMotionClips,
+    cameraMotionClips,
+    mosaicClips,
+    stickerClips,
+    animationClips,
+    audioClips,
+    videoClips,
+    subtitleCues,
+  };
+}
+
 // MARK: - Ripple Main
 
 export function rippleTimeline(
@@ -1605,7 +1967,7 @@ export function rippleTimeline(
   replacingSourceSequenceWith: SourceSequence,
   deleting: OutputDeletion,
   deletesOutputTail: boolean,
-  fullSourceDuration: number,
+  fullSourceDurationOrDurations: TimelineSourceDurationsInput,
   defaultTransitionDuration: number = 0.7
 ): ProjectTimeline {
   const sourceSequence = replacingSourceSequenceWith;
@@ -1628,6 +1990,18 @@ export function rippleTimeline(
   );
   const stickerClips = compactMap(timeline.stickerClips, c =>
     rippleSticker(c, deleting, deletesOutputTail)
+  );
+  const animationClips = compactMap(timeline.animationClips ?? [], c =>
+    rippleAnimation(c, deleting, deletesOutputTail)
+  );
+  const audioClips = compactMap(timeline.audioClips ?? [], c =>
+    rippleAudioClip(c, deleting, deletesOutputTail)
+  );
+  const videoClips = compactMap(timeline.videoClips ?? [], c =>
+    rippleVideoClip(c, deleting, deletesOutputTail)
+  );
+  const subtitleCues = compactMap(timeline.subtitleCues ?? [], c =>
+    rippleTimed(c, deleting, deletesOutputTail)
   );
 
   sortZoom(zoomClips);
@@ -1672,6 +2046,7 @@ export function rippleTimeline(
   }
 
   const result: ProjectTimeline = {
+    ...timeline,
     sourceSequence,
     primarySegmentAudioOverrides,
     zoomClips,
@@ -1679,9 +2054,13 @@ export function rippleTimeline(
     cameraMotionClips,
     mosaicClips,
     stickerClips,
+    animationClips,
+    audioClips,
+    videoClips,
+    subtitleCues,
   };
 
-  validateProjectTimelineWithSourceDuration(result, fullSourceDuration);
+  validateProjectTimelineWithSourceDuration(result, fullSourceDurationOrDurations);
   return result;
 }
 
@@ -1697,9 +2076,15 @@ export const ProjectTimelineEditingTransforms = Object.freeze({
   insertingOverlayTiming,
   insertingMosaic,
   insertingSticker,
+  insertingAnimation,
+  insertingTimed,
   rippleOverlayTiming,
   rippleMosaic,
   rippleSticker,
+  rippleAnimation,
+  rippleAudioClip,
+  rippleVideoClip,
+  rippleTimed,
   rippleZoom,
   rippleScreenMotion,
   rippleCameraMotion,
@@ -1719,6 +2104,10 @@ export const ProjectTimelineEditingTransforms = Object.freeze({
   remappedCameraMotionClips,
   remappedMosaicClips,
   remappedStickerClips,
+  remappedAnimationClips,
+  remappedTimed,
+  timelineInsertionTime,
+  timelineSplitEdits,
   normalizedScreenMotionSequence,
   normalizedCameraMotionSequence,
   validateSourceSequence,
@@ -1730,6 +2119,7 @@ export const ProjectTimelineEditingTransforms = Object.freeze({
   validateCameraMotionClips,
   validateMosaicClips,
   validateStickerClips,
+  validateAnimationClips,
   validOverlayTiming,
   validTransitionTiming,
   validZoomBezierCurve,

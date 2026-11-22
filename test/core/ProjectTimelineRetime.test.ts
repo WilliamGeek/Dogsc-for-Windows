@@ -16,6 +16,15 @@ import {
 } from '../../src/core/ProjectTimeline.ts';
 import { TimelineMap } from '../../src/core/TimelineMap.ts';
 import { makeZoomAnimationClip, makeNormalizedPoint } from '../../src/core/ZoomAnimation.ts';
+import {
+  makeMosaicClip,
+  makeAnimationClip,
+  makeOverlayTiming,
+  makeNormalizedOverlayRect,
+} from '../../src/core/OverlayTimeline.ts';
+import { makeAudioClip, makeSubtitleCue, makeVideoClip } from '../../src/core/PostProductionModel.ts';
+import { makeSegmentSceneStyle } from '../../src/core/SegmentSceneStyle.ts';
+import { RecordingSourcePrimaryID } from '../../src/core/RecordingSource.ts';
 
 test('T7.5: settingPlaybackRate changes rate and shifts downstream clips', () => {
   const seg1 = makeRecordingSegment({ id: 's1', sourceStart: 0, sourceDuration: 4, playbackRate: 1.0 }); // 0..4
@@ -68,4 +77,74 @@ test('T7.5: zoomSequenceIsValid and nonoverlappingZoomClips repair', () => {
   assert.equal(repaired.length, 2);
   assert.equal(repaired[1].startTime, 2.5);
   assert.equal(repaired[1].endTime, 4.3); // 2.5 + duration 1.8
+});
+
+test('T13.5b-1: multi-source settingPlaybackRate preserves segment sceneStyle and retimes all overlay/post tracks', () => {
+  const altSourceID = '44444444-4444-4444-8444-444444444444';
+  const style = makeSegmentSceneStyle({ presetID: 'focus-style' });
+  const seg1 = makeRecordingSegment({
+    id: 's1',
+    sourceStart: 0,
+    sourceDuration: 4,
+    playbackRate: 1.0,
+    sourceID: altSourceID,
+    sceneStyle: style,
+  });
+  const seg2 = makeRecordingSegment({
+    id: 's2',
+    sourceStart: 0,
+    sourceDuration: 6,
+    playbackRate: 1.0,
+  });
+  const mosaicInside = makeMosaicClip({
+    id: 'm1',
+    timing: makeOverlayTiming(1.0, 2.0), // inside seg1 (0..4) -> halved to (0.5, 1.0)
+    normalizedRect: makeNormalizedOverlayRect(0.2, 0.2, 0.3, 0.3),
+  });
+  const animDownstream = makeAnimationClip({
+    id: 'a1',
+    timing: makeOverlayTiming(5.0, 2.0),
+    sourcePath: 'motions/badge.dmhtml',
+  });
+  const audioDownstream = makeAudioClip({
+    id: 'aud1',
+    timing: makeOverlayTiming(4.5, 2.0),
+    sourcePath: 'audio/bgm.mp3',
+  });
+  const videoDownstream = makeVideoClip({
+    id: 'vid1',
+    timing: makeOverlayTiming(6.0, 2.0),
+    sourcePath: 'clips/overlay.mp4',
+  });
+  const subDownstream = makeSubtitleCue({
+    id: 'sub1',
+    timing: makeOverlayTiming(5.0, 1.5),
+    text: 'caption',
+  });
+
+  const timeline = makeProjectTimeline({
+    sourceSequence: makeSourceSequenceEdited([seg1, seg2]),
+    mosaicClips: [mosaicInside],
+    animationClips: [animDownstream],
+    audioClips: [audioDownstream],
+    videoClips: [videoDownstream],
+    subtitleCues: [subDownstream],
+  });
+
+  const retimed = settingPlaybackRate(2.0, 's1', timeline, {
+    [RecordingSourcePrimaryID]: 10,
+    [altSourceID]: 8,
+  });
+
+  if (retimed.sourceSequence.kind === 'edited') {
+    assert.equal(retimed.sourceSequence.segments[0].sourceID, altSourceID);
+    assert.equal(retimed.sourceSequence.segments[0].sceneStyle?.presetID, 'focus-style');
+    assert.equal(retimed.sourceSequence.segments[0].playbackRate, 2.0);
+  }
+  assert.equal(retimed.mosaicClips[0].timing.startTime, 0.5);
+  assert.equal(retimed.mosaicClips[0].timing.duration, 2.0);
+  assert.equal(retimed.animationClips[0].timing.startTime, 3.0);
+  assert.equal(retimed.audioClips[0].timing.startTime, 2.5);
+  assert.equal(retimed.videoClips[0].timing.startTime, 4.0);
+  assert.equal(retimed.subtitleCues[0].timing.startTime, 3.0);
 });

@@ -12,7 +12,11 @@ import {
   type TransitionTiming,
   makeTransitionTiming,
 } from './ProjectTimeline.ts';
-import { TimelineMap } from './TimelineMap.ts';
+import {
+  type TimelineSourceDurationsInput,
+  TimelineMap,
+} from './TimelineMap.ts';
+import { RecordingSourcePrimaryID } from './RecordingSource.ts';
 import {
   type ZoomAnimationClip,
   makeZoomAnimationClip,
@@ -224,10 +228,10 @@ export function settingPlaybackRate(
   requestedRate: number,
   segmentID: string,
   timeline: ProjectTimeline,
-  fullSourceDuration: number
+  fullSourceDurationOrDurations: TimelineSourceDurationsInput
 ): ProjectTimeline {
   ProjectValidator.validate(timeline);
-  const oldMap = new TimelineMap(timeline.sourceSequence, fullSourceDuration);
+  const oldMap = new TimelineMap(timeline.sourceSequence, fullSourceDurationOrDurations);
   const resolved = oldMap.segments.find(
     (s) => s.id.toLowerCase() === segmentID.toLowerCase()
   );
@@ -255,6 +259,10 @@ export function settingPlaybackRate(
       sourceStart: s.sourceStart,
       sourceDuration: s.sourceDuration,
       playbackRate: s.playbackRate,
+      media: s.media,
+      sourceID: s.sourceID === RecordingSourcePrimaryID ? null : s.sourceID,
+      sceneStyle: s.sceneStyle,
+      crop: s.crop,
     })
   );
   const index = authored.findIndex(
@@ -290,7 +298,7 @@ export function settingPlaybackRate(
   );
   const mosaicClips = timeline.mosaicClips.map((clip) => ({
     ...clip,
-    timing: transform.mapTransitionTiming(clip.timing),
+    timing: transform.mapOverlayTiming(clip.timing),
   }));
   const stickerClips = timeline.stickerClips.map((clip) => {
     const timing = transform.mapOverlayTiming(clip.timing);
@@ -301,6 +309,22 @@ export function settingPlaybackRate(
       exitDuration: min(clip.exitDuration, timing.duration),
     };
   });
+  const animationClips = timeline.animationClips.map((clip) => ({
+    ...clip,
+    timing: transform.mapOverlayTiming(clip.timing),
+  }));
+  const audioClips = timeline.audioClips.map((clip) => ({
+    ...clip,
+    timing: transform.mapOverlayTiming(clip.timing),
+  }));
+  const videoClips = timeline.videoClips.map((clip) => ({
+    ...clip,
+    timing: transform.mapOverlayTiming(clip.timing),
+  }));
+  const subtitleCues = timeline.subtitleCues.map((cue) => ({
+    ...cue,
+    timing: transform.mapOverlayTiming(cue.timing),
+  }));
 
   sortZoom(zoomClips);
   sortScreenMotion(screenMotionClips);
@@ -326,8 +350,16 @@ export function settingPlaybackRate(
     cameraMotionClips,
     mosaicClips,
     stickerClips,
+    animationClips,
+    audioClips,
+    videoClips,
+    subtitleCues,
+    subtitleStyle: timeline.subtitleStyle,
+    mediaAssets: timeline.mediaAssets,
   });
 
+  // Validate against sourceDurations map cleanly via TimelineMap + ProjectValidator
+  new TimelineMap(result.sourceSequence, fullSourceDurationOrDurations);
   ProjectValidator.validate(result);
   return result;
 }

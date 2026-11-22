@@ -1,15 +1,26 @@
-// Port of: F:\dogsc\Sources\RecorderCore\TimelineMap.swift
+// Port of: F:\dogsc-v0.2.0\Sources\RecorderCore\TimelineMap.swift
 
 import { min, max } from './swift.ts';
 import { type MediaTimeRange, makeMediaTimeRange } from './MediaTimeRange.ts';
+import type { NormalizedCrop } from './ProjectModel.ts';
 import { type PointerEventRecord, makePointerEventRecord } from './ZoomAnimation.ts';
 import { PointerEventTimelineOrdering } from './PointerEventTimelineOrdering.ts';
 import {
+  type InsertedMedia,
   type RecordingSegment,
   makeRecordingSegment,
   type SourceSequence,
   makeSourceSequenceEdited,
+  recordingSegmentResolvedSourceID,
 } from './ProjectTimeline.ts';
+import { RecordingSourcePrimaryID } from './RecordingSource.ts';
+import type { SegmentSceneStyle } from './SegmentSceneStyle.ts';
+
+const NUMERICAL_BOUNDARY_TOLERANCE = 0.000_000_001;
+
+function isSameBoundary(lhs: number, rhs: number): boolean {
+  return Math.abs(lhs - rhs) <= NUMERICAL_BOUNDARY_TOLERANCE;
+}
 
 // MARK: - TimelineMapError
 
@@ -18,8 +29,7 @@ export type TimelineMapErrorKind =
   | 'emptyEditedSequence'
   | 'duplicateSegmentID'
   | 'invalidSegment'
-  | 'segmentOutsideSource'
-  | 'nonMonotonicSegments';
+  | 'segmentOutsideSource';
 
 export class TimelineMapError extends Error {
   readonly kind: TimelineMapErrorKind;
@@ -48,9 +58,6 @@ export class TimelineMapError extends Error {
       case 'segmentOutsideSource':
         msg = '主片段超出原始录屏可用时长。';
         break;
-      case 'nonMonotonicSegments':
-        msg = '主片段不能重复使用同一段源素材。';
-        break;
     }
     super(msg);
     this.name = 'TimelineMapError';
@@ -65,10 +72,17 @@ export class TimelineMapError extends Error {
 
 export class ResolvedRecordingSegment {
   readonly id: string;
+  readonly sourceID: string;
   readonly sourceStart: number;
   readonly sourceDuration: number;
   readonly playbackRate: number;
   readonly outputStart: number;
+  /// Non-nil for an inserted video: source times are in that file and the
+  /// recording's camera, audio and pointer are absent for this span.
+  readonly media: InsertedMedia | null;
+  readonly sceneStyle: SegmentSceneStyle | null;
+  /// nil follows the recording source's crop; a value is this occurrence's own.
+  readonly crop: NormalizedCrop | null;
 
   constructor(options: {
     id: string;
@@ -76,12 +90,24 @@ export class ResolvedRecordingSegment {
     sourceDuration: number;
     playbackRate?: number;
     outputStart: number;
+    media?: InsertedMedia | null;
+    sourceID?: string;
+    sceneStyle?: SegmentSceneStyle | null;
+    crop?: NormalizedCrop | null;
   }) {
     this.id = options.id;
+    this.sourceID = options.sourceID ?? RecordingSourcePrimaryID;
     this.sourceStart = options.sourceStart;
     this.sourceDuration = options.sourceDuration;
     this.playbackRate = options.playbackRate ?? 1;
     this.outputStart = options.outputStart;
+    this.media = options.media ?? null;
+    this.sceneStyle = options.sceneStyle ?? null;
+    this.crop = options.crop ?? null;
+  }
+
+  get isInserted(): boolean {
+    return this.media != null;
   }
 
   get sourceEnd(): number {
@@ -107,73 +133,131 @@ export class ResolvedRecordingSegment {
 
 // MARK: - TimelineMappedPointerSegment
 
+/// Pointer events are kept in groups across cuts. Flattening them would let an
+/// interpolator travel through a deleted interval toward the next segment's
+/// first position, creating motion that never existed in the finished video.
 export interface TimelineMappedPointerSegment {
   readonly id: string;
+  readonly sourceID: string;
   readonly outputRange: MediaTimeRange;
   readonly events: readonly PointerEventRecord[];
 }
 
 export function makeTimelineMappedPointerSegment(options: {
   id: string;
+  sourceID?: string;
   outputRange: MediaTimeRange;
   events: readonly PointerEventRecord[];
 }): TimelineMappedPointerSegment {
   return {
     id: options.id,
+    sourceID: options.sourceID ?? RecordingSourcePrimaryID,
     outputRange: options.outputRange,
     events: options.events.slice(),
   };
 }
 
+// MARK: - RecordingSourcePosition & RecordingOutputPosition
+
+/// A recording time is meaningful only with its source and occurrence.
+export interface RecordingSourcePosition {
+  readonly sourceID: string;
+  readonly segmentID: string;
+  readonly time: number;
+}
+
+export interface RecordingOutputPosition {
+  readonly segmentID: string;
+  readonly time: number;
+  readonly id: string;
+}
+
 // MARK: - TimelineMap
 
+export type TimelineSourceDurationsInput =
+  | number
+  | ReadonlyMap<string, number>
+  | Record<string, number>;
+
+export function toSourceDurationsMap(
+  input: TimelineSourceDurationsInput,
+): Map<string, number> {
+  if (typeof input === 'number') {
+    return new Map([[RecordingSourcePrimaryID, input]]);
+  }
+  if (input instanceof Map) {
+    return new Map(input as ReadonlyMap<string, number>);
+  }
+  return new Map(Object.entries(input as Record<string, number>));
+}
+
 /**
- * Pure mapping between the final ripple timeline and the original recording
- * clock. Array order is output order; source ranges may be rearranged but
- * remain non-overlapping so every original source instant has one owner.
+ * Array order is output order. A source interval may occur repeatedly; the
+ * segment ID disambiguates each independently editable use of that interval.
  */
 export class TimelineMap {
   static readonly fullRecordingSegmentID = '00000000-0000-4000-8000-000000000001';
 
   readonly segments: readonly ResolvedRecordingSegment[];
-  readonly fullSourceDuration: number;
+  readonly sourceDurations: ReadonlyMap<string, number>;
 
   constructor(
     sourceSequenceOrOptions:
       | SourceSequence
-      | { sourceSequence: SourceSequence; fullSourceDuration: number },
-    fullSourceDuration?: number
+      | {
+          sourceSequence: SourceSequence;
+          fullSourceDuration?: number;
+          sourceDurations?: ReadonlyMap<string, number> | Record<string, number>;
+        },
+    durationOrMap?: TimelineSourceDurationsInput
   ) {
     let sourceSequence: SourceSequence;
-    let duration: number;
+    let durationsMap: Map<string, number>;
+
     if (
       typeof sourceSequenceOrOptions === 'object' &&
-      'sourceSequence' in sourceSequenceOrOptions &&
-      'fullSourceDuration' in sourceSequenceOrOptions
+      sourceSequenceOrOptions !== null &&
+      'sourceSequence' in sourceSequenceOrOptions
     ) {
       sourceSequence = sourceSequenceOrOptions.sourceSequence;
-      duration = sourceSequenceOrOptions.fullSourceDuration;
+      if (sourceSequenceOrOptions.sourceDurations !== undefined) {
+        durationsMap = toSourceDurationsMap(sourceSequenceOrOptions.sourceDurations);
+      } else if (sourceSequenceOrOptions.fullSourceDuration !== undefined) {
+        durationsMap = new Map([[RecordingSourcePrimaryID, sourceSequenceOrOptions.fullSourceDuration]]);
+      } else {
+        throw new TimelineMapError('invalidFullSourceDuration');
+      }
     } else {
       sourceSequence = sourceSequenceOrOptions as SourceSequence;
-      duration = fullSourceDuration!;
+      if (durationOrMap === undefined) {
+        throw new TimelineMapError('invalidFullSourceDuration');
+      }
+      durationsMap = toSourceDurationsMap(durationOrMap);
     }
-    if (!Number.isFinite(duration) || duration <= 0) {
-      throw new TimelineMapError('invalidFullSourceDuration');
+
+    for (const d of durationsMap.values()) {
+      if (!Number.isFinite(d) || !(d > 0)) {
+        throw new TimelineMapError('invalidFullSourceDuration');
+      }
     }
-    this.fullSourceDuration = duration;
-    fullSourceDuration = duration;
+    this.sourceDurations = durationsMap;
 
     let authored: readonly RecordingSegment[];
     switch (sourceSequence.kind) {
-      case 'fullRecording':
+      case 'fullRecording': {
+        const primaryDuration = durationsMap.get(RecordingSourcePrimaryID);
+        if (primaryDuration === undefined) {
+          throw new TimelineMapError('invalidFullSourceDuration');
+        }
         authored = [
           makeRecordingSegment({
             id: TimelineMap.fullRecordingSegmentID,
             sourceStart: 0,
-            sourceDuration: fullSourceDuration,
+            sourceDuration: primaryDuration,
           }),
         ];
         break;
+      }
       case 'edited':
         if (sourceSequence.segments.length === 0) {
           throw new TimelineMapError('emptyEditedSequence');
@@ -185,7 +269,7 @@ export class TimelineMap {
     const identifiers = new Set<string>();
     let outputStart = 0;
     const resolved: ResolvedRecordingSegment[] = [];
-    const epsilon = 1.0 / 120000.0;
+    const epsilon = 1.0 / 120_000.0;
 
     for (const segment of authored) {
       if (identifiers.has(segment.id)) {
@@ -193,6 +277,7 @@ export class TimelineMap {
       }
       identifiers.add(segment.id);
 
+      const segSourceEnd = segment.sourceStart + segment.sourceDuration;
       if (
         !Number.isFinite(segment.sourceStart) ||
         !Number.isFinite(segment.sourceDuration) ||
@@ -200,17 +285,19 @@ export class TimelineMap {
         segment.sourceStart < 0 ||
         segment.sourceDuration <= 0 ||
         segment.playbackRate <= 0 ||
-        !Number.isFinite(segment.sourceEnd)
+        !Number.isFinite(segSourceEnd)
       ) {
         throw new TimelineMapError('invalidSegment', { segmentID: segment.id });
       }
 
-      const availableDuration = fullSourceDuration;
+      const segSourceID = recordingSegmentResolvedSourceID(segment);
+      const availableDuration = segment.media?.fileDuration ?? durationsMap.get(segSourceID);
       if (
-        !(
-          segment.sourceStart < availableDuration &&
-          segment.sourceEnd <= availableDuration + epsilon
-        )
+        availableDuration === undefined ||
+        !Number.isFinite(availableDuration) ||
+        !(availableDuration > 0) ||
+        !(segment.sourceStart < availableDuration) ||
+        !(segSourceEnd <= availableDuration + epsilon)
       ) {
         throw new TimelineMapError('segmentOutsideSource', { segmentID: segment.id });
       }
@@ -227,33 +314,20 @@ export class TimelineMap {
           sourceDuration: resolvedDuration,
           playbackRate: segment.playbackRate,
           outputStart,
+          media: segment.media ?? null,
+          sourceID: segSourceID,
+          sceneStyle: segment.sceneStyle ?? null,
+          crop: segment.crop ?? null,
         })
       );
       outputStart += resolvedDuration / segment.playbackRate;
     }
 
-    for (const current of authored) {
-      const candidates = authored.filter(
-        (candidate) => candidate.id !== current.id && candidate.sourceStart <= current.sourceStart
-      );
-      if (candidates.length > 0) {
-        const sorted = candidates.slice().sort((lhs, rhs) => {
-          if (lhs.sourceStart !== rhs.sourceStart) {
-            return lhs.sourceStart - rhs.sourceStart;
-          }
-          return lhs.id.localeCompare(rhs.id);
-        });
-        const previous = sorted[sorted.length - 1];
-        if (current.sourceStart < previous.sourceEnd - epsilon) {
-          throw new TimelineMapError('nonMonotonicSegments', {
-            previousID: previous.id,
-            currentID: current.id,
-          });
-        }
-      }
-    }
-
     this.segments = resolved;
+  }
+
+  get fullSourceDuration(): number {
+    return this.sourceDurations.get(RecordingSourcePrimaryID) ?? 0;
   }
 
   get outputDuration(): number {
@@ -267,8 +341,9 @@ export class TimelineMap {
     let lower = 0;
     let upper = this.segments.length;
     while (lower < upper) {
-      const middle = lower + Math.floor((upper - lower) / 2);
-      if (this.segments[middle].outputEnd <= atOutputTime) {
+      const middle = lower + Math.trunc((upper - lower) / 2);
+      const end = this.segments[middle].outputEnd;
+      if (end < atOutputTime || isSameBoundary(end, atOutputTime)) {
         lower = middle + 1;
       } else {
         upper = middle;
@@ -276,34 +351,71 @@ export class TimelineMap {
     }
     if (lower >= this.segments.length) return null;
     const candidate = this.segments[lower];
-    return atOutputTime >= candidate.outputStart ? candidate : null;
+    return atOutputTime > candidate.outputStart || isSameBoundary(atOutputTime, candidate.outputStart)
+      ? candidate
+      : null;
   }
 
   segmentAtOutputTime(atOutputTime: number): ResolvedRecordingSegment | null {
     return this.segment(atOutputTime);
   }
 
-  sourceTime(atOutputTime: number): number | null {
+  sourcePosition(atOutputTime: number): RecordingSourcePosition | null {
     const seg = this.segment(atOutputTime);
-    if (!seg) return null;
-    return seg.sourceStart + (atOutputTime - seg.outputStart) * seg.playbackRate;
+    if (!seg || seg.isInserted) return null;
+    return {
+      sourceID: seg.sourceID,
+      segmentID: seg.id,
+      time: seg.sourceStart + max(atOutputTime - seg.outputStart, 0) * seg.playbackRate,
+    };
   }
 
-  outputTime(forSourceTime: number): number | null {
-    if (!Number.isFinite(forSourceTime)) return null;
-    const seg = this.segments.find(
-      (s) => forSourceTime >= s.sourceStart && forSourceTime < s.sourceEnd
-    );
-    if (!seg) return null;
-    return seg.outputStart + (forSourceTime - seg.sourceStart) / seg.playbackRate;
+  sourceTime(atOutputTime: number): number | null {
+    const position = this.sourcePosition(atOutputTime);
+    if (!position || position.sourceID !== RecordingSourcePrimaryID) return null;
+    return position.time;
+  }
+
+  outputPositions(forSourceTime: number, sourceID: string): RecordingOutputPosition[] {
+    if (!Number.isFinite(forSourceTime)) return [];
+    const result: RecordingOutputPosition[] = [];
+    for (const seg of this.segments) {
+      if (
+        !seg.isInserted &&
+        seg.sourceID === sourceID &&
+        forSourceTime >= seg.sourceStart &&
+        forSourceTime < seg.sourceEnd
+      ) {
+        const mapped = seg.outputStart + (forSourceTime - seg.sourceStart) / seg.playbackRate;
+        result.push({
+          segmentID: seg.id,
+          id: seg.id,
+          time: mapped,
+        });
+      }
+    }
+    return result;
+  }
+
+  outputTime(forSourceTime: number, inSegmentID?: string): number | null {
+    if (inSegmentID !== undefined) {
+      if (!Number.isFinite(forSourceTime)) return null;
+      const seg = this.segments.find((s) => s.id === inSegmentID);
+      if (!seg || forSourceTime < seg.sourceStart || forSourceTime >= seg.sourceEnd) {
+        return null;
+      }
+      return seg.outputStart + (forSourceTime - seg.sourceStart) / seg.playbackRate;
+    }
+    const positions = this.outputPositions(forSourceTime, RecordingSourcePrimaryID);
+    return positions.length > 0 ? positions[0].time : null;
   }
 
   outputRange(forSegmentID: string): MediaTimeRange | null {
-    return this.segments.find((s) => s.id === idMatch(s.id, forSegmentID))?.outputRange ?? null;
+    return this.segments.find((s) => s.id === forSegmentID)?.outputRange ?? null;
   }
 
   sourceRange(forSegmentID: string): MediaTimeRange | null {
-    return this.segments.find((s) => s.id === idMatch(s.id, forSegmentID))?.sourceRange ?? null;
+    return this.segments.find((s) => s.id === forSegmentID)?.sourceRange ?? null;
   }
 
   materializedSourceSequence(): SourceSequence {
@@ -314,6 +426,10 @@ export class TimelineMap {
           sourceStart: s.sourceStart,
           sourceDuration: s.sourceDuration,
           playbackRate: s.playbackRate,
+          media: s.media,
+          sourceID: s.sourceID === RecordingSourcePrimaryID ? null : s.sourceID,
+          sceneStyle: s.sceneStyle,
+          crop: s.crop,
         })
       )
     );
@@ -324,15 +440,38 @@ export class TimelineMap {
    * receives the most recent source position as a move seed when possible.
    */
   mapPointerEventSegments(
-    sourceEvents: readonly PointerEventRecord[]
+    sourceEventsOrBySource:
+      | readonly PointerEventRecord[]
+      | ReadonlyMap<string, readonly PointerEventRecord[]>
+      | Record<string, readonly PointerEventRecord[]>
   ): TimelineMappedPointerSegment[] {
-    const ordered = PointerEventTimelineOrdering.normalized(sourceEvents);
-    const result: TimelineMappedPointerSegment[] = [];
+    const rawBySource = new Map<string, readonly PointerEventRecord[]>();
+    if (Array.isArray(sourceEventsOrBySource)) {
+      rawBySource.set(RecordingSourcePrimaryID, sourceEventsOrBySource);
+    } else if (sourceEventsOrBySource instanceof Map) {
+      for (const [k, v] of sourceEventsOrBySource.entries()) {
+        rawBySource.set(k, v);
+      }
+    } else {
+      for (const [k, v] of Object.entries(
+        sourceEventsOrBySource as Record<string, readonly PointerEventRecord[]>
+      )) {
+        rawBySource.set(k, v);
+      }
+    }
 
+    const orderedSources = new Map<string, readonly PointerEventRecord[]>();
+    for (const [k, events] of rawBySource.entries()) {
+      orderedSources.set(k, PointerEventTimelineOrdering.normalized(events));
+    }
+
+    const result: TimelineMappedPointerSegment[] = [];
     for (const segment of this.segments) {
+      if (segment.media != null) continue;
       const outputRange = segment.outputRange;
       if (!outputRange) continue;
 
+      const ordered = orderedSources.get(segment.sourceID) ?? [];
       const lowerIndex = TimelineMap.firstEventIndex(segment.sourceStart, ordered);
       const upperIndex = TimelineMap.firstEventIndex(segment.sourceEnd, ordered);
       const eventsInRange = ordered.slice(lowerIndex, upperIndex);
@@ -340,7 +479,7 @@ export class TimelineMap {
 
       const firstEvent = eventsInRange[0];
       const startsWithExactEvent =
-        firstEvent != null && Math.abs(firstEvent.time - segment.sourceStart) < 0.000001;
+        firstEvent != null && Math.abs(firstEvent.time - segment.sourceStart) < 0.000_001;
 
       if (!startsWithExactEvent && lowerIndex > 0) {
         const seed = ordered[lowerIndex - 1];
@@ -371,6 +510,7 @@ export class TimelineMap {
       result.push(
         makeTimelineMappedPointerSegment({
           id: segment.id,
+          sourceID: segment.sourceID,
           outputRange,
           events: mapped,
         })
@@ -387,7 +527,7 @@ export class TimelineMap {
     let lower = 0;
     let upper = events.length;
     while (lower < upper) {
-      const middle = lower + Math.floor((upper - lower) / 2);
+      const middle = lower + Math.trunc((upper - lower) / 2);
       if (events[middle].time < time) {
         lower = middle + 1;
       } else {
@@ -396,8 +536,4 @@ export class TimelineMap {
     }
     return lower;
   }
-}
-
-function idMatch(a: string, b: string): string {
-  return a.toLowerCase() === b.toLowerCase() ? a : '';
 }

@@ -128,13 +128,10 @@ test('T7.7: validateSourceSequence detects empty, duplicates and overlapping sou
     (err: any) => err instanceof ProjectTimelineEditingError && err.kind === 'duplicateSegmentID'
   );
 
-  // Overlapping source intervals: 0..4 and 3..6
+  // Repeated source intervals (0..4 and 3..6) are valid in v0.2.0
   const s3 = makeRecordingSegment({ id: 's3', sourceStart: 0, sourceDuration: 4 });
   const s4 = makeRecordingSegment({ id: 's4', sourceStart: 3, sourceDuration: 3 });
-  assert.throws(
-    () => validateSourceSequence(makeSourceSequenceEdited([s3, s4])),
-    (err: any) => err instanceof ProjectTimelineEditingError && err.kind === 'invalidSourceSequence'
-  );
+  assert.doesNotThrow(() => validateSourceSequence(makeSourceSequenceEdited([s3, s4])));
 
   // Valid disjoint source intervals: 0..4 and 4..10
   const s5 = makeRecordingSegment({ id: 's5', sourceStart: 0, sourceDuration: 4 });

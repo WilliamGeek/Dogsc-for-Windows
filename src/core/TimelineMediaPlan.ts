@@ -1,4 +1,4 @@
-// Port of: F:\dogsc\Sources\RecorderCore\TimelineMediaPlan.swift
+// Port of: F:\dogsc-v0.2.0\Sources\RecorderCore\TimelineMediaPlan.swift
 
 import { min, max, newUUID } from './swift.ts';
 import type { MediaTimeRange } from './MediaTimeRange.ts';
@@ -13,10 +13,10 @@ import {
 import { TimelineMap } from './TimelineMap.ts';
 import type { PointerEventRecord } from './ZoomAnimation.ts';
 import { PointerTimelineAlignment } from './PointerTimelineAlignment.ts';
-import type { SourceSequence } from './ProjectTimeline.ts';
-
+import type { InsertedMedia, SourceSequence } from './ProjectTimeline.ts';
 import type { ProjectMediaManifest, RecorderProject } from './ProjectMediaModel.ts';
 import { ProjectPointerTrack } from './ProjectPointerTrack.ts';
+import { RecordingSourcePrimaryID } from './RecordingSource.ts';
 
 // MARK: - TimelineMediaSlice
 
@@ -27,10 +27,13 @@ import { ProjectPointerTrack } from './ProjectPointerTrack.ts';
 export class TimelineMediaSlice {
   readonly id: string;
   readonly segmentID: string;
+  readonly sourceID: string;
   readonly outputStart: number;
   readonly sourceStart: number;
   readonly duration: number;
   readonly sourceTimeScale: number;
+  /// Inserted video this slice reads instead of the recording.
+  readonly media: InsertedMedia | null;
 
   constructor(options: {
     id?: string;
@@ -39,12 +42,16 @@ export class TimelineMediaSlice {
     sourceStart: number;
     duration: number;
     sourceTimeScale?: number;
+    media?: InsertedMedia | null;
+    sourceID?: string;
   }) {
     this.id = options.id ?? newUUID();
     this.segmentID = options.segmentID;
+    this.sourceID = options.sourceID ?? RecordingSourcePrimaryID;
     this.outputStart = options.outputStart;
     this.sourceStart = options.sourceStart;
     this.duration = options.duration;
+    this.media = options.media ?? null;
     const scale = options.sourceTimeScale ?? 1;
     this.sourceTimeScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
   }
@@ -75,6 +82,24 @@ export class TimelineMediaSlice {
 
 // MARK: - TimelineMediaPlan
 
+export type TimelineMediaPlanOptions =
+  | { primary: TimelineMap }
+  | {
+      timelineMap: TimelineMap;
+      auxiliary: MediaTimelinePlacement;
+      sourceID?: string;
+      syncAnchors?: readonly MediaSyncAnchor[];
+      sourceAvailableRange?: MediaTimeRange | null;
+    }
+  | {
+      outputDuration: number;
+      combining: readonly TimelineMediaPlan[];
+    }
+  | {
+      clipping: TimelineMediaPlan;
+      to: MediaTimeRange;
+    };
+
 /**
  * Final-time media placement generated from the one authoritative
  * TimelineMap. No preview/export implementation is allowed to invent its
@@ -91,16 +116,7 @@ export class TimelineMediaPlan {
   readonly outputDuration: number;
   readonly slices: readonly TimelineMediaSlice[];
 
-  constructor(
-    options:
-      | { primary: TimelineMap }
-      | {
-          timelineMap: TimelineMap;
-          auxiliary: MediaTimelinePlacement;
-          syncAnchors?: readonly MediaSyncAnchor[];
-          sourceAvailableRange?: MediaTimeRange | null;
-        }
-  ) {
+  constructor(options: TimelineMediaPlanOptions) {
     if ('primary' in options) {
       const timelineMap = options.primary;
       this.outputDuration = timelineMap.outputDuration;
@@ -113,18 +129,61 @@ export class TimelineMediaPlan {
             sourceStart: seg.sourceStart,
             duration: seg.outputDuration,
             sourceTimeScale: seg.playbackRate,
+            media: seg.media,
+            sourceID: seg.sourceID,
           })
       );
       return;
     }
 
-    const { timelineMap, auxiliary: placement, syncAnchors = [], sourceAvailableRange = null } =
-      options;
+    if ('combining' in options) {
+      this.outputDuration = options.outputDuration;
+      this.slices = options.combining
+        .flatMap((p) => p.slices)
+        .sort((a, b) => a.outputStart - b.outputStart);
+      return;
+    }
+
+    if ('clipping' in options) {
+      this.outputDuration = options.clipping.outputDuration;
+      const range = options.to;
+      const clipped: TimelineMediaSlice[] = [];
+      for (const slice of options.clipping.slices) {
+        const start = max(slice.outputStart, range.start);
+        const end = min(slice.outputEnd, range.end);
+        if (end > start && !TimelineMediaPlan.isSameBoundary(start, end)) {
+          clipped.push(
+            new TimelineMediaSlice({
+              id: slice.id,
+              segmentID: slice.segmentID,
+              outputStart: start,
+              sourceStart: slice.sourceStart + (start - slice.outputStart) * slice.sourceTimeScale,
+              duration: end - start,
+              sourceTimeScale: slice.sourceTimeScale,
+              media: slice.media,
+              sourceID: slice.sourceID,
+            })
+          );
+        }
+      }
+      this.slices = clipped;
+      return;
+    }
+
+    const {
+      timelineMap,
+      auxiliary: placement,
+      sourceID = RecordingSourcePrimaryID,
+      syncAnchors = [],
+      sourceAvailableRange = null,
+    } = options;
     this.outputDuration = timelineMap.outputDuration;
 
     if (syncAnchors.length === 0) {
       const result: TimelineMediaSlice[] = [];
       for (const segment of timelineMap.segments) {
+        // Camera and audio of the recording are absent in inserts.
+        if (segment.media != null || segment.sourceID !== sourceID) continue;
         const retainedStart = max(segment.sourceStart, placement.timelineStart);
         const retainedEnd = min(segment.sourceEnd, placement.timelineEnd);
         const startsAtPrimaryBoundary = TimelineMediaPlan.isSameBoundary(
@@ -158,6 +217,7 @@ export class TimelineMediaPlan {
               sourceStart: placement.sourceTime(retainedStart) ?? placement.sourceStart,
               duration,
               sourceTimeScale: placement.sourceTimeScale * segment.playbackRate,
+              sourceID,
             })
           );
         }
@@ -172,6 +232,7 @@ export class TimelineMediaPlan {
 
     const result: TimelineMediaSlice[] = [];
     for (const segment of timelineMap.segments) {
+      if (segment.media != null || segment.sourceID !== sourceID) continue;
       const retainedStart = max(segment.sourceStart, placement.timelineStart);
       const retainedEnd = min(segment.sourceEnd, placement.timelineEnd);
       if (!(retainedEnd - retainedStart > 0.000001)) {
@@ -236,6 +297,7 @@ export class TimelineMediaPlan {
             sourceStart: correctedStart,
             duration,
             sourceTimeScale: correctedDuration / duration,
+            sourceID,
           })
         );
       }
@@ -250,11 +312,12 @@ export class TimelineMediaPlan {
 
   sourceTime(atOutputTime: number): number | null {
     const slice = this.slice(atOutputTime);
-    return slice ? slice.sourceTime(atOutputTime) : null;
+    if (!slice || slice.sourceID !== RecordingSourcePrimaryID) return null;
+    return slice.sourceTime(atOutputTime);
   }
 
   contains(outputTime: number): boolean {
-    return this.sourceTime(outputTime) != null;
+    return this.slice(outputTime) != null;
   }
 
   slice(atOutputTime: number): TimelineMediaSlice | null {
@@ -262,7 +325,7 @@ export class TimelineMediaPlan {
     let lower = 0;
     let upper = this.slices.length;
     while (lower < upper) {
-      const middle = lower + Math.floor((upper - lower) / 2);
+      const middle = lower + Math.trunc((upper - lower) / 2);
       const end = this.slices[middle].outputEnd;
       if (end < atOutputTime || TimelineMediaPlan.isSameBoundary(end, atOutputTime)) {
         lower = middle + 1;
@@ -283,7 +346,7 @@ export class TimelineMediaPlan {
   }
 }
 
-// MARK: - AuxiliaryMediaClockAlignment
+// MARK: - AuxiliaryMediaClockAlignment (retained for backward compatibility)
 
 /**
  * Aligns both ends of an independently clocked capture. This is deliberately
@@ -316,10 +379,39 @@ export const AuxiliaryMediaClockAlignment = {
   },
 };
 
-// MARK: - ProjectTimelineMediaPlan
+// MARK: - RecordingSourceMedia & ProjectTimelineMediaPlan
+
+/// Validated source-clock inventory. Asset loading stays outside RecorderCore.
+export interface RecordingSourceMedia {
+  manifest: ProjectMediaManifest | null;
+  videoRange: MediaTimeRange;
+  systemAudioRange: MediaTimeRange | null;
+  cameraRange: MediaTimeRange | null;
+  microphoneRange: MediaTimeRange | null;
+  pointerEvents: readonly PointerEventRecord[];
+}
+
+export function makeRecordingSourceMedia(options: {
+  manifest: ProjectMediaManifest | null;
+  videoRange: MediaTimeRange;
+  systemAudioRange?: MediaTimeRange | null;
+  cameraRange?: MediaTimeRange | null;
+  microphoneRange?: MediaTimeRange | null;
+  pointerEvents?: readonly PointerEventRecord[];
+}): RecordingSourceMedia {
+  return {
+    manifest: options.manifest,
+    videoRange: options.videoRange,
+    systemAudioRange: options.systemAudioRange ?? null,
+    cameraRange: options.cameraRange ?? null,
+    microphoneRange: options.microphoneRange ?? null,
+    pointerEvents: options.pointerEvents ? options.pointerEvents.slice() : [],
+  };
+}
 
 /**
- * Every time-bearing source resolved onto the one final output clock.
+ * Every time-bearing source resolved onto one final output clock. Missing
+ * auxiliary tracks remain gaps; they never borrow another source's media.
  */
 export class ProjectTimelineMediaPlan {
   readonly timelineMap: TimelineMap;
@@ -328,13 +420,26 @@ export class ProjectTimelineMediaPlan {
   readonly camera: TimelineMediaPlan | null;
   readonly microphone: TimelineMediaPlan | null;
   readonly pointer: ProjectPointerTrack;
-  readonly primarySourceTimeOffset: number;
+  readonly sources: ReadonlyMap<string, RecordingSourceMedia>;
+
+  get sourceTimeOffsets(): Map<string, number> {
+    const result = new Map<string, number>();
+    for (const [id, src] of this.sources.entries()) {
+      result.set(id, src.videoRange.start);
+    }
+    return result;
+  }
+
+  get primarySourceTimeOffset(): number {
+    return this.sources.get(RecordingSourcePrimaryID)?.videoRange.start ?? 0;
+  }
 
   constructor(options: {
     sourceSequence?: SourceSequence;
     project?: RecorderProject;
+    sources?: ReadonlyMap<string, RecordingSourceMedia> | Record<string, RecordingSourceMedia>;
     mediaManifest?: ProjectMediaManifest | null;
-    primaryVideoRange: MediaTimeRange;
+    primaryVideoRange?: MediaTimeRange;
     systemAudioRange?: MediaTimeRange | null;
     cameraRange?: MediaTimeRange | null;
     microphoneRange?: MediaTimeRange | null;
@@ -345,57 +450,111 @@ export class ProjectTimelineMediaPlan {
     if (!sourceSequence) {
       throw new Error('ProjectTimelineMediaPlan requires sourceSequence or project');
     }
-    const mediaManifest = options.mediaManifest ?? options.project?.media ?? null;
-    const primaryVideoRange = options.primaryVideoRange;
-    const systemAudioRange = options.systemAudioRange ?? null;
-    const cameraRange = options.cameraRange ?? null;
-    const microphoneRange = options.microphoneRange ?? null;
-    const sourcePointerEvents = options.sourcePointerEvents ?? [];
 
-    const map = new TimelineMap(sourceSequence, primaryVideoRange.duration);
-    this.timelineMap = map;
-    this.primary = new TimelineMediaPlan({ primary: map });
-    this.primarySourceTimeOffset = primaryVideoRange.start;
-
-    if (systemAudioRange) {
-      const sharedSourceStart = max(systemAudioRange.start, primaryVideoRange.start);
-      const placement = makeMediaTimelinePlacement({
-        reference: makeProjectMediaReference({
-          relativePath: mediaManifest?.screen.relativePath ?? 'screen',
-          startOffset: max(systemAudioRange.start - primaryVideoRange.start, 0),
-          sourceStartTime: sharedSourceStart,
-        }),
-        sourceAvailableStart: systemAudioRange.start,
-        sourceAvailableDuration: systemAudioRange.duration,
-        timelineDuration: primaryVideoRange.duration,
-      });
-      this.systemAudio = new TimelineMediaPlan({ timelineMap: map, auxiliary: placement });
+    const sourcesMap = new Map<string, RecordingSourceMedia>();
+    if (options.sources !== undefined) {
+      if (options.sources instanceof Map) {
+        for (const [k, v] of (options.sources as ReadonlyMap<string, RecordingSourceMedia>).entries()) {
+          sourcesMap.set(k, v);
+        }
+      } else {
+        for (const [k, v] of Object.entries(
+          options.sources as Record<string, RecordingSourceMedia>
+        )) {
+          sourcesMap.set(k, v);
+        }
+      }
+    } else if (options.primaryVideoRange) {
+      const mediaManifest = options.mediaManifest ?? options.project?.media ?? null;
+      sourcesMap.set(
+        RecordingSourcePrimaryID,
+        makeRecordingSourceMedia({
+          manifest: mediaManifest,
+          videoRange: options.primaryVideoRange,
+          systemAudioRange: options.systemAudioRange ?? null,
+          cameraRange: options.cameraRange ?? null,
+          microphoneRange: options.microphoneRange ?? null,
+          pointerEvents: options.sourcePointerEvents ?? [],
+        })
+      );
     } else {
-      this.systemAudio = null;
+      throw new Error('ProjectTimelineMediaPlan requires sources or primaryVideoRange');
     }
 
-    this.camera = ProjectTimelineMediaPlan.auxiliaryPlan(
-      mediaManifest?.camera ?? null,
-      cameraRange,
-      map,
-      primaryVideoRange.duration
-    );
+    this.sources = sourcesMap;
+    const durations = new Map<string, number>();
+    for (const [id, src] of sourcesMap.entries()) {
+      durations.set(id, src.videoRange.duration);
+    }
+    const map = new TimelineMap({ sourceSequence, sourceDurations: durations });
+    this.timelineMap = map;
+    this.primary = new TimelineMediaPlan({ primary: map });
 
-    this.microphone = ProjectTimelineMediaPlan.auxiliaryPlan(
-      mediaManifest?.microphone ?? null,
-      microphoneRange,
-      map,
-      primaryVideoRange.duration
-    );
+    const systemPlans: TimelineMediaPlan[] = [];
+    const cameraPlans: TimelineMediaPlan[] = [];
+    const microphonePlans: TimelineMediaPlan[] = [];
+    const alignedPrimaryEvents: PointerEventRecord[] = [];
 
-    this.pointer = new ProjectPointerTrack(
-      map,
-      PointerTimelineAlignment.align(
-        sourcePointerEvents,
-        mediaManifest?.pointerEvents?.startOffset ?? 0,
-        mediaManifest?.pointerEvents?.sourceStartTime ?? 0
-      )
-    );
+    for (const [id, source] of sourcesMap.entries()) {
+      if (source.systemAudioRange) {
+        const sharedStart = max(source.systemAudioRange.start, source.videoRange.start);
+        const placement = makeMediaTimelinePlacement({
+          reference: makeProjectMediaReference({
+            relativePath: source.manifest?.screen.relativePath ?? 'screen',
+            startOffset: max(source.systemAudioRange.start - source.videoRange.start, 0),
+            sourceStartTime: sharedStart,
+          }),
+          sourceAvailableStart: source.systemAudioRange.start,
+          sourceAvailableDuration: source.systemAudioRange.duration,
+          timelineDuration: source.videoRange.duration,
+        });
+        systemPlans.push(
+          new TimelineMediaPlan({ timelineMap: map, auxiliary: placement, sourceID: id })
+        );
+      }
+
+      const cameraPlan = ProjectTimelineMediaPlan.auxiliaryPlan(
+        source.manifest?.camera ?? null,
+        source.cameraRange,
+        id,
+        map,
+        source.videoRange.duration
+      );
+      if (cameraPlan) cameraPlans.push(cameraPlan);
+
+      const micPlan = ProjectTimelineMediaPlan.auxiliaryPlan(
+        source.manifest?.microphone ?? null,
+        source.microphoneRange,
+        id,
+        map,
+        source.videoRange.duration
+      );
+      if (micPlan) microphonePlans.push(micPlan);
+
+      if (id === RecordingSourcePrimaryID) {
+        const aligned = PointerTimelineAlignment.align(
+          source.pointerEvents,
+          source.manifest?.pointerEvents?.startOffset ?? 0,
+          source.manifest?.pointerEvents?.sourceStartTime ?? 0
+        );
+        alignedPrimaryEvents.push(...aligned);
+      }
+    }
+
+    this.systemAudio =
+      systemPlans.length === 0
+        ? null
+        : new TimelineMediaPlan({ outputDuration: map.outputDuration, combining: systemPlans });
+    this.camera =
+      cameraPlans.length === 0
+        ? null
+        : new TimelineMediaPlan({ outputDuration: map.outputDuration, combining: cameraPlans });
+    this.microphone =
+      microphonePlans.length === 0
+        ? null
+        : new TimelineMediaPlan({ outputDuration: map.outputDuration, combining: microphonePlans });
+    // Note: Multi-source ProjectPointerTrack(eventsBySource) completes in T13.5b-2.
+    this.pointer = new ProjectPointerTrack(map, alignedPrimaryEvents);
   }
 
   get outputDuration(): number {
@@ -405,6 +564,7 @@ export class ProjectTimelineMediaPlan {
   private static auxiliaryPlan(
     reference: ProjectMediaReference | null,
     availableRange: MediaTimeRange | null,
+    sourceID: string,
     timelineMap: TimelineMap,
     timelineDuration: number
   ): TimelineMediaPlan | null {
@@ -418,6 +578,7 @@ export class ProjectTimelineMediaPlan {
     return new TimelineMediaPlan({
       timelineMap,
       auxiliary: placement,
+      sourceID,
       syncAnchors: reference.syncAnchors,
       sourceAvailableRange: availableRange,
     });
