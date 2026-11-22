@@ -196,6 +196,9 @@ test('T6.3: FrameScene and FrameRenderPlan construction', () => {
     'spotlight',
     'camera',
     'stickers',
+    'animations',
+    'subtitles',
+    'videos',
   ]);
 
   const dummyQuad = makeProjectedScreenQuad(
@@ -415,5 +418,170 @@ test('T6.4: FrameSceneEvaluator.refreshingCursor only modifies cursor and presen
   assert.deepEqual(refreshedPlan.scene.color, plan.scene.color);
   assert.deepEqual(refreshedPlan.scene.stickers, plan.scene.stickers);
   assert.deepEqual(refreshedPlan.scene.stickerBackdrop, plan.scene.stickerBackdrop);
+});
+
+test('T13.5b-2b: FrameSceneEvaluator v0.2.0 supports multi-source, inserted media, beauty, pressScale, post tracks, and layerOrder', async () => {
+  const {
+    makeRecorderProject,
+    makeProjectMediaManifest,
+    makeProjectMediaReference,
+  } = await import('../../src/core/ProjectMediaModel.ts');
+  const { makeCameraBeautySettings } = await import('../../src/core/CameraBeauty.ts');
+  const { makeCameraStyle, makeCursorStyle } = await import('../../src/core/ProjectModel.ts');
+  const {
+    makeProjectTimeline,
+    makeRecordingSegment,
+    makeSourceSequenceEdited,
+    makeInsertedMedia,
+  } = await import('../../src/core/ProjectTimeline.ts');
+  const { makeAnimationClip, makeOverlayTiming } = await import('../../src/core/OverlayTimeline.ts');
+  const {
+    makeVideoClip,
+    makeSubtitleCue,
+    makeSubtitleStyle,
+  } = await import('../../src/core/PostProductionModel.ts');
+  const { makePointerTrackEvaluation, makePointerSample } = await import('../../src/core/PointerTrack.ts');
+
+  const altSourceID = 'cccccccc-3333-4333-8333-333333333333';
+  const project = makeRecorderProject({
+    media: makeProjectMediaManifest({
+      screen: makeProjectMediaReference({ relativePath: 'media/primary.mp4' }),
+      camera: makeProjectMediaReference({ relativePath: 'media/cam.mp4' }),
+    }),
+    camera: makeCameraStyle({
+      isHidden: false,
+      beauty: makeCameraBeautySettings({ smoothing: 0.45, whitening: 0.3 }),
+    }),
+    cursorStyle: makeCursorStyle({ assetID: 'appleBlack' }),
+    timeline: makeProjectTimeline({
+      sourceSequence: makeSourceSequenceEdited([
+        makeRecordingSegment({ id: 'rec-1', sourceStart: 0, sourceDuration: 5 }),
+        makeRecordingSegment({
+          id: 'ins-vid',
+          sourceStart: 0,
+          sourceDuration: 4,
+          media: makeInsertedMedia({
+            path: 'assets/card.mp4',
+            fileDuration: 4,
+            name: 'TitleCard',
+            usesFrameStyle: false,
+          }),
+        }),
+        makeRecordingSegment({
+          id: 'rec-2',
+          sourceStart: 0,
+          sourceDuration: 4,
+          sourceID: altSourceID,
+        }),
+      ]),
+      videoClips: [
+        makeVideoClip({
+          id: 'ov-vid',
+          timing: makeOverlayTiming(1.0, 2.0),
+          sourcePath: 'clips/pip.mp4',
+          sourceStart: 0.5,
+          playbackRate: 2.0,
+        }),
+      ],
+      animationClips: [
+        makeAnimationClip({
+          id: 'ov-anim',
+          timing: makeOverlayTiming(1.0, 2.0),
+          sourcePath: 'motions/callout.dmhtml',
+          timeOffset: 0.25,
+          playbackRate: 1.5,
+        }),
+      ],
+      subtitleCues: [
+        makeSubtitleCue({
+          id: 'cue-1',
+          timing: makeOverlayTiming(1.0, 2.0),
+          text: 'Hello world',
+          secondaryText: '你好世界',
+        }),
+      ],
+      subtitleStyle: makeSubtitleStyle({ showsSecondary: true }),
+    }),
+  });
+
+  const canvasSize = makeCompositionSize(1920, 1080);
+  const pointerEval = makePointerTrackEvaluation(
+    makeNormalizedPoint(0.5, 0.5),
+    makePointerSample(makeNormalizedPoint(0.5, 0.5), true, null, 0, null, 0.82)
+  );
+  const metrics = {
+    hotspot: { x: 0, y: 0 },
+    intrinsicSize: { width: 32, height: 32 },
+    clickColor: HexColorBlack,
+    scaleReferenceHeight: 32,
+  };
+
+  // Sample during first recording segment (t=2.0): videos, animations, camera (+beauty), cursor (+pressScale), subtitles active
+  const recScene = FrameSceneEvaluator.scene(
+    project,
+    2.0,
+    13.0,
+    canvasSize,
+    16 / 9,
+    { width: 640, height: 480 },
+    null,
+    pointerEval,
+    metrics
+  );
+  assert.ok(recScene.camera);
+  assert.equal(recScene.camera.beauty.smoothing, 0.45);
+  assert.equal(recScene.camera.beauty.whitening, 0.3);
+  assert.ok(recScene.cursor);
+  assert.ok(Math.abs(recScene.cursor.pressScale - 0.82) < 1e-6);
+  assert.equal(recScene.videos.length, 1);
+  assert.equal(recScene.videos[0].sourceTime, 2.5); // 0.5 + (2-1)*2
+  assert.equal(recScene.animations.length, 1);
+  assert.equal(recScene.animations[0].localTime, 1.75); // (2-1)*1.5 + 0.25
+  assert.equal(recScene.subtitle?.text, 'Hello world');
+  assert.equal(recScene.subtitle?.secondaryText, '你好世界');
+  // Camera renders after overlay videos/animations, and subtitles last
+  assert.ok(recScene.layerOrder.indexOf('videos') < recScene.layerOrder.indexOf('camera'));
+  assert.ok(recScene.layerOrder.indexOf('animations') < recScene.layerOrder.indexOf('camera'));
+  assert.equal(recScene.layerOrder[recScene.layerOrder.length - 1], 'subtitles');
+
+  // Sample inside flat inserted video segment (t=6.5): full canvas, no chrome, camera & cursor suppressed
+  const insScene = FrameSceneEvaluator.scene(
+    project,
+    6.5,
+    13.0,
+    canvasSize,
+    16 / 9,
+    { width: 640, height: 480 },
+    null,
+    pointerEval,
+    metrics
+  );
+  assert.equal(insScene.screen.fillsFrame, true);
+  assert.equal(insScene.screen.cornerRadius, 0);
+  assert.equal(insScene.screen.decoration.kind, 'none');
+  assert.equal(insScene.camera, null);
+  assert.equal(insScene.cursor, null);
+
+  // Content aspect mismatch sets sourceContentRect distinct from finalRect
+  const morphScene = FrameSceneEvaluator.scene(
+    project,
+    2.0,
+    13.0,
+    canvasSize,
+    1.0, // square source
+    null,
+    null,
+    null,
+    null,
+    {},
+    null,
+    null,
+    null,
+    null,
+    null,
+    16 / 9 // wider outer card geometry
+  );
+  assert.equal(morphScene.screen.contentAspectRatio, 1.0);
+  assert.ok(morphScene.screen.sourceContentRect!.width < morphScene.screen.finalRect.width);
 });
 

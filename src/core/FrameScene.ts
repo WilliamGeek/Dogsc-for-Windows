@@ -1,4 +1,4 @@
-// Port of: F:\dogsc\Sources\RecorderCore\FrameScene.swift
+// Port of: F:\dogsc-v0.2.0\Sources\RecorderCore\FrameScene.swift
 
 import { min, max } from './swift.ts';
 import {
@@ -29,6 +29,7 @@ import {
   type ScreenFrameStyle,
   type BackgroundSource,
   type NormalizedCrop,
+  NormalizedCropFull,
   normalizedCropClamped,
   type CursorAssetID,
   type CursorClickEffectStyle,
@@ -36,6 +37,7 @@ import {
   openingSequenceMaximumStagger,
   OPENING_SEQUENCE_MINIMUM_ELEMENT_DURATION,
 } from './ProjectModel.ts';
+import { type CameraBeautySettings, makeCameraBeautySettings } from './CameraBeauty.ts';
 import { screenFrameStyleDefaults } from './ScreenFrameDefaults.ts';
 import {
   type NormalizedPoint,
@@ -55,6 +57,9 @@ import {
   makePointerTrackEvaluation,
 } from './PointerTrack.ts';
 import {
+  type AnimationClip,
+  type AnimationPropertyValue,
+  type MotionElementEdit,
   type NormalizedOverlayRect,
   normalizedOverlayRectClamped,
   type MosaicEffectStyle,
@@ -63,8 +68,43 @@ import {
   type StickerClip,
   type StickerAnimationPreset,
   overlayTimingContains,
+  overlayTimingEndTime,
   stickerAnimationPresetAutomaticExit,
 } from './OverlayTimeline.ts';
+import {
+  type SubtitleCue,
+  type SubtitleStyle,
+  type VideoClip,
+  makeSubtitleStyle,
+} from './PostProductionModel.ts';
+import {
+  type RecordingSource,
+  RecordingSourcePrimaryID,
+  projectOpeningDeclaresCamera,
+  projectOpeningRecordingSourceID,
+  projectSourceByID,
+} from './RecordingSource.ts';
+import {
+  type InsertedMedia,
+  type ProjectTimeline,
+  type RecordingSegment,
+  type SourceSequence,
+  projectTimelineInsertedPlayback,
+} from './ProjectTimeline.ts';
+import type { RecorderProject } from './ProjectMediaModel.ts';
+import {
+  projectCameraAppearanceTransitionSample,
+  projectSceneProjectAtOutputTime,
+  projectScreenCanvasAtOutputTime,
+  projectSettledCameraAtOutputTime,
+} from './ScreenCardAppearance.ts';
+import {
+  RecordingSegmentBoundaryNone,
+  type RecordingSegmentBoundary,
+  projectTimelineRecordingSegmentBoundaryAtOutputTime,
+  recordingSegmentBoundaryInsertedPlayback,
+  segmentSceneStyleApplyToProject,
+} from './SegmentSceneStyle.ts';
 import {
   StickerTransitionTrack,
   type FrameStickerBackdropScene,
@@ -74,6 +114,23 @@ import { FocusEffectEvaluator, type FrameFocusScene } from './FocusEffect.ts';
 import { ElementMotionEvaluator } from './ElementMotion.ts';
 import { ScreenMotionTrack, type ScreenMotionClip } from './ScreenMotion.ts';
 import { CameraMotionTrack, type CameraMotionClip } from './CameraMotion.ts';
+
+const _nextDownBuf = new ArrayBuffer(8);
+const _nextDownF64 = new Float64Array(_nextDownBuf);
+const _nextDownU64 = new BigInt64Array(_nextDownBuf);
+
+function nextDown(value: number): number {
+  if (Number.isNaN(value) || value === -Infinity) return value;
+  if (value === Infinity) return Number.MAX_VALUE;
+  if (value === 0) return -Number.MIN_VALUE;
+  _nextDownF64[0] = value;
+  if (value > 0) {
+    _nextDownU64[0] -= 1n;
+  } else {
+    _nextDownU64[0] += 1n;
+  }
+  return _nextDownF64[0];
+}
 
 // MARK: - CompositionSize
 
@@ -365,7 +422,28 @@ export interface FrameScreenScene {
   mosaics: FrameMosaicScene[];
   focusEffect: FrameFocusScene | null;
   opacity: number;
+  fillsFrame: boolean;
+  contentAspectRatio: number | null;
+  readonly sourceContentRect?: CompositionRect;
   readonly projectionRect?: CompositionRect;
+}
+
+export function frameScreenSceneSourceContentRect(scene: FrameScreenScene): CompositionRect {
+  const aspect = scene.contentAspectRatio;
+  if (aspect == null || !Number.isFinite(aspect) || !(aspect > 0)) {
+    return scene.finalRect;
+  }
+  const fitsWidth =
+    (aspect >= scene.finalRect.width / max(scene.finalRect.height, 0.001)) !==
+    scene.fillsFrame;
+  const width = fitsWidth ? scene.finalRect.width : scene.finalRect.height * aspect;
+  const height = fitsWidth ? scene.finalRect.width / aspect : scene.finalRect.height;
+  return makeCompositionRect(
+    scene.finalRect.x + (scene.finalRect.width - width) / 2,
+    scene.finalRect.y + (scene.finalRect.height - height) / 2,
+    width,
+    height
+  );
 }
 
 export function frameScreenSceneProjectionRect(scene: FrameScreenScene): CompositionRect {
@@ -374,7 +452,7 @@ export function frameScreenSceneProjectionRect(scene: FrameScreenScene): Composi
 
 export function makeFrameScreenScene(options: {
   sourceCrop: NormalizedCrop;
-  fittedRect: CompositionRect;
+  fittedRect?: CompositionRect;
   baseRect: CompositionRect;
   finalRect: CompositionRect;
   projectedQuad: ProjectedScreenQuad;
@@ -387,10 +465,12 @@ export function makeFrameScreenScene(options: {
   mosaics?: FrameMosaicScene[];
   focusEffect?: FrameFocusScene | null;
   opacity?: number;
+  fillsFrame?: boolean;
+  contentAspectRatio?: number | null;
 }): FrameScreenScene {
   return {
     sourceCrop: normalizedCropClamped(options.sourceCrop),
-    fittedRect: options.fittedRect,
+    fittedRect: options.fittedRect ?? options.baseRect,
     baseRect: options.baseRect,
     finalRect: options.finalRect,
     projectedQuad: options.projectedQuad,
@@ -403,6 +483,11 @@ export function makeFrameScreenScene(options: {
     mosaics: options.mosaics ? options.mosaics.slice() : [],
     focusEffect: options.focusEffect ?? null,
     opacity: min(max(options.opacity ?? 1, 0), 1),
+    fillsFrame: options.fillsFrame ?? false,
+    contentAspectRatio: options.contentAspectRatio ?? null,
+    get sourceContentRect(): CompositionRect {
+      return frameScreenSceneSourceContentRect(this);
+    },
     get projectionRect(): CompositionRect {
       return frameScreenSceneProjectionRect(this);
     },
@@ -420,6 +505,7 @@ export interface FrameCameraScene {
   shadow: FrameShadow | null;
   opacity: number;
   isMirrored: boolean;
+  beauty: CameraBeautySettings;
 }
 
 export function makeFrameCameraScene(options: {
@@ -431,6 +517,7 @@ export function makeFrameCameraScene(options: {
   shadow: FrameShadow | null;
   opacity: number;
   isMirrored: boolean;
+  beauty?: CameraBeautySettings;
 }): FrameCameraScene {
   return {
     rect: options.rect,
@@ -441,6 +528,7 @@ export function makeFrameCameraScene(options: {
     shadow: options.shadow,
     opacity: min(max(options.opacity, 0), 1),
     isMirrored: options.isMirrored,
+    beauty: options.beauty ?? makeCameraBeautySettings(),
   };
 }
 
@@ -467,6 +555,7 @@ export interface FrameCursorScene {
   clickOpacity: number;
   clickScale: number;
   rotationRadians: number;
+  pressScale: number;
   shadow: FrameShadow | null;
   attachment: FrameCursorAttachment;
   readonly effectiveClickColor?: HexColor;
@@ -479,7 +568,7 @@ export function frameCursorSceneEffectiveClickColor(scene: FrameCursorScene): He
 export function makeFrameCursorScene(options: {
   assetID: CursorAssetID;
   metrics: CursorAssetMetrics;
-  normalizedScreenPosition: NormalizedPoint;
+  normalizedScreenPosition?: NormalizedPoint;
   layout: CursorRenderLayout;
   isClicking: boolean;
   clickPhase?: PointerClickPhase | null;
@@ -488,13 +577,14 @@ export function makeFrameCursorScene(options: {
   clickOpacity?: number;
   clickScale?: number;
   rotationRadians?: number;
+  pressScale?: number;
   shadow: FrameShadow | null;
   attachment?: FrameCursorAttachment;
 }): FrameCursorScene {
   return {
     assetID: options.assetID,
     metrics: options.metrics,
-    normalizedScreenPosition: options.normalizedScreenPosition,
+    normalizedScreenPosition: options.normalizedScreenPosition ?? makeNormalizedPoint(0.5, 0.5),
     layout: options.layout,
     isClicking: options.isClicking,
     clickPhase: options.clickPhase ?? null,
@@ -503,6 +593,12 @@ export function makeFrameCursorScene(options: {
     clickOpacity: min(max(options.clickOpacity ?? 0.8, 0.05), 1.0),
     clickScale: min(max(options.clickScale ?? 1.0, 0.4), 3.0),
     rotationRadians: Number.isFinite(options.rotationRadians) ? options.rotationRadians! : 0,
+    pressScale:
+      typeof options.pressScale === 'number' &&
+      Number.isFinite(options.pressScale) &&
+      options.pressScale > 0
+        ? options.pressScale
+        : 1,
     shadow: options.shadow,
     attachment: options.attachment ?? 'screen',
     get effectiveClickColor(): HexColor {
@@ -537,10 +633,16 @@ export interface FrameStickerScene {
   /// backdrop so two partially visible images cannot expose the recording.
   transitionProgress: number;
   layerIndex: number;
+  sourceTime: number;
 }
 
-export function makeFrameStickerScene(init: FrameStickerScene): FrameStickerScene {
-  return { ...init };
+export function makeFrameStickerScene(
+  init: Omit<FrameStickerScene, 'sourceTime'> & { sourceTime?: number }
+): FrameStickerScene {
+  return {
+    ...init,
+    sourceTime: init.sourceTime ?? 0,
+  };
 }
 
 // MARK: - FrameLayerRole
@@ -551,7 +653,10 @@ export type FrameLayerRole =
   | 'cursor'
   | 'spotlight'
   | 'camera'
-  | 'stickers';
+  | 'stickers'
+  | 'animations'
+  | 'subtitles'
+  | 'videos';
 
 export const FrameLayerRoleAllCases: readonly FrameLayerRole[] = Object.freeze([
   'background',
@@ -560,7 +665,123 @@ export const FrameLayerRoleAllCases: readonly FrameLayerRole[] = Object.freeze([
   'spotlight',
   'camera',
   'stickers',
+  'animations',
+  'subtitles',
+  'videos',
 ]);
+
+// MARK: - FrameVideoScene, FrameSubtitleScene, FrameAnimationScene & Inserted Media Scenes
+
+export interface FrameVideoScene {
+  id: string;
+  sourcePath: string;
+  sourceTime: number;
+  position: NormalizedPoint;
+  width: number;
+  aspect: number;
+  opacity: number;
+  layerIndex: number;
+}
+
+export function makeFrameVideoSceneFromClip(clip: VideoClip, time: number): FrameVideoScene {
+  return {
+    id: clip.id,
+    sourcePath: clip.sourcePath,
+    sourceTime: clip.sourceStart + max(time - clip.timing.startTime, 0) * clip.playbackRate,
+    position: clip.position,
+    width: clip.width,
+    aspect: clip.aspect,
+    opacity: clip.opacity,
+    layerIndex: clip.layerIndex,
+  };
+}
+
+export interface FrameSubtitleScene {
+  cueID: string;
+  text: string;
+  secondaryText: string | null;
+  style: SubtitleStyle;
+  elapsed: number;
+  remaining: number;
+}
+
+export function makeFrameSubtitleScene(options: FrameSubtitleScene): FrameSubtitleScene {
+  return { ...options };
+}
+
+export interface FrameAnimationScene {
+  playbackRate: number;
+  id: string;
+  sourcePath: string;
+  artboard: string | null;
+  stateMachine: string | null;
+  localTime: number;
+  position: NormalizedPoint;
+  width: number;
+  opacity: number;
+  properties: Record<string, AnimationPropertyValue>;
+  layerIndex: number;
+  elementEdits: Record<string, MotionElementEdit>;
+}
+
+export function makeFrameAnimationSceneFromClip(
+  clip: AnimationClip,
+  time: number
+): FrameAnimationScene {
+  return {
+    id: clip.id,
+    sourcePath: clip.sourcePath,
+    artboard: clip.artboard,
+    stateMachine: clip.stateMachine,
+    localTime: max(time - clip.timing.startTime, 0) * clip.playbackRate + max(clip.timeOffset, 0),
+    playbackRate: clip.playbackRate,
+    position: clip.position,
+    width: clip.width,
+    opacity: clip.opacity,
+    properties: clip.properties,
+    layerIndex: clip.layerIndex,
+    elementEdits: clip.elementEdits,
+  };
+}
+
+export interface FrameInsertedMotionScene {
+  playbackRate: number;
+  sourcePath: string;
+  localTime: number;
+  properties: Record<string, AnimationPropertyValue>;
+  elementEdits: Record<string, MotionElementEdit>;
+}
+
+export function makeFrameInsertedMotionScene(options: {
+  sourcePath: string;
+  localTime: number;
+  properties: Record<string, AnimationPropertyValue>;
+  elementEdits?: Record<string, MotionElementEdit>;
+  playbackRate?: number;
+}): FrameInsertedMotionScene {
+  return {
+    sourcePath: options.sourcePath,
+    localTime: options.localTime,
+    properties: options.properties,
+    elementEdits: options.elementEdits ?? {},
+    playbackRate: options.playbackRate ?? 1,
+  };
+}
+
+export interface FrameInsertedImageScene {
+  sourcePath: string;
+  localTime: number;
+}
+
+export function makeFrameInsertedImageScene(options: {
+  sourcePath: string;
+  localTime: number;
+}): FrameInsertedImageScene {
+  return {
+    sourcePath: options.sourcePath,
+    localTime: options.localTime,
+  };
+}
 
 // MARK: - FrameScene
 
@@ -576,7 +797,12 @@ export interface FrameScene {
   cursor: FrameCursorScene | null;
   stickers: FrameStickerScene[];
   stickerBackdrop: FrameStickerBackdropScene;
+  animations: FrameAnimationScene[];
+  subtitle: FrameSubtitleScene | null;
+  videos: FrameVideoScene[];
   layerOrder: FrameLayerRole[];
+  insertedMotion: FrameInsertedMotionScene | null;
+  insertedImage: FrameInsertedImageScene | null;
 }
 
 export function makeFrameScene(options: {
@@ -589,7 +815,12 @@ export function makeFrameScene(options: {
   cursor: FrameCursorScene | null;
   stickers?: FrameStickerScene[];
   stickerBackdrop?: FrameStickerBackdropScene | null;
+  animations?: FrameAnimationScene[];
+  subtitle?: FrameSubtitleScene | null;
+  videos?: FrameVideoScene[];
   layerOrder: FrameLayerRole[];
+  insertedMotion?: FrameInsertedMotionScene | null;
+  insertedImage?: FrameInsertedImageScene | null;
 }): FrameScene {
   const stickers = options.stickers ? options.stickers.slice() : [];
   const stickerBackdrop =
@@ -604,7 +835,12 @@ export function makeFrameScene(options: {
     cursor: options.cursor,
     stickers,
     stickerBackdrop,
+    animations: options.animations ? options.animations.slice() : [],
+    subtitle: options.subtitle ?? null,
+    videos: options.videos ? options.videos.slice() : [],
     layerOrder: options.layerOrder.slice(),
+    insertedMotion: options.insertedMotion ?? null,
+    insertedImage: options.insertedImage ?? null,
   };
 }
 
@@ -619,13 +855,13 @@ export interface FrameRenderPlan {
 }
 
 export function makeFrameRenderPlan(options: {
-  presentationTime: number;
+  presentationTime?: number;
   outputDuration: number;
   frameRate: number;
   scene: FrameScene;
 }): FrameRenderPlan {
   return {
-    presentationTime: options.presentationTime,
+    presentationTime: options.presentationTime ?? options.scene.time,
     outputDuration: options.outputDuration,
     frameRate: options.frameRate,
     scene: options.scene,
@@ -635,22 +871,34 @@ export function makeFrameRenderPlan(options: {
 // MARK: - FrameSceneProjectLike & Helper Interfaces
 
 export interface FrameSceneProjectLike {
+  title?: string;
+  capture?: any;
   canvas: CanvasStyle;
-  camera: CameraStyle;
+  camera: CameraStyle & { beauty?: CameraBeautySettings };
   motion: MotionStyle;
-  cursorStyle: CursorStyle;
+  cursorStyle: CursorStyle & { pressesOnClick?: boolean };
   openingSequence: OpeningSequence;
   timeline: {
+    sourceSequence?: SourceSequence;
     screenMotionClips: readonly ScreenMotionClip[];
     cameraMotionClips: readonly CameraMotionClip[];
     stickerClips: readonly StickerClip[];
     mosaicClips: readonly MosaicClip[];
     zoomClips?: readonly ZoomAnimationClip[];
+    animationClips?: readonly AnimationClip[];
+    audioClips?: readonly any[];
+    videoClips?: readonly VideoClip[];
+    subtitleCues?: readonly SubtitleCue[];
+    subtitleStyle?: SubtitleStyle;
   };
   zoomAnimations: readonly ZoomAnimationClip[];
   media?: {
+    screen?: any;
     camera?: any;
+    microphone?: any;
+    pointerEvents?: any;
   } | null;
+  additionalSources?: readonly RecordingSource[];
 }
 
 export interface ProjectPointerTrackLike {
@@ -938,21 +1186,30 @@ function screenDecoration(
   const isPhone = frameScreenChromeKindIsPhone(kind);
   const defaults = screenFrameStyleDefaults(style);
 
-  const fallbackOuterRadius = isDevice
-    ? (min(outerRect.width, outerRect.height) * (isPhone ? 0.11 : 0.065)) / max(scale, 0.0001)
-    : defaults.outerRadius;
-  const authoredOuterRadius = min(max(outerCornerRadius ?? fallbackOuterRadius, 0), 160);
+  const authoredOuterRadius = min(max(outerCornerRadius ?? defaults.outerRadius, 0), 160);
+  const authoredContentRadius = min(max(contentCornerRadius ?? defaults.contentRadius, 0), 160);
+
+  let resolvedOuterRadius: number;
+  let resolvedContentRadius: number;
+  if (isDevice) {
+    const contentShortEdge = min(geometry.finalRect.width, geometry.finalRect.height);
+    const bezel = min(topInset, leftInset);
+    const nativeContentRadius = contentShortEdge * (isPhone ? 0.145 : 0.034);
+    const contentFactor = authoredContentRadius / max(defaults.contentRadius, 1);
+    const outerFactor = authoredOuterRadius / max(defaults.outerRadius, 1);
+    resolvedContentRadius = nativeContentRadius * contentFactor;
+    resolvedOuterRadius = (nativeContentRadius + bezel) * outerFactor;
+  } else {
+    resolvedContentRadius = authoredContentRadius * scale;
+    resolvedOuterRadius = authoredOuterRadius * scale;
+  }
+
   const resolvedOuterCornerRadius = min(
-    authoredOuterRadius * scale,
+    resolvedOuterRadius,
     min(outerRect.width, outerRect.height) / 2
   );
-
-  const fallbackContentRadius = isDevice
-    ? max(resolvedOuterCornerRadius - min(topInset, leftInset), 0) / max(scale, 0.0001)
-    : defaults.contentRadius;
-  const authoredContentRadius = min(max(contentCornerRadius ?? fallbackContentRadius, 0), 160);
   const resolvedContentCornerRadius = min(
-    authoredContentRadius * scale,
+    resolvedContentRadius,
     min(geometry.finalRect.width, geometry.finalRect.height) / 2
   );
 
@@ -964,11 +1221,11 @@ function screenDecoration(
       contentRect: geometry.finalRect,
       outerCornerRadius: resolvedOuterCornerRadius,
       contentCornerRadius: resolvedContentCornerRadius,
-      surfaceColor: isDark ? makeHexColor(0x222327) : makeHexColor(0xecedf0),
-      toolbarColor: isDark ? makeHexColor(0x313238) : makeHexColor(0xf4f4f6),
-      separatorColor: isDark ? makeHexColor(0x4b4d55) : makeHexColor(0xc9cace),
-      fieldColor: isDark ? makeHexColor(0x1b1c20) : makeHexColor(0xffffff),
-      glyphColor: isDark ? makeHexColor(0xa9abb3) : makeHexColor(0x7a7c84),
+      surfaceColor: isDark ? makeHexColor(0x1e1e21) : makeHexColor(0xeeeef0),
+      toolbarColor: isDark ? makeHexColor(0x2c2c30) : makeHexColor(0xf7f7f8),
+      separatorColor: isDark ? makeHexColor(0x161618) : makeHexColor(0xdddde1),
+      fieldColor: isDark ? makeHexColor(0x3b3b40) : makeHexColor(0xe8e8ec),
+      glyphColor: isDark ? makeHexColor(0xa4a4ab) : makeHexColor(0x6e6e76),
       title,
       browserAddress,
     })
@@ -998,9 +1255,10 @@ function cursorScene(
   );
   if (local.x < 0 || local.x > 1 || local.y < 0 || local.y > 1) return null;
 
+  const content = frameScreenSceneSourceContentRect(screen);
   const point = makeCompositionPoint(
-    screen.finalRect.x + local.x * screen.finalRect.width,
-    screen.finalRect.y + local.y * screen.finalRect.height
+    content.x + local.x * content.width,
+    content.y + local.y * content.height
   );
   const layout = CursorRenderGeometry.layout(
     point,
@@ -1023,6 +1281,7 @@ function cursorScene(
     clickOpacity: project.cursorStyle.clickOpacity,
     clickScale: project.cursorStyle.clickScale,
     rotationRadians: sample.rotationRadians,
+    pressScale: sample.pressScale ?? 1,
     shadow: makeFrameShadow({
       opacity: 0.42,
       radius: max((clickHeight * 1.5) / 44, 0.5),
@@ -1114,6 +1373,7 @@ function stickerScenes(
       hidesCamera: clip.hidesCamera,
       transitionProgress: visibility,
       layerIndex: clip.layerIndex,
+      sourceTime: clip.sourceStart + max(time - clip.timing.startTime, 0) * clip.playbackRate,
     });
   });
   return { stickers, backdrop: sample.backdrop };
@@ -1131,24 +1391,54 @@ export const FrameSceneEvaluator = Object.freeze({
     cursorMetricsByAssetID: Record<string, CursorAssetMetrics> = {},
     zoomTrack: ZoomAnimationTrack | null = null
   ): FrameRenderPlan {
+    const resolvedProject =
+      project.timeline.sourceSequence != null
+        ? projectSceneProjectAtOutputTime(
+            project as unknown as RecorderProject,
+            presentationTime
+          )
+        : project;
     const time = Number.isFinite(presentationTime)
       ? min(max(presentationTime, 0), plan.outputDuration)
       : 0;
     const resolvedZoomTrack =
       zoomTrack != null
         ? zoomTrack
-        : new ZoomAnimationTrack(project.zoomAnimations, plan.outputDuration);
+        : new ZoomAnimationTrack(resolvedProject.zoomAnimations, plan.outputDuration);
     const activeClip = resolvedZoomTrack.activeClip(time);
     const activeAutomaticClip = activeClip && activeClip.origin === 'automatic' ? activeClip : null;
-    const pointer = pointerTrack?.evaluation(time, project.motion, project.cursorStyle, activeAutomaticClip);
-    const newCursor = cursorScene(
-      pointer?.cursor ?? null,
-      project,
-      cursorMetrics,
-      cursorMetricsByAssetID,
-      plan.scene.screen,
-      plan.scene.canvasSize
+    const pointer = pointerTrack?.evaluation(
+      time,
+      resolvedProject.motion,
+      resolvedProject.cursorStyle,
+      activeAutomaticClip
     );
+
+    let insertedImage = plan.scene.insertedImage ?? null;
+    if (insertedImage != null && project.timeline.sourceSequence != null) {
+      const playback = projectTimelineInsertedPlayback(
+        resolvedProject.timeline as ProjectTimeline,
+        time
+      );
+      if (playback != null) {
+        insertedImage = makeFrameInsertedImageScene({
+          sourcePath: insertedImage.sourcePath,
+          localTime: playback.localTime,
+        });
+      }
+    }
+
+    const newCursor =
+      insertedImage != null
+        ? null
+        : cursorScene(
+            pointer?.cursor ?? null,
+            resolvedProject,
+            cursorMetrics,
+            cursorMetricsByAssetID,
+            plan.scene.screen,
+            plan.scene.canvasSize
+          );
 
     const newLayerOrder = plan.scene.layerOrder.filter((role) => role !== 'cursor');
     if (newCursor != null) {
@@ -1162,6 +1452,7 @@ export const FrameSceneEvaluator = Object.freeze({
       ...plan.scene,
       cursor: newCursor,
       layerOrder: newLayerOrder,
+      insertedImage,
     };
 
     return makeFrameRenderPlan({
@@ -1188,6 +1479,8 @@ export const FrameSceneEvaluator = Object.freeze({
     cameraMotionTrack: CameraMotionTrack | null = null,
     stickerTrack: StickerTransitionTrack | null = null,
     cameraTimeline: TimelineMediaPlanLike | null = null,
+    recordingSourceID: string | null = null,
+    geometrySourceAspectRatio: number | null = null,
     color: FrameColorContract = FrameColorContractSDRDesktop
   ): FrameRenderPlan {
     const safeDuration = Number.isFinite(outputDuration) ? max(outputDuration, 0) : 0;
@@ -1210,6 +1503,8 @@ export const FrameSceneEvaluator = Object.freeze({
       screenMotionTrack,
       cameraMotionTrack,
       stickerTrack,
+      recordingSourceID,
+      geometrySourceAspectRatio,
       color
     );
     return makeFrameRenderPlan({
@@ -1221,11 +1516,11 @@ export const FrameSceneEvaluator = Object.freeze({
   },
 
   scene(
-    project: FrameSceneProjectLike,
+    rawProject: FrameSceneProjectLike,
     time: number,
     outputDuration: number | null = null,
     canvasSize: CompositionSize,
-    sourceAspectRatio: number,
+    rawSourceAspectRatio: number,
     cameraSourceSize: CompositionSize | null = null,
     pointerTrack: ProjectPointerTrackLike | null = null,
     pointerEvaluation: PointerTrackEvaluation | null = null,
@@ -1235,10 +1530,86 @@ export const FrameSceneEvaluator = Object.freeze({
     screenMotionTrack: ScreenMotionTrack | null = null,
     cameraMotionTrack: CameraMotionTrack | null = null,
     stickerTrack: StickerTransitionTrack | null = null,
+    recordingSourceID: string | null = null,
+    rawGeometrySourceAspectRatio: number | null = null,
     color: FrameColorContract = FrameColorContractSDRDesktop
   ): FrameScene {
     const width = max(canvasSize.width, 2);
     const height = max(canvasSize.height, 2);
+    const cameraAspect = cameraSourceSize
+      ? max(cameraSourceSize.width, 1) / max(cameraSourceSize.height, 1)
+      : null;
+
+    let project: FrameSceneProjectLike = rawProject;
+    let boundary: RecordingSegmentBoundary = RecordingSegmentBoundaryNone;
+    let cameraBase = null;
+    let openingSourceID = RecordingSourcePrimaryID;
+    let openingDeclaresCamera = project.media?.camera != null;
+
+    if (project.timeline.sourceSequence != null) {
+      const fullProj = project as unknown as RecorderProject;
+      boundary = projectTimelineRecordingSegmentBoundaryAtOutputTime(
+        fullProj.timeline,
+        time
+      );
+      const settledCanvas = projectScreenCanvasAtOutputTime(
+        fullProj,
+        time,
+        recordingSourceID,
+        boundary
+      );
+      const settledCamera = projectSettledCameraAtOutputTime(fullProj, time, boundary);
+      cameraBase =
+        cameraAspect !== null
+          ? projectCameraAppearanceTransitionSample(
+              fullProj,
+              time,
+              cameraAspect,
+              width / height,
+              boundary
+            )
+          : null;
+
+      let appliedProj: RecorderProject = fullProj;
+      const segSceneStyle = boundary.segment?.sceneStyle;
+      if (segSceneStyle) {
+        appliedProj = segmentSceneStyleApplyToProject(segSceneStyle, appliedProj);
+      }
+      appliedProj = {
+        ...appliedProj,
+        canvas: settledCanvas,
+        camera: settledCamera,
+      };
+
+      openingSourceID = projectOpeningRecordingSourceID(appliedProj);
+      openingDeclaresCamera = projectOpeningDeclaresCamera(appliedProj);
+      if (recordingSourceID != null) {
+        const src = projectSourceByID(appliedProj, recordingSourceID);
+        if (src) {
+          appliedProj = { ...appliedProj, media: src.media };
+        }
+      }
+      project = appliedProj;
+    }
+
+    const insertedMedia = (boundary.segment?.media ?? null) as InsertedMedia | null;
+    const sourceAspectRatio = insertedMedia?.sourceAspectRatio ?? rawSourceAspectRatio;
+    const geometrySourceAspectRatio =
+      insertedMedia?.imagePath != null ? null : rawGeometrySourceAspectRatio;
+
+    if (insertedMedia?.imagePath != null && insertedMedia.usesFrameStyle === false) {
+      project = {
+        ...project,
+        canvas: {
+          ...project.canvas,
+          cornerRadius: 0,
+          borderWidth: 0,
+          shadowStrength: 0,
+          screenFrame: 'none',
+        },
+      };
+    }
+
     const sampleTime = Number.isFinite(time) ? max(time, 0) : 0;
 
     const resolvedZoomTrack =
@@ -1277,14 +1648,14 @@ export const FrameSceneEvaluator = Object.freeze({
       const previous = resolvedZoomTrack.adjacentPreviousClip(activeZoomClip);
       if (previous && previous.origin === 'automatic') {
         inheritedAutomaticCameraPosition = pointerTrack?.automaticCameraFocus
-          ? pointerTrack.automaticCameraFocus(previous.endTime, previous, project.motion)
+          ? pointerTrack.automaticCameraFocus(
+              max(previous.startTime, nextDown(previous.endTime)),
+              previous,
+              project.motion
+            )
           : previous.focus;
       }
     }
-
-    const cameraAspect = cameraSourceSize
-      ? max(cameraSourceSize.width, 1) / max(cameraSourceSize.height, 1)
-      : null;
 
     const styleScale = CompositionSceneEvaluator.canonicalStyleScale(width, height);
     const geometry = CompositionSceneEvaluator.evaluate(
@@ -1292,7 +1663,7 @@ export const FrameSceneEvaluator = Object.freeze({
       sampleTime,
       width,
       height,
-      sourceAspectRatio,
+      geometrySourceAspectRatio ?? sourceAspectRatio,
       cameraAspect,
       styleScale,
       automaticCameraPosition,
@@ -1300,7 +1671,8 @@ export const FrameSceneEvaluator = Object.freeze({
       reanchorsAtCut,
       resolvedZoomTrack,
       resolvedScreenTrack,
-      cameraMotionTrack
+      cameraMotionTrack,
+      cameraBase
     );
 
     const hasOpeningSticker = project.timeline.stickerClips.some(
@@ -1308,8 +1680,11 @@ export const FrameSceneEvaluator = Object.freeze({
         clip.timing.startTime <= 0.0001 &&
         clip.timing.startTime + clip.timing.duration > 0.0001
     );
+    const resolvedRecordingID = recordingSourceID ?? RecordingSourcePrimaryID;
     const hasOpeningCamera = Boolean(
-      (project.media?.camera != null || cameraSourceSize != null) && !project.camera.isHidden
+      (openingDeclaresCamera ||
+        (cameraSourceSize != null && openingSourceID === resolvedRecordingID)) &&
+        !project.camera.isHidden
     );
 
     const availableOpeningElements = openingSequenceParticipatingElements(
@@ -1411,6 +1786,15 @@ export const FrameSceneEvaluator = Object.freeze({
       }
     }
 
+    const contentAspectOverride =
+      geometrySourceAspectRatio != null &&
+      Math.abs(geometrySourceAspectRatio - sourceAspectRatio) > 0.000_001
+        ? (() => {
+            const c = normalizedCropClamped(project.canvas.crop);
+            return (sourceAspectRatio * c.width) / c.height;
+          })()
+        : null;
+
     const screen = makeFrameScreenScene({
       sourceCrop: project.canvas.crop,
       fittedRect: screenGeometry.fittedRect,
@@ -1434,6 +1818,7 @@ export const FrameSceneEvaluator = Object.freeze({
         project.motion
       ),
       opacity: screenOpening.opacity,
+      contentAspectRatio: contentAspectOverride,
     });
 
     let camera: FrameCameraScene | null = null;
@@ -1479,6 +1864,7 @@ export const FrameSceneEvaluator = Object.freeze({
             : null,
         opacity: project.camera.isHidden ? 0 : evaluation.opacity * opening.opacity,
         isMirrored: project.camera.isMirrored,
+        beauty: project.camera.beauty ?? makeCameraBeautySettings(),
       });
     }
 
@@ -1515,22 +1901,166 @@ export const FrameSceneEvaluator = Object.freeze({
       opacity: s.opacity * stickerOpening.opacity,
     }));
 
+    const videos: FrameVideoScene[] = (project.timeline.videoClips ?? [])
+      .filter((c) => overlayTimingContains(c.timing, sampleTime) && c.opacity > 0)
+      .slice()
+      .sort((a, b) =>
+        a.layerIndex === b.layerIndex
+          ? a.id < b.id
+            ? -1
+            : a.id > b.id
+            ? 1
+            : 0
+          : a.layerIndex - b.layerIndex
+      )
+      .map((c) => makeFrameVideoSceneFromClip(c, sampleTime));
+
+    const animations: FrameAnimationScene[] = (project.timeline.animationClips ?? [])
+      .filter((c) => overlayTimingContains(c.timing, sampleTime) && c.opacity > 0)
+      .slice()
+      .sort((a, b) =>
+        a.layerIndex === b.layerIndex
+          ? a.id < b.id
+            ? -1
+            : a.id > b.id
+            ? 1
+            : 0
+          : a.layerIndex - b.layerIndex
+      )
+      .map((c) => makeFrameAnimationSceneFromClip(c, sampleTime));
+
+    const subtitleStyle = project.timeline.subtitleStyle ?? makeSubtitleStyle();
+    const activeCue = (project.timeline.subtitleCues ?? []).find(
+      (c) => overlayTimingContains(c.timing, sampleTime) && c.text.length > 0
+    );
+    const subtitle: FrameSubtitleScene | null = activeCue
+      ? makeFrameSubtitleScene({
+          cueID: activeCue.id,
+          text: activeCue.text,
+          secondaryText: subtitleStyle.showsSecondary ? activeCue.secondaryText : null,
+          style: subtitleStyle,
+          elapsed: max(sampleTime - activeCue.timing.startTime, 0),
+          remaining: max(overlayTimingEndTime(activeCue.timing) - sampleTime, 0),
+        })
+      : null;
+
+    // EDT-054: main-track inserted media suppresses camera, cursor & regions.
+    const playback =
+      boundary.segment != null
+        ? recordingSegmentBoundaryInsertedPlayback(boundary, sampleTime)
+        : null;
+    const inserted = (playback?.media ?? null) as InsertedMedia | null;
+    const insertedNow = inserted != null;
+
+    let presentedScreen = screen;
+    if (inserted != null) {
+      const nextCrop = normalizedCropClamped(
+        boundary.segment?.sceneStyle?.canvas.crop ?? NormalizedCropFull
+      );
+      const fillsFrame = inserted.imagePath == null;
+      let nextBaseRect = screen.baseRect;
+      let nextFinalRect = screen.finalRect;
+      let nextQuad = screen.projectedQuad;
+      let nextCornerRadius = screen.cornerRadius;
+      let nextBorderWidth = screen.borderWidth;
+      let nextShadow = screen.shadow;
+      let nextDecoration = screen.decoration;
+
+      if (!inserted.usesFrameStyle && inserted.imagePath == null) {
+        const aspect = max(
+          (sourceAspectRatio * nextCrop.width) / max(nextCrop.height, 0.001),
+          0.001
+        );
+        const scale = min(max(project.canvas.contentScale, 0.25), 4);
+        const imageWidth = max(width, height * aspect) * scale;
+        const imageHeight = imageWidth / aspect;
+        const rect = makeCompositionRect(
+          (width - imageWidth) * project.canvas.contentPosition.x,
+          (height - imageHeight) * project.canvas.contentPosition.y,
+          imageWidth,
+          imageHeight
+        );
+        nextBaseRect = rect;
+        nextFinalRect = rect;
+        nextQuad = {
+          topLeft: makeCompositionPoint(rect.x, rect.y),
+          topRight: makeCompositionPoint(rect.x + rect.width, rect.y),
+          bottomRight: makeCompositionPoint(rect.x + rect.width, rect.y + rect.height),
+          bottomLeft: makeCompositionPoint(rect.x, rect.y + rect.height),
+        };
+        nextCornerRadius = 0;
+        nextBorderWidth = 0;
+        nextShadow = null;
+        nextDecoration = FrameScreenDecoration.none;
+      }
+
+      presentedScreen = makeFrameScreenScene({
+        sourceCrop: nextCrop,
+        fittedRect: screen.fittedRect,
+        baseRect: nextBaseRect,
+        finalRect: nextFinalRect,
+        projectedQuad: nextQuad,
+        cornerRadius: nextCornerRadius,
+        borderWidth: nextBorderWidth,
+        borderColor: screen.borderColor,
+        borderOpacity: screen.borderOpacity,
+        shadow: nextShadow,
+        decoration: nextDecoration,
+        mosaics: [],
+        focusEffect: null,
+        opacity: screen.opacity,
+        fillsFrame,
+        contentAspectRatio: screen.contentAspectRatio,
+      });
+    }
+
+    const finalCamera = insertedNow ? null : camera;
+    const finalCursor = insertedNow ? null : cursor;
+
     const order: FrameLayerRole[] = ['background', 'screen'];
-    if (cursor != null) {
+    if (finalCursor != null) {
       order.push('cursor');
     }
     if (
-      screen.focusEffect != null ||
-      activeMosaics.some((m) => m.style === 'spotlight')
+      presentedScreen.focusEffect != null ||
+      presentedScreen.mosaics.some((m) => m.style === 'spotlight')
     ) {
       order.push('spotlight');
     }
-    if (camera != null && (camera.opacity ?? 0) > 0) {
-      order.push('camera');
+    if (videos.length > 0) {
+      order.push('videos');
     }
     if (stickers.length > 0) {
       order.push('stickers');
     }
+    if (animations.length > 0) {
+      order.push('animations');
+    }
+    if (finalCamera != null && (finalCamera.opacity ?? 0) > 0) {
+      order.push('camera');
+    }
+    if (subtitle != null) {
+      order.push('subtitles');
+    }
+
+    const insertedMotion =
+      playback != null && inserted?.motionPath != null
+        ? makeFrameInsertedMotionScene({
+            sourcePath: inserted.motionPath,
+            localTime: playback.localTime,
+            properties: inserted.properties,
+            elementEdits: inserted.elementEdits,
+            playbackRate: playback.playbackRate,
+          })
+        : null;
+
+    const insertedImage =
+      playback != null && inserted?.imagePath != null
+        ? makeFrameInsertedImageScene({
+            sourcePath: inserted.imagePath,
+            localTime: playback.localTime,
+          })
+        : null;
 
     return makeFrameScene({
       time: sampleTime,
@@ -1542,12 +2072,17 @@ export const FrameSceneEvaluator = Object.freeze({
         patternScale: project.canvas.patternScale,
         patternOpacity: project.canvas.patternOpacity,
       }),
-      screen,
-      camera,
-      cursor,
+      screen: presentedScreen,
+      camera: finalCamera,
+      cursor: finalCursor,
       stickers,
       stickerBackdrop: stickerSample.backdrop,
+      animations,
+      subtitle,
+      videos,
       layerOrder: order,
+      insertedMotion,
+      insertedImage,
     });
   },
 });

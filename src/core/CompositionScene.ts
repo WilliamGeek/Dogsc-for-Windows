@@ -25,7 +25,7 @@ import {
 } from './ScreenMotion.ts';
 import {
   CameraMotionTrack,
-  makeCameraMotionState,
+  makeCameraMotionStateFromBase,
   type CameraMotionClip,
   type CameraMotionSample,
 } from './CameraMotion.ts';
@@ -179,14 +179,14 @@ export const ScreenFrameGeometry = Object.freeze({
       case 'devicePhonePortrait':
       case 'devicePhoneLandscape': {
         const shortEdge = max(min(fittedWidth, fittedHeight), 1);
-        const bezel = min(max(shortEdge * 0.026 * authoredFrameScale, 2 * safeStyleScale), shortEdge * 0.07);
+        const bezel = min(max(shortEdge * 0.036 * authoredFrameScale, 2 * safeStyleScale), shortEdge * 0.08);
         return makeScreenDecorationInsets(bezel, bezel, bezel, bezel);
       }
       case 'deviceTablet':
       case 'deviceTabletPortrait':
       case 'deviceTabletLandscape': {
         const shortEdge = max(min(fittedWidth, fittedHeight), 1);
-        const bezel = min(max(shortEdge * 0.035 * authoredFrameScale, 2 * safeStyleScale), shortEdge * 0.08);
+        const bezel = min(max(shortEdge * 0.046 * authoredFrameScale, 2 * safeStyleScale), shortEdge * 0.09);
         return makeScreenDecorationInsets(bezel, bezel, bezel, bezel);
       }
     }
@@ -297,6 +297,24 @@ function aspectFit(
   return { width, height: width / safeAspect };
 }
 
+/**
+ * Distance kept between a docked camera and the canvas edge along one axis:
+ * 3.5% of the short side plus the border, shrinking to zero when the camera
+ * leaves no room for it.
+ */
+export function cameraEdgeInset(
+  canvas: number,
+  camera: number,
+  base: number,
+  style: CameraStyle,
+  styleScale: number = 1
+): number {
+  const scale = max(styleScale, 0.0001);
+  const border = min(max(style.borderWidth, 0), 18) * scale;
+  const wanted = base * 0.035 + border;
+  return min(wanted, max((canvas - camera) / 2, 0));
+}
+
 function evaluateCameraWithSample(
   style: CameraStyle,
   sample: CameraMotionSample,
@@ -324,9 +342,11 @@ function evaluateCameraWithSample(
   const cameraHeight = preferredCameraHeight * fitScale;
   const positionX = min(max(sample.position.x, 0), 1);
   const positionY = min(max(sample.position.y, 0), 1);
+  const insetX = cameraEdgeInset(width, cameraWidth, base, style, styleScale);
+  const insetY = cameraEdgeInset(height, cameraHeight, base, style, styleScale);
   const shapedRect = makeCompositionRect(
-    positionX * (width - cameraWidth),
-    positionY * (height - cameraHeight),
+    insetX + positionX * (width - cameraWidth - insetX * 2),
+    insetY + positionY * (height - cameraHeight - insetY * 2),
     cameraWidth,
     cameraHeight
   );
@@ -359,13 +379,7 @@ function evaluateCameraWithAspect(
   canvasHeight: number,
   styleScale: number = 1
 ): CameraSceneEvaluation {
-  const base = makeCameraMotionState(
-    { kind: 'shape', shape: style.shape },
-    style.position,
-    style.size,
-    style.roundness,
-    1
-  );
+  const base = makeCameraMotionStateFromBase(style);
   const sample = new CameraMotionTrack([]).sample(
     0,
     base,
@@ -423,7 +437,8 @@ function evaluate(
   reanchorAutomaticEntry: boolean = false,
   zoomTrack: ZoomAnimationTrack | null = null,
   screenMotionTrack: ScreenMotionTrack | null = null,
-  cameraMotionTrack: CameraMotionTrack | null = null
+  cameraMotionTrack: CameraMotionTrack | null = null,
+  cameraMotionBase: CameraMotionSample | null = null
 ): CompositionSceneEvaluation {
   const width = max(canvasWidth, 2);
   const height = max(canvasHeight, 2);
@@ -565,13 +580,7 @@ function evaluate(
 
   let camera: CameraSceneEvaluation | null = null;
   if (cameraAspectRatio !== null) {
-    const baseCameraMotion = makeCameraMotionState(
-      { kind: 'shape', shape: project.camera.shape },
-      project.camera.position,
-      project.camera.size,
-      project.camera.roundness,
-      1
-    );
+    const baseCameraMotion = makeCameraMotionStateFromBase(project.camera);
     const cameraMotion = (
       cameraMotionTrack ?? motionTrackCache.cameraTrack(project.timeline.cameraMotionClips)
     ).sample(
@@ -579,7 +588,8 @@ function evaluate(
       baseCameraMotion,
       cameraAspectRatio,
       width / height,
-      project.motion
+      project.motion,
+      cameraMotionBase
     );
     camera = evaluateCameraWithSample(
       project.camera,
@@ -596,6 +606,7 @@ function evaluate(
 
 export const CompositionSceneEvaluator = Object.freeze({
   canonicalStyleScale,
+  cameraEdgeInset,
   evaluate,
   evaluateCamera,
   aspectFit,

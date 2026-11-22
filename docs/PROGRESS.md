@@ -90,8 +90,9 @@
 2026-11-23 02:59 | T13.3 | DONE | 移植 RecordingSourceEditing（projectStabilizeRecordingColors / usageCount / insertingFullRecording / removing / droppingMissingSources），新增 5 项单测（含范围插入分割跨 boundary 动效与音频、删源颜色稳定及唯一源拦截、缺源容错恢复与 fullRecording 回退），zero node:* 校验通过 | 285 pass (5 skip E2E)
 2026-11-23 03:04 | T13.4 | DONE | 移植 VisualTrackTransfer（find/moveToMain/moveToOverlay 全轨往返互转与静音音量继承）与 RecordingProjectImport（adding/inserting 多源混入、冻结音频、裁剪对齐与 groupID 无冲突重映射），通过 53/53 上游 Swift 模块全量文件对照校验，新增 5 项单测且 zero node:* 校验通过 | 290 pass (5 skip E2E)
 2026-11-23 03:24 | T13.5b-2a | DONE | 同步 CameraMotion（baseSample/transitionSample）、ScreenCardAppearance（cameraAppearanceTransitionSample/cameraMotionBase）、ZoomAnimation/ZoomTransitionResolution（transitionIntentVersion 0->1 修复与子帧片段过滤/微隙桥接）、AutoZoomPlanner（makeAnimationsInTimelineMap 多源隔离规划）、CursorRenderGeometry（80ms+180ms pressScale 曲线）、PointerTrack（零相位前后双向弹簧与 pressScale）、ProjectPointerTrack & TimelineMediaPlan（多源 eventsBySource 与同源相机区间限制），新增 6 项单测且 zero node:* 校验通过 | 296 pass (5 skip E2E)
+2026-11-23 03:35 | T13.5 | DONE | 同步 CompositionScene（3.6%/4.6% 设备边框、cameraEdgeInset 安全边距与 cameraMotionBase，并修复 evaluateCameraWithAspect 误传位置参数调用 makeCameraMotionState 改用 makeCameraMotionStateFromBase）与 FrameScene（多源 sourceContentRect / beauty / pressScale / insertedMedia / post 音字动轨 / layerOrder 与 refreshingCursor），完成上游 v0.2.0 全部 53/53 RecorderCore 模块对齐并收官 Wave B；新增 2 项单测，zero node:* 与 53/53 文件存在性校验通过 | 298 pass / 303 total (0 fail, 5 skip E2E)
 
-下一个任务：T13.5b-2b（同步 CompositionScene 与 FrameScene 至上游 v0.2.0 并收官 Wave B [x] T13.5，随后刷新架构 DAG）
+下一个任务：ARCH-DAG-WaveB（刷新架构看板同步 T12.9/T12.10 与 Wave B 53/53 收官）
 
 
 

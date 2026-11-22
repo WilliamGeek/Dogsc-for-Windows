@@ -72,7 +72,7 @@ test('T5.5: ScreenDecorationInsets clamping and ScreenFrameGeometry', () => {
   assert.equal(windowInsets.right, 0);
   assert.equal(windowInsets.bottom, 0);
 
-  // style: devicePhone -> bezel on all 4 sides
+  // style: devicePhone -> bezel on all 4 sides (v0.2.0: 3.6%)
   const phoneInsets = ScreenFrameGeometry.decorationInsetsAtScaleOne(
     'devicePhone',
     1.0,
@@ -81,13 +81,13 @@ test('T5.5: ScreenDecorationInsets clamping and ScreenFrameGeometry', () => {
     1000,
     1.0
   );
-  // shortEdge = 1000, bezel = 1000 * 0.026 * 1.0 = 26
-  assert.equal(phoneInsets.top, 26);
-  assert.equal(phoneInsets.bottom, 26);
-  assert.equal(phoneInsets.left, 26);
-  assert.equal(phoneInsets.right, 26);
+  // shortEdge = 1000, bezel = 1000 * 0.036 * 1.0 = 36
+  assert.equal(phoneInsets.top, 36);
+  assert.equal(phoneInsets.bottom, 36);
+  assert.equal(phoneInsets.left, 36);
+  assert.equal(phoneInsets.right, 36);
 
-  // style: deviceTablet -> bezel on all 4 sides
+  // style: deviceTablet -> bezel on all 4 sides (v0.2.0: 4.6%)
   const tabletInsets = ScreenFrameGeometry.decorationInsetsAtScaleOne(
     'deviceTablet',
     1.0,
@@ -96,11 +96,11 @@ test('T5.5: ScreenDecorationInsets clamping and ScreenFrameGeometry', () => {
     1000,
     1.0
   );
-  // shortEdge = 1000, bezel = 1000 * 0.035 * 1.0 = 35
-  assert.equal(tabletInsets.top, 35);
-  assert.equal(tabletInsets.bottom, 35);
-  assert.equal(tabletInsets.left, 35);
-  assert.equal(tabletInsets.right, 35);
+  // shortEdge = 1000, bezel = 1000 * 0.046 * 1.0 = 46
+  assert.equal(tabletInsets.top, 46);
+  assert.equal(tabletInsets.bottom, 46);
+  assert.equal(tabletInsets.left, 46);
+  assert.equal(tabletInsets.right, 46);
 });
 
 test('T5.5: CompositionSceneEvaluator canonicalStyleScale and aspectFit', () => {
@@ -246,4 +246,62 @@ test('T5.5: MotionTrackCacheStore caching and eviction', () => {
   // Original track1 should be evicted now
   const track1Recreated = cache.screenTrack([clipA]);
   assert.notEqual(track1, track1Recreated);
+});
+
+test('T13.5b-2b: cameraEdgeInset keeps docked camera inside safe edge margin and honors cameraMotionBase', () => {
+  // 1080p canvas: base=1080, 3.5% = 37.8 + 4 border = 41.8
+  const inset = CompositionSceneEvaluator.cameraEdgeInset(
+    1920,
+    300,
+    1080,
+    makeCameraStyle({ borderWidth: 4 }),
+    1.0
+  );
+  assert.ok(Math.abs(inset - 41.8) < 1e-9);
+
+  const cornerCamera = CompositionSceneEvaluator.evaluateCamera(
+    makeCameraStyle({ shape: 'square', position: { x: 0, y: 0 }, size: 0.2, borderWidth: 4 }),
+    1.0,
+    1.0,
+    1920,
+    1080,
+    1.0
+  );
+  assert.ok(Math.abs(cornerCamera.rect.x - 41.8) < 1e-6);
+  assert.ok(Math.abs(cornerCamera.rect.y - 41.8) < 1e-6);
+
+  const project: CompositionProjectLike = {
+    canvas: makeCanvasStyle({ padding: 0, cornerRadius: 0 }),
+    camera: makeCameraStyle({ position: { x: 0, y: 0 }, size: 0.2 }),
+    motion: makeMotionStyle(),
+    timeline: { screenMotionClips: [], cameraMotionClips: [] },
+    zoomAnimations: [],
+  };
+  const customBase = {
+    position: { x: 0.5, y: 0.5 },
+    size: 0.4,
+    aspectRatio: 1.5,
+    cornerFraction: 0.2,
+    fullscreenProgress: 0,
+    opacity: 0.75,
+  };
+  const evalWithBase = CompositionSceneEvaluator.evaluate(
+    project,
+    0,
+    1920,
+    1080,
+    16 / 9,
+    16 / 9,
+    1.0,
+    null,
+    null,
+    false,
+    null,
+    null,
+    null,
+    customBase
+  );
+  assert.ok(evalWithBase.camera);
+  assert.equal(evalWithBase.camera.opacity, 0.75);
+  assert.ok(Math.abs(evalWithBase.camera.rect.height - 1080 * 0.4) < 1e-6);
 });
