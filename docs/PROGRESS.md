@@ -82,6 +82,8 @@
 
 2026-11-23 02:00 | T13.1 | DONE | 完成上游 v0.2.0 只读克隆(F:\dogsc-v0.2.0)与 44→53 模块逐文件 -w diff 审计，输出 docs/V020_DIFF_MAP.md（9新增/25行为修改/9清理/10未改、Schema v28 字段对照与 REORDER 依赖拓扑） | 248 pass (5 skip E2E)
 2026-11-23 02:04 | T13.2 | DONE | 移植 CameraBeautySettings、ScreenCardAppearance（核心模型）与 SegmentSceneStyle（片段边界 lookup / 240ms smoothstep / hexColorMixing / canvasStyleBlend / cameraStyleBlend），CameraStyle 接入 beauty 默认值，新增 10 项核心单测并通过 zero node:* 校验 | 258 pass (5 skip E2E)
+2026-11-23 02:07 | T13.3 | REORDER | REORDER: T13.3(RecordingSourceEditing) / T13.4(VisualTrackTransfer, RecordingProjectImport) 依赖 T13.5 的 ProjectTimeline/OverlayTimeline/TimelineMap/ProjectTimelineEditing v0.2.0 多源接口，先完成叶子模型 T13.3a，禁止写临时 stub | 258 pass (5 skip E2E)
+2026-11-23 02:08 | T13.3a | DONE | 移植 RecordingSource（核心结构）、RecordingAspectTransitions（240ms 兼容外框比例平滑插值与中途抢占重定位）与 PostProductionModel（MediaAsset / VideoClip / AudioClip / Subtitle* / MainTrackVisualStyle / VisualClipSound），新增 7 项核心单测且 zero node:* 校验通过 | 265 pass (5 skip E2E)
 
-下一个任务：T13.3a（先移植不依赖 T13.5 的叶子多源与后期模型 RecordingSource / RecordingAspectTransitions / PostProductionModel）
+下一个任务：T13.5（Stage 3：同步 44 个共享核心模块至上游 v0.2.0 与 Schema v28，然后接入 T13.3b/T13.4 与 T13.6 G3 Golden Fixture）
 
