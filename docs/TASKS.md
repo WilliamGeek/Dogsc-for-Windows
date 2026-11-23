@@ -174,7 +174,7 @@
 - [x] T15.6 录制中分段暂停/恢复无损拼接与热键实时打点 `RecordingMarker`。
 
 ### Wave E：交互式 Web 编辑器与多规格产品级导出（P2-04, P2-08, P2-09）
-- [ ] T16.1 新增 `src/server/StudioServer.ts` 与 `scripts/studio.ts`（Edge `--app` 无地址栏窗口模式）。
+- [x] T16.1 新增 `src/server/StudioServer.ts` 与 `scripts/studio.ts`（Edge `--app` 无地址栏窗口模式）。
 - [ ] T16.2 实现 `web/studio.html` 与 `web/studio/player.ts`（实时 WebGL2 播放预览画布与录制列表）。
 - [ ] T16.3 实现 `web/studio/timeline.ts`（基于 `EditorTimeline`/`ProjectTimelineEditing` 的多轨交互时间线 + Undo/Redo）。
 - [ ] T16.4 实现 `web/studio/inspector.ts`（画布/圆角/背景/外框/摄像头/光标/音频全参数实时检查器，严格零假开关）。

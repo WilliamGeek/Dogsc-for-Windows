@@ -106,8 +106,9 @@
 2026-11-23 10:36 | T15.5 | DONE | 新增 src/render/AudioMixPlan.ts（buildAtempoFilterChain 任意倍速 [0.5,2.0] 级联、buildSessionAudioTracks、buildAudioMixFilterGraph atrim/adelay/afade/amix、buildAudioOnlyM4aArgs），扩展 ExportServer.ts 单遍 rawvideo+AAC 音画合流与 scripts/export.ts --format m4a 纯音频直出，并通过真机 ffmpeg 合成双 WAV -> M4A + ffprobe 实测（新增 4 项单测） | 332 pass / 337 total (0 fail, 5 skip E2E)
 2026-11-23 10:38 | T15.6 | DONE | 新增 src/capture/SegmentedSession.ts（buildConcatListFileContent / buildLosslessConcatArgs / stitchSegmentedPointerTracks 暂停扣除鼠标轨合流 / LiveRecordingMarkerRecorder 暂停冻结时钟与 Ctrl+Shift+M/F8 热键规范 / concatMediaSegmentsLossless），并通过真机 ffmpeg 双段 MP4 无损拼接 + ffprobe 实测，Wave D 全部收官（新增 4 项单测，core=54 / web=11 零 node:* 且全过 stripTypeScriptTypes） | 336 pass / 341 total (0 fail, 5 skip E2E)
 2026-11-23 10:41 | ARCH-DAG-WaveD | DONE | 刷新 docs/ARCHITECTURE_DAG.json 并通过 cli.py validate --strict 与 render --strict（24 节点 / 35 路径 / 0 警告）重建 docs/WORKFLOW.html（489.0 KB）与 docs/WORKFLOW.md；点亮 C_MultiSrc（区域/窗口/摄像头/分段）、C_Audio（WASAPI+Mic）、M_AudioMux（混音+M4A）及对应通路与 336 通过单测计数，保持 M_EditorUI（Wave E）、M_ShellPkg（Wave F）与 H_Review（T11.7）虚化（opacity 0.65） | cli.py --strict 0 warnings
+2026-11-23 11:15 | T16.1 | DONE | 新增 src/server/StudioServer.ts（validateRecordingId / resolveExportSpec / 录制列表与明细 / ProjectValidator 强校验原子写入 project.json / 预解码 prepare-frames / 硬件设备枚举 / 后台录制与可取消多规格 MP4·M4A 导出 / 全路径 SafePath + 原始 .. 防护）与 scripts/studio.ts（Edge --app 无地址栏窗口模式启动器），新增 3 项单测 | 339 pass / 344 total (0 fail, 5 skip E2E)
 
-下一个任务：Wave E（交互式 Web 编辑器界面，对齐 macOS Studio 功能与布局）& Wave F（Windows 桌面外壳与安装包）
+下一个任务：T16.2（对齐 macOS Warm Graphite 设计系统的 Studio 三栏主界面、状态历史栈与 WebGL2 实时预览播放器）
 
 
 
