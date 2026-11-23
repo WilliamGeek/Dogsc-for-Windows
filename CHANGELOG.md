@@ -1,23 +1,31 @@
 # Changelog — DogSC Windows
 
+## v1.2.0-windows (2026-11-23)
+
+### 采集稳定性与桌面原生能力增强
+- **三家 GPU 硬件编码自动探测与回退**：依次按 `h264_nvenc`（NVIDIA）→ `h264_amf`（AMD）→ `h264_qsv`（Intel）执行单帧空输出探活，全失败自动回退 `libx264`；导出阶段同步支持对应 H.264 / HEVC 硬编映射。
+- **0.5s 抗崩溃碎片化 MP4 封装**：屏幕与摄像头录制默认启用 `+frag_keyframe+empty_moov+default_base_moof`（`-frag_duration 500000`），突发断电或进程异常终止时已落盘画面仍可正常读取。
+- **防录屏提词备忘录浮窗**：在原生 C# 外壳 `desktop/DogSC.cs` 内置 `SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)` 置顶提词窗（快捷键 `Ctrl+Alt+Shift+N`），屏幕录制与共享画面中自动隐身，正文防抖自动保存至本地用户目录；新增 `--memo-check` 自检参数。
+- **应用内 SHA-256 更新检查**：托盘菜单新增“检查更新...”与 CLI `--check-update` / `--verify-file` 校验指令，支持 SemVer 比对与安装包哈希核对。
+- **便携运行时优先探测与打包**：`DogSC.exe` 启动时优先查找同级 `runtime\node.exe` 与 `runtime\ffmpeg.exe`；`scripts/package-windows.ts` 新增 `--bundle-node`（`npm run package:win:portable`）。
+
+### DogSC Studio 工作台交互与视觉升级
+- **统一线性 SVG 图标系统**：以统一 `1.65px` 线性矢量图标替换所有工具栏、侧边栏与时间线控件中的字符符号。
+- **可视化预设图卡**：将背景壁纸/流体纹理（8 套对应 WebGL 着色器色板）、设备/窗口外框（7 种线框预览）、光标形态、摄像头裁切形状、开场透视预设及 5 套内置动效模板升级为可视化缩略图卡片。
+- **主视频轨帧缩略图胶片条 + 自绘 HSV/HEX 调色板**：时间线主视频轨实时采样渲染源码视频帧缩略图并修正 `1×` 缩放下的横向滚动余量；用带 2D SV 取色区与色相滑条的自绘浮层替换系统原生颜色弹窗。
+- **专业滑杆与拖拽零重建**：支持拖拽右侧数值标签横向微调（按住 `Shift` 精细 `0.25×`）、双击复位默认值，并在连续拖动滑杆与时间线片段期间局部更新 DOM 避免失焦闪烁。
+
+---
+
+## v1.1.0-windows (2026-11-23)
+
+- **AI 智能剪辑助手与本地 Agent Bridge**：接入 Windows DPAPI 用户态加密存储密钥、随机 32 位 hex Bearer 鉴权 `AgentBridge`、本地规则 + OpenAI/Gemini 路由、单轮快照回撤，以及自动扫描本机 `codex` / `claude` / `gemini` / `kimi` CLI 状态。
+- **完整后期功能栈**：支持 5 种入场动画双语字幕与 SRT 导入导出、基于波形峰值的静音停顿一键删剪、5 套 `.dmhtml` 动效卡片模板、48kHz 合成音效（`SoundSynth`）与 FFmpeg 语音动态闪避混音（Ducking）、多录制片尾拼接、8 手柄交互式裁剪及 7 轨实时波形时间线。
+
+---
+
 ## v1.0.0-windows (2026-11-23)
 
-首个完整对齐 macOS 上游 `v0.2.0` 架构、内置交互式 Studio 工作台与 Windows 原生桌面包装的发行版（零 npm 运行时依赖，Node.js v24.15.0 原生 TypeScript 类型擦除）。
-
-### Wave F — 原生桌面外壳、安装包与设备矩阵（`T17.1`–`T17.4`）
-- **T17.1**：新增严格 C# 5 编写的原生 x64 外壳 `desktop/DogSC.cs`、双分辨率 PNG-in-ICO 品牌图标生成与构建工具 `src/desktop/DesktopBuilder.ts` / `scripts/build-desktop.ts`，支持系统托盘、全局热键（`Ctrl+Alt+Shift+S/R/M`）、单实例互斥、`--version`/`--check`/`--install`/`--uninstall` 与 Studio `?action=record` 直达录制岛。
-- **T17.2**：新增 `scripts/package-windows.ts` 生成便携包 `DogSC-Windows-x64-v1.0.0.zip` 与 `iexpress` 安装程序 `DogSC-Setup-x64-v1.0.0.exe` 及 `SHA256SUMS.txt`；完善 `THIRD_PARTY_NOTICES.md` 未签名及非捆绑外部依赖声明。
-- **T17.3**：新增 `scripts/run-device-matrix.ts` 并输出严格标注 `VERIFIED` 与 `UNTESTED` 的 Gate G6 [`docs/DEVICE_MATRIX_REPORT.md`](file:///F:/dogsc-win/docs/DEVICE_MATRIX_REPORT.md)。
-- **T17.4**：版本号升级至 `1.0.0`（同步更新 `StudioServer /api/health`），更新文档、看板与最终 Chrome 验收，切分 `v1.0.0-windows` 标签。
-
-### Wave E — 交互式 Web Studio 与多规格导出（`T16.1`–`T16.6`）
-- 新增 `StudioServer`（原子 `PUT /project`、`POST /api/export/start|cancel`、`GET /api/devices`）、WebGL2 实时预览引擎 `web/studio/player.ts`、多轨时间线（Split/Delete/Retime/Undo/Redo）、6 标签零假开关检查器、`760px` 三阶段导出弹窗与多源录制岛。
-- 修复 Chrome `1436x901` 四轮实时验收暴露的 4 项界面/焦点问题（舞台尺寸溢出遮挡工具栏、`favicon.ico` 404、`setInspectorTab` `TypeError` 与 `getRenderedScreenContentRect` 靶心 `0.63px` 精确定位）。
-
-### Wave C–D — 全通道 WebGL2 渲染管线与多源音视频采集（`T14.1`–`T15.6`）
-- 重构 9 个模块化 WebGL2 Pass 管线：摄像头美颜/圆角裁剪/缩放避让、6 类设备/窗口外框 3D 透视、区域模糊马赛克与聚光灯、毛玻璃贴纸两阶段防渗色、矢量光标与 4 种点击动效及 3D 开场动画。
-- 补齐多源采集与混音：区域/窗口捕获、WASAPI 系统音频回环、DirectShow 麦克风与摄像头同步、多音轨变速混音与 M4A 纯音频导出、无损分段恢复与热键打点。
-
-### Wave A–B — 采集可靠性止血与 `v0.2.0` 算法核心对齐（`T12.1`–`T13.5`）
-- 引入 `MediaProbe`、`SafePath`（含符号链接防护）、`ExportServer` 看门狗、Per-Monitor V2 DPI 多屏归一化与 `T12.9 showinfo` 首帧时钟同步；完成 54 个 `src/core/` 模块及 Schema `v27 -> v28` 双向无损迁移，全量单测达到 `355` 项（`350 pass / 5 E2E skip / 0 fail`）。
-
+- 完成 macOS 上游 `v0.2.0` 全部 54 个核心算法模块与 Schema `v28` 编解码移植，实现与 `v27`/`v28` 工程文件的双向无损互操作。
+- 落地 Multi-Source 采集（`ddagrab` / `gdigrab` / DirectShow 麦克风与摄像头 / WASAPI 系统声音 / `WH_MOUSE_LL` 多屏鼠标钩子 / `showinfo` 首帧时钟对齐）、9 通道 WebGL2 合成管线、`StudioServer` 与原生 WinForms 托盘安装包（`DogSC.exe` / `iexpress` Setup）。
+- 建立自动化测试、Chrome 实机检查与本地 AI 助手编辑能力。

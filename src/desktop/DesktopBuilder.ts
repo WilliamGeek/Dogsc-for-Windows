@@ -208,8 +208,10 @@ const INCLUDED_DIRS = ['src', 'web', 'scripts', 'tools'] as const;
 const INCLUDED_ROOT_FILES = [
   'package.json',
   'LICENSE',
+  'LICENSE-MIT',
   'THIRD_PARTY_NOTICES.md',
   'README.md',
+  'README.en.md',
 ] as const;
 const EXCLUDED_SEGMENTS = new Set([
   'recordings',

@@ -18,8 +18,10 @@ test('T17.2: listPackagedRelativePaths includes runtime dirs/docs and excludes r
   const files = listPackagedRelativePaths(ROOT_DIR);
   assert.ok(files.includes('package.json'));
   assert.ok(files.includes('LICENSE'));
+  assert.ok(files.includes('LICENSE-MIT'));
   assert.ok(files.includes('THIRD_PARTY_NOTICES.md'));
   assert.ok(files.includes('README.md'));
+  assert.ok(files.includes('README.en.md'));
   assert.ok(files.some((f) => f.startsWith('src/core/')));
   assert.ok(files.some((f) => f.startsWith('web/studio/')));
   assert.ok(files.some((f) => f.startsWith('scripts/')));

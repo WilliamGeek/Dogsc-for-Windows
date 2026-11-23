@@ -1,22 +1,107 @@
-MIT License
+===============================================================================
+DUAL-LICENSE NOTICE FOR DOGSC WINDOWS
+===============================================================================
 
-Copyright (c) 2026 神烦老狗
-Copyright (c) 2026 DogSC Windows contributors
+1. Core Algorithm & Schema Modules (`src/core/**`)
+   Derived from and aligned with upstream macOS DogSC (laogou717/dogsc).
+   Licensed strictly under the MIT License. See `LICENSE-MIT` for full text.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+2. Windows Platform Implementation & Studio Frontend (`src/capture/**`,
+   `src/render/**`, `src/server/**`, `src/desktop/**`, `web/**`, `desktop/**`,
+   `scripts/**`, `tools/**`, `docs/**`, `assets/**`)
+   Independent Windows implementation Copyright (c) 2026 DogSC Windows contributors.
+   Licensed under the **PolyForm Noncommercial License 1.0.0** below.
+   Individuals may fork, study, modify, and use this software locally for free;
+   commercial use, commercial redistribution, or SaaS resale is prohibited
+   without a separate written commercial license.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+===============================================================================
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+# PolyForm Noncommercial License 1.0.0
+
+<https://polyformproject.org/licenses/noncommercial/1.0.0>
+
+## Acceptance
+
+In order to get any license under these terms, you must agree
+to them as both strict obligations and conditions to all
+your licenses.
+
+## Copyright License
+
+The licensor grants you a copyright license for the
+software to do everything you might do with the software
+that would otherwise infringe the licensor's copyright
+in it for any permitted purpose. However, you may
+only distribute the software according to [Distribution
+Limitation](#distribution-limitation) and make changes or
+new works based on the software according to [Changes and
+New Works Limitation](#changes-and-new-works-limitation).
+
+## Distribution Limitation
+
+You may distribute copies of the software under these
+terms, provided that you include a copy of these terms with
+all copies of the software.
+
+## Changes and New Works Limitation
+
+If you make changes or create new works based on the
+software, you may distribute those changes or new works
+under these terms, provided that you include a prominent
+notice in any changed files stating that you changed them.
+
+## Noncommercial Purposes
+
+You may use the software for noncommercial purposes only.
+
+"Noncommercial purposes" means using the software for
+research, personal, or educational purposes, and does not
+include any purpose for which you receive a fee or other
+compensation, or any purpose carried out on behalf of or for
+the benefit of a commercial entity.
+
+## Patent License
+
+The licensor grants you a patent license for the software
+that covers patent claims the licensor can license, or
+becomes able to license, that you would infringe by using
+the software.
+
+## Fair Use
+
+You may have "fair use" rights for the software under the
+law. These terms do not limit them.
+
+## Samples
+
+The licensor may include samples or templates in the
+software. You may not distribute those samples or templates
+as standalone works.
+
+## Notice
+
+You must ensure that everyone who gets a copy of
+any part of this software from you also gets a copy of
+these terms or the URL for them above, as well as copies
+of any plain-text lines included with the software as
+required notices.
+
+## No Liability
+
+**As far as the law allows, the software comes as is, without
+any warranty or condition, and the licensor will not be
+liable to you for any damages arising out of these terms or
+the use or nature of the software, under any kind of legal
+claim.**
+
+## Definitions
+
+The **licensor** is the individual or entity offering these
+terms, and the **software** is the software the licensor
+makes available under these terms.
+
+**You** refers to the individual or entity agreeing to these
+terms.
+
+**Your** refers to the possessive of **you**.

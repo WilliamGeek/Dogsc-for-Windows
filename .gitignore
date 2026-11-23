@@ -7,3 +7,6 @@ audit-runs/
 recordings/
 frames/
 *.jpg
+
+AGENTS.md
+assets/raw/
