@@ -109,8 +109,9 @@
 2026-11-23 11:15 | T16.1 | DONE | 新增 src/server/StudioServer.ts（validateRecordingId / resolveExportSpec / 录制列表与明细 / ProjectValidator 强校验原子写入 project.json / 预解码 prepare-frames / 硬件设备枚举 / 后台录制与可取消多规格 MP4·M4A 导出 / 全路径 SafePath + 原始 .. 防护）与 scripts/studio.ts（Edge --app 无地址栏窗口模式启动器），新增 3 项单测 | 339 pass / 344 total (0 fail, 5 skip E2E)
 2026-11-23 11:19 | T16.2 | DONE | 新增 web/studio.html、web/studio/styles.css（对齐 macOS Warm Graphite 暗色/柔银浅色双主题、44px 顶栏/监视条与 7 轨家族色）、web/studio/state.ts（不可变 StudioHistory 撤销重做栈与 ProjectValidator 受控编辑器算子）、web/studio/player.ts（全 9 通道 WebGL2 实时预览与 LRU 纹理缓存）及 web/studio/app.ts；core=54/web=14 零 node:* 且全过 stripTypeScriptTypes | 339 pass / 344 total (0 fail, 5 skip E2E)
 2026-11-23 11:22 | T16.3 | DONE | 新增 web/studio/timeline.ts（4 轨多色家族时间线：主视频分割/删段/1×-4×倍速与剪刀光标、缩放轨拖拽移动与双边句柄伸缩+双击新建、马赛克/聚光灯区域轨与音频轨，时间标尺刷屏、录制打点 pin 与首帧防抖撤销融合）与 test/render/StudioState.test.ts，全部编辑器算子均通过 ProjectValidator | 343 pass / 348 total (0 fail, 5 skip E2E)
+2026-11-23 11:25 | T16.4 | DONE | 新增 web/studio/inspector.ts（画面/运镜/开场/光标/摄像头/声音 6 大标签零假开关实时调节器，含 5 类图案+3 类流动背景、6 类设备外框、4 种点击特效、美颜滑块与马赛克/聚光灯属性）与 web/studio/recorderIsland.ts（Windows 多源显示/窗口/WASAPI/Mic/摄像头录制岛弹窗）；core=54/web=17 全零 node:* 且全过 stripTypeScriptTypes | 343 pass / 348 total (0 fail, 5 skip E2E)
 
-下一个任务：T16.4（web/studio/inspector.ts 6 标签零假开关实时检查器与 Windows 录制岛弹窗）
+下一个任务：Stage 10 规划与收官（T16.5 多规格导出面板 + T16.6 Chrome Studio 端到端审核 + Wave F Windows 桌面外壳与安装包 T17.1-T17.4）
 
 
 
