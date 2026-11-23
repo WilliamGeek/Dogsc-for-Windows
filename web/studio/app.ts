@@ -413,6 +413,58 @@ export class StudioApp {
     }
   }
 
+  private cropOverlayController: {
+    isActive(): boolean;
+    setActive(next: boolean): void;
+    toggle(): boolean;
+    sync(container: HTMLElement | null, getCrop: () => any, onChangeCrop: (next: any, rec: boolean) => void, onDone: () => void): void;
+  } | null = null;
+  private cropOverlayLoading: Promise<void> | null = null;
+
+  private syncCropOverlayView(): void {
+    const container = document.getElementById('stage-crop-overlay');
+    const getCrop = () => this.detail?.project.canvas.crop ?? null;
+    const onChange = (nextCrop: any, recHistory: boolean) => {
+      if (!this.detail) return;
+      this.getContext().applyProjectMutation(
+        {
+          ...this.detail.project,
+          canvas: { ...this.detail.project.canvas, crop: nextCrop },
+        },
+        { recordHistory: recHistory }
+      );
+    };
+    const onDone = () => {
+      this.cropOverlayController?.setActive(false);
+      this.syncCropOverlayView();
+    };
+    if (this.cropOverlayController) {
+      this.cropOverlayController.sync(container, getCrop, onChange, onDone);
+      return;
+    }
+    if (!this.cropOverlayLoading) {
+      this.cropOverlayLoading = import('./cropOverlay.ts')
+        .then(({ StudioCropOverlayController }) => {
+          this.cropOverlayController = new StudioCropOverlayController();
+          this.cropOverlayController.sync(container, getCrop, onChange, onDone);
+        })
+        .catch(() => {});
+    }
+  }
+
+  private toggleCropMode(): void {
+    if (this.cropOverlayController) {
+      this.cropOverlayController.toggle();
+      this.syncCropOverlayView();
+    } else {
+      this.syncCropOverlayView();
+      void this.cropOverlayLoading?.then(() => {
+        this.cropOverlayController?.toggle();
+        this.syncCropOverlayView();
+      });
+    }
+  }
+
   async loadRecordingsList(preferredId?: string): Promise<void> {
     const res = await fetch('/api/recordings', { cache: 'no-store' });
     const data = await res.json();
@@ -629,6 +681,7 @@ export class StudioApp {
     this.renderTimelineView();
     this.renderInspectorView();
     this.syncLibraryView();
+    this.syncCropOverlayView();
     this.updatePlayheadUI(this.player.getCurrentTime());
   }
 
@@ -756,6 +809,13 @@ export class StudioApp {
           canvas: { ...this.detail.project.canvas, aspectRatio: ratio },
         });
       });
+    });
+
+    document.getElementById('btn-toggle-crop')?.addEventListener('click', () => {
+      this.toggleCropMode();
+    });
+    window.addEventListener('dogsc:toggle-crop', () => {
+      this.toggleCropMode();
     });
 
     // Monitor progress bar scrub

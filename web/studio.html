@@ -55,6 +55,7 @@
             <canvas id="studio-stage" width="1280" height="720"></canvas>
             <div id="stage-focus-hint" class="stage-hint-pill">点击画面可直接重设当前缩放焦点</div>
             <div id="focus-target-marker" class="focus-target-marker"></div>
+            <div id="stage-crop-overlay" class="stage-crop-overlay" aria-hidden="true"></div>
           </div>
         </div>
 
@@ -74,6 +75,7 @@
                 <button class="seg-opt" data-ratio="9:16">9:16</button>
                 <button class="seg-opt" data-ratio="1:1">1:1</button>
               </div>
+              <button id="btn-toggle-crop" class="chrome-btn" title="拖拽画布交互式裁剪源画面区域">裁剪</button>
             </div>
 
             <div class="transport-cluster">

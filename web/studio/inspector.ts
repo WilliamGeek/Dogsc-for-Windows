@@ -198,6 +198,10 @@ function renderFrameTab(el: HTMLElement, ctx: StudioRuntimeContext): void {
         <span class="insp-label">描边颜色</span>
         <input id="frame-border-col" type="color" value="${hexColorString(c.borderColor)}" />
       </div>
+      <div class="insp-row">
+        <span class="insp-label">画面裁剪 (${Math.round(c.crop.width * 100)}%×${Math.round(c.crop.height * 100)}%)</span>
+        <button id="frame-btn-toggle-crop" class="chrome-btn subtle-well">交互式裁剪…</button>
+      </div>
     </div>
 
     <div class="insp-card">
@@ -238,6 +242,10 @@ function renderFrameTab(el: HTMLElement, ctx: StudioRuntimeContext): void {
   document.getElementById('frame-border-col')?.addEventListener('change', (ev) => {
     const parsed = parseHexColor((ev.target as HTMLInputElement).value);
     if (parsed) applyCanvas({ borderColor: parsed });
+  });
+
+  document.getElementById('frame-btn-toggle-crop')?.addEventListener('click', () => {
+    window.dispatchEvent(new CustomEvent('dogsc:toggle-crop'));
   });
 
   el.querySelectorAll('[data-bg-kind]').forEach((btn) => {
