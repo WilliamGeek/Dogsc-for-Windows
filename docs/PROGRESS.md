@@ -108,8 +108,9 @@
 2026-11-23 10:41 | ARCH-DAG-WaveD | DONE | 刷新 docs/ARCHITECTURE_DAG.json 并通过 cli.py validate --strict 与 render --strict（24 节点 / 35 路径 / 0 警告）重建 docs/WORKFLOW.html（489.0 KB）与 docs/WORKFLOW.md；点亮 C_MultiSrc（区域/窗口/摄像头/分段）、C_Audio（WASAPI+Mic）、M_AudioMux（混音+M4A）及对应通路与 336 通过单测计数，保持 M_EditorUI（Wave E）、M_ShellPkg（Wave F）与 H_Review（T11.7）虚化（opacity 0.65） | cli.py --strict 0 warnings
 2026-11-23 11:15 | T16.1 | DONE | 新增 src/server/StudioServer.ts（validateRecordingId / resolveExportSpec / 录制列表与明细 / ProjectValidator 强校验原子写入 project.json / 预解码 prepare-frames / 硬件设备枚举 / 后台录制与可取消多规格 MP4·M4A 导出 / 全路径 SafePath + 原始 .. 防护）与 scripts/studio.ts（Edge --app 无地址栏窗口模式启动器），新增 3 项单测 | 339 pass / 344 total (0 fail, 5 skip E2E)
 2026-11-23 11:19 | T16.2 | DONE | 新增 web/studio.html、web/studio/styles.css（对齐 macOS Warm Graphite 暗色/柔银浅色双主题、44px 顶栏/监视条与 7 轨家族色）、web/studio/state.ts（不可变 StudioHistory 撤销重做栈与 ProjectValidator 受控编辑器算子）、web/studio/player.ts（全 9 通道 WebGL2 实时预览与 LRU 纹理缓存）及 web/studio/app.ts；core=54/web=14 零 node:* 且全过 stripTypeScriptTypes | 339 pass / 344 total (0 fail, 5 skip E2E)
+2026-11-23 11:22 | T16.3 | DONE | 新增 web/studio/timeline.ts（4 轨多色家族时间线：主视频分割/删段/1×-4×倍速与剪刀光标、缩放轨拖拽移动与双边句柄伸缩+双击新建、马赛克/聚光灯区域轨与音频轨，时间标尺刷屏、录制打点 pin 与首帧防抖撤销融合）与 test/render/StudioState.test.ts，全部编辑器算子均通过 ProjectValidator | 343 pass / 348 total (0 fail, 5 skip E2E)
 
-下一个任务：T16.3（web/studio/timeline.ts 多轨交互式时间线与 StudioState 纯状态机单测）
+下一个任务：T16.4（web/studio/inspector.ts 6 标签零假开关实时检查器与 Windows 录制岛弹窗）
 
 
 
