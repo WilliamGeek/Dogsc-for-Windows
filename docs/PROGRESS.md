@@ -103,8 +103,9 @@
 2026-11-23 05:01 | T15.2 | DONE | 新增 tools/wasapi-loopback.ps1（纯内联 C# COM Interop 零第三方依赖 WASAPI 回环 WAV 录制与 RIFF/data 块头闭合）与 src/capture/SystemAudioRecorder.ts（buildWasapiCommand 无 Bypass / parseWasapiHeaderLine / computeAudioOffsetSeconds / startSystemAudioRecording），已实测 Add-Type C# 在 Win PowerShell 5.1 下编译通过（WASAPI_CS_COMPILED=True）并新增 4 项单测 | 320 pass / 325 total (0 fail, 5 skip E2E)
 2026-11-23 05:05 | T15.3 | DONE | 新增 src/capture/MediaDevices.ts（兼容 FFmpeg 8.x [in#0] 与传统 [dshow] 节的 DirectShow 设备枚举解析，实机检出 1 摄像头与 9 麦克风含中文设备名）与 src/capture/MicRecorder.ts（buildMicFfmpegArgs / -progress pipe:1 首样本时钟对齐 / startMicRecording 启停与故障拒收），新增 3 项单测 | 323 pass / 328 total (0 fail, 5 skip E2E)
 2026-11-23 10:34 | T15.4 | DONE | 新增 src/capture/CameraRecorder.ts（DirectShow dshow 摄像头录制、-vf showinfo 首帧 n:0 时钟锚点、buildCameraSyncAnchor、extractCameraFrames），扩展 RecordingSession.ts 多源音视频录制与 ProjectMediaManifest / CaptureConfiguration 真实标志，ExportServer.ts 开放 /camera_frames/ 安全路径受控静态帧服务，新增 5 项单测 | 328 pass / 333 total (0 fail, 5 skip E2E)
+2026-11-23 10:36 | T15.5 | DONE | 新增 src/render/AudioMixPlan.ts（buildAtempoFilterChain 任意倍速 [0.5,2.0] 级联、buildSessionAudioTracks、buildAudioMixFilterGraph atrim/adelay/afade/amix、buildAudioOnlyM4aArgs），扩展 ExportServer.ts 单遍 rawvideo+AAC 音画合流与 scripts/export.ts --format m4a 纯音频直出，并通过真机 ffmpeg 合成双 WAV -> M4A + ffprobe 实测（新增 4 项单测） | 332 pass / 337 total (0 fail, 5 skip E2E)
 
-下一个任务：T15.5（多音轨混音变速滤镜与纯音频 --format m4a 导出）
+下一个任务：T15.6（录制中分段暂停/恢复无损拼接与热键实时打点 RecordingMarker）
 
 
 

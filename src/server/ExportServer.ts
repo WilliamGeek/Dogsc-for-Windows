@@ -25,15 +25,27 @@ export interface ExportFfmpegArgsOptions {
   fps: number;
   encoder: VideoEncoderKind;
   outFile: string;
+  audioInputs?: readonly string[];
+  audioFilterComplex?: string;
+  audioMapLabel?: string;
+  audioBitrate?: string;
 }
 
 /**
- * Pure function: builds ffmpeg rawvideo RGBA stdin -> flipped H.264 MP4 arguments per CONTRACTS §4.
+ * Pure function: builds ffmpeg rawvideo RGBA stdin -> flipped H.264 MP4 arguments per CONTRACTS §4,
+ * optionally muxing pre-built audio filtergraphs (`audioInputs` + `audioFilterComplex`).
  */
 export function buildExportFfmpegArgs(o: ExportFfmpegArgsOptions): string[] {
   const fps = o.fps > 0 ? o.fps : 60;
   const width = o.width > 0 ? o.width : 1920;
   const height = o.height > 0 ? o.height : 1080;
+
+  const hasAudioMux = Boolean(
+    o.audioInputs &&
+      o.audioInputs.length > 0 &&
+      o.audioFilterComplex &&
+      o.audioMapLabel
+  );
 
   const baseArgs = [
     '-y',
@@ -47,41 +59,65 @@ export function buildExportFfmpegArgs(o: ExportFfmpegArgsOptions): string[] {
     String(fps),
     '-i',
     '-',
-    '-vf',
-    'vflip',
   ];
 
-  if (o.encoder === 'h264_nvenc') {
+  if (hasAudioMux) {
+    for (const audioPath of o.audioInputs!) {
+      baseArgs.push('-i', audioPath);
+    }
+    baseArgs.push(
+      '-filter_complex',
+      `[0:v]vflip[vout];${o.audioFilterComplex}`,
+      '-map',
+      '[vout]',
+      '-map',
+      o.audioMapLabel!
+    );
+  } else {
+    baseArgs.push('-vf', 'vflip');
+  }
+
+  const videoCodecArgs =
+    o.encoder === 'h264_nvenc'
+      ? [
+          '-c:v',
+          'h264_nvenc',
+          '-preset',
+          'p4',
+          '-rc',
+          'vbr',
+          '-cq',
+          '23',
+          '-b:v',
+          '0',
+          '-pix_fmt',
+          'yuv420p',
+        ]
+      : [
+          '-c:v',
+          'libx264',
+          '-preset',
+          'veryfast',
+          '-crf',
+          '20',
+          '-pix_fmt',
+          'yuv420p',
+        ];
+
+  if (hasAudioMux) {
     return [
       ...baseArgs,
-      '-c:v',
-      'h264_nvenc',
-      '-preset',
-      'p4',
-      '-rc',
-      'vbr',
-      '-cq',
-      '23',
-      '-b:v',
-      '0',
-      '-pix_fmt',
-      'yuv420p',
+      ...videoCodecArgs,
+      '-c:a',
+      'aac',
+      '-b:a',
+      o.audioBitrate ?? '192k',
+      '-shortest',
       o.outFile,
     ];
   }
 
-  return [
-    ...baseArgs,
-    '-c:v',
-    'libx264',
-    '-preset',
-    'veryfast',
-    '-crf',
-    '20',
-    '-pix_fmt',
-    'yuv420p',
-    o.outFile,
-  ];
+  return [...baseArgs, ...videoCodecArgs, o.outFile];
 }
 
 export interface ExportPlanPayload {
@@ -113,6 +149,12 @@ export interface ExportServerOptions {
   plan: ExportPlanPayload;
   outFile: string;
   encoder?: VideoEncoderKind;
+  audioMix?: {
+    inputs: readonly string[];
+    filterComplex: string;
+    audioMapLabel: string;
+    audioBitrate?: string;
+  };
   port?: number;
   ffmpegCommand?: { command: string; args: string[] };
   /** No-frame watchdog. Defaults to 30 seconds. */
@@ -190,6 +232,10 @@ export async function startExportServer(o: ExportServerOptions): Promise<ExportS
       fps: o.plan.fps,
       encoder,
       outFile: resolve(o.outFile),
+      audioInputs: o.audioMix?.inputs,
+      audioFilterComplex: o.audioMix?.filterComplex,
+      audioMapLabel: o.audioMix?.audioMapLabel,
+      audioBitrate: o.audioMix?.audioBitrate,
     });
 
   const proc: ChildProcess = spawn(cmd, args, {
