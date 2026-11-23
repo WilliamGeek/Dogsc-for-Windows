@@ -113,7 +113,9 @@
 
 2026-11-23 11:42 | T16.5 | DONE | 完成 web/studio/exportSheet.ts（760px 双栏三阶段交互导出弹窗：MP4/M4A、原始素材/1080p/1440p/4K、30/60fps、H.264/HEVC、3 档画质、ExportPolicy 实时预估体积、进度条/取消/打开目录）与全链路 sourceFps/quality/videoCodec/TimelineMap 对齐（FramePlan/ExportServer/StudioServer/renderer/player/app/scripts/export.ts）；实测 2176x1812@60fps 源导出 --resolution 1080p --fps 30 生成 1920x1598@30fps H.264 MP4（core=54/web=18 全零 node:*） | 344 pass / 349 total (0 fail, 5 skip E2E)
 
-下一个任务：T16.6 Chrome Live Studio E2E 视觉与功能全链路验收 + ARCH-DAG-WaveE + Wave F Windows 桌面外壳与安装包 (T17.1-T17.4)
+2026-11-23 13:07 | T16.6 | DONE | Chrome 1436x901 四轮 Live Studio E2E 闭环验收通过并修复 BUG-1..4（#studio-stage ResizeObserver 等比贴合与 .monitor-bar 解锁、/favicon.ico 204 + SVG 图标、无音轨 M4A 导出按钮禁用防护、app.ts:138 setInspectorTab TypeError、getRenderedScreenContentRect 内嵌内容区 0.63px 精确靶心投影）；Studio 修改（圆角 48/流体背景/windowLight/1080p30 HEVC）持久化并通过 60 帧 CLI 再导出（ffprobe: hevc 1920x1598@30fps, 60f, 8.48s）；存档 docs/audits/T16.6-studio-audit-report.json（Pass 4 控制台 0 报错/HTTP>=400 为 0）；基线 verify-export 非 --sync 通过（--sync 在 2026-11-20 历史会话呈预期 T12.9 前 24 帧漂移，待 Wave F T17.3 实机重录验收） | 344 pass / 349 total (0 fail, 5 skip E2E)
+
+下一个任务：ARCH-DAG-WaveE 更新与校验 + Wave F Windows 桌面外壳与安装包规划与实现 (T17.1-T17.4)
 
 
 

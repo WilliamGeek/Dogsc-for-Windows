@@ -108,7 +108,10 @@ export class StudioApp {
 
   constructor(canvas: HTMLCanvasElement) {
     this.player = new StudioWebGLPlayer(canvas, {
-      onTimeUpdate: (t) => this.updatePlayheadUI(t),
+      onTimeUpdate: (t) => {
+        this.updatePlayheadUI(t);
+        this.syncStageFocusOverlay();
+      },
       onPlayStateChange: (playing) => {
         const btn = document.getElementById('btn-play-toggle');
         if (btn) btn.textContent = playing ? '⏸' : '▶';
@@ -128,6 +131,12 @@ export class StudioApp {
     if (plugins.openRecordModal) this.recordModalOpener = plugins.openRecordModal;
   }
 
+  private setInspectorTab(tab: StudioInspectorTab): void {
+    this.inspectorTab = tab;
+    this.syncRailTabs();
+    this.renderInspectorView();
+  }
+
   getContext(): StudioRuntimeContext {
     return {
       getDetail: () => this.detail,
@@ -135,7 +144,10 @@ export class StudioApp {
       getSelection: () => this.selection,
       setSelection: (sel) => {
         this.selection = sel;
-        if (sel?.kind === 'zoom') this.setInspectorTab('zoom');
+        if (sel?.kind === 'zoom') {
+          this.inspectorTab = 'zoom';
+          this.syncRailTabs();
+        }
         this.renderSubViews();
         this.syncStageFocusOverlay();
       },
@@ -145,11 +157,7 @@ export class StudioApp {
         this.renderSubViews();
       },
       getInspectorTab: () => this.inspectorTab,
-      setInspectorTab: (tab) => {
-        this.inspectorTab = tab;
-        this.syncRailTabs();
-        this.renderInspectorView();
-      },
+      setInspectorTab: (tab) => this.setInspectorTab(tab),
       getTimelineZoom: () => this.timelineZoom,
       setTimelineZoom: (z) => {
         this.timelineZoom = Math.min(4, Math.max(0.5, z));
@@ -449,8 +457,20 @@ export class StudioApp {
         (c) => c.id === (this.selection as { kind: 'zoom'; id: string }).id
       );
       if (clip) {
-        marker.style.left = `${clip.focus.x * 100}%`;
-        marker.style.top = `${clip.focus.y * 100}%`;
+        const stageCanvas = stage as HTMLCanvasElement | null;
+        const cr = this.player.getRenderedScreenContentRect();
+        const cw = stageCanvas && stageCanvas.width > 0 ? stageCanvas.width : 0;
+        const ch = stageCanvas && stageCanvas.height > 0 ? stageCanvas.height : 0;
+        const pctX =
+          cr && cr.width > 0 && cw > 0
+            ? ((cr.x + clip.focus.x * cr.width) / cw) * 100
+            : clip.focus.x * 100;
+        const pctY =
+          cr && cr.height > 0 && ch > 0
+            ? ((cr.y + clip.focus.y * cr.height) / ch) * 100
+            : clip.focus.y * 100;
+        marker.style.left = `${Math.min(100, Math.max(0, pctX))}%`;
+        marker.style.top = `${Math.min(100, Math.max(0, pctY))}%`;
         marker.classList.add('visible');
         return;
       }

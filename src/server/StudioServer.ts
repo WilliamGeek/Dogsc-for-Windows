@@ -554,6 +554,12 @@ export async function startStudioServer(o: StudioServerOptions): Promise<StudioS
         return;
       }
 
+      if (req.method === 'GET' && decodedPath === '/favicon.ico') {
+        res.writeHead(204);
+        res.end();
+        return;
+      }
+
       // 2. Health & device discovery
       if (req.method === 'GET' && decodedPath === '/api/health') {
         sendJson(res, 200, { ok: true, version: '0.4.0' });

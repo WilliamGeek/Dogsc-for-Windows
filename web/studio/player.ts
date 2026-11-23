@@ -80,6 +80,8 @@ export class StudioWebGLPlayer {
 
   private onTimeUpdate?: (time: number) => void;
   private onPlayStateChange?: (playing: boolean) => void;
+  private resizeObserver: ResizeObserver | null = null;
+  private readonly onWindowResize: () => void;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -114,6 +116,41 @@ export class StudioWebGLPlayer {
     this.blurRelay = new BackdropBlurRelay(gl);
     this.stickerPass = new StickerPass(gl);
     this.screenTex = createTexture2D(gl, true);
+
+    this.onWindowResize = () => this.fitStageDisplaySize();
+    if (typeof window !== 'undefined') {
+      window.addEventListener('resize', this.onWindowResize);
+    }
+    if (typeof ResizeObserver !== 'undefined') {
+      const viewport = canvas.parentElement?.parentElement;
+      if (viewport) {
+        this.resizeObserver = new ResizeObserver(() => this.fitStageDisplaySize());
+        this.resizeObserver.observe(viewport);
+      }
+    }
+    this.fitStageDisplaySize();
+  }
+
+  fitStageDisplaySize(): void {
+    const wrap = this.canvas.parentElement;
+    const viewport = wrap?.parentElement;
+    if (!wrap || !viewport) return;
+    const cs =
+      typeof window !== 'undefined' && typeof window.getComputedStyle === 'function'
+        ? window.getComputedStyle(viewport)
+        : null;
+    const padLeft = cs ? parseFloat(cs.paddingLeft) || 0 : 0;
+    const padRight = cs ? parseFloat(cs.paddingRight) || 0 : 0;
+    const padTop = cs ? parseFloat(cs.paddingTop) || 0 : 0;
+    const padBottom = cs ? parseFloat(cs.paddingBottom) || 0 : 0;
+    const availW = viewport.clientWidth - padLeft - padRight;
+    const availH = viewport.clientHeight - padTop - padBottom;
+    if (availW <= 0 || availH <= 0) return;
+    const w = Math.max(1, this.renderDims.width);
+    const h = Math.max(1, this.renderDims.height);
+    const scale = Math.min(availW / w, availH / h);
+    wrap.style.width = `${Math.max(1, Math.floor(w * scale))}px`;
+    wrap.style.height = `${Math.max(1, Math.floor(h * scale))}px`;
   }
 
   private computeCanvasDims(input: StudioPlayerSessionInput): CanvasDimensions {
@@ -156,6 +193,7 @@ export class StudioWebGLPlayer {
     this.renderDims = this.computeCanvasDims(input);
     this.canvas.width = this.renderDims.width;
     this.canvas.height = this.renderDims.height;
+    this.fitStageDisplaySize();
 
     this.plan = makeFramePlan({
       project: input.project,
@@ -283,6 +321,17 @@ export class StudioWebGLPlayer {
     void this.renderAtTime(clamped);
   }
 
+  getRenderedScreenContentRect(): { x: number; y: number; width: number; height: number } | null {
+    const screen = this.lastScene?.screen;
+    if (!screen) return null;
+    const rect =
+      screen.decoration.kind === 'chrome'
+        ? screen.decoration.chrome.contentRect
+        : (screen.sourceContentRect ?? screen.finalRect);
+    if (!rect || rect.width <= 0 || rect.height <= 0) return null;
+    return rect;
+  }
+
   canvasClientPointToNormalizedScreen(
     clientX: number,
     clientY: number
@@ -291,7 +340,7 @@ export class StudioWebGLPlayer {
     if (rect.width <= 0 || rect.height <= 0 || !this.lastScene) return null;
     const cx = ((clientX - rect.left) / rect.width) * this.renderDims.width;
     const cy = ((clientY - rect.top) / rect.height) * this.renderDims.height;
-    const cr = this.lastScene.screen.contentRect;
+    const cr = this.getRenderedScreenContentRect();
     if (!cr || cr.width <= 0 || cr.height <= 0) {
       return {
         x: Math.min(Math.max((clientX - rect.left) / rect.width, 0), 1),
@@ -476,5 +525,12 @@ export class StudioWebGLPlayer {
   destroy(): void {
     this.pause();
     this.clearCache();
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
+      this.resizeObserver = null;
+    }
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('resize', this.onWindowResize);
+    }
   }
 }

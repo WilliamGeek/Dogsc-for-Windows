@@ -179,7 +179,7 @@
 - [x] T16.3 实现 `web/studio/timeline.ts`（基于 `EditorTimeline`/`ProjectTimelineEditing` 的多轨交互时间线 + Undo/Redo）。
 - [x] T16.4 实现 `web/studio/inspector.ts`（画布/圆角/背景/外框/摄像头/光标/音频全参数实时检查器，严格零假开关）。
 - [x] T16.5 实现交互式导出面板与 CLI 多规格导出（1080p/1440p/4K、30/60fps、多比例、M4A、可取消）。
-- [ ] T16.6 按 `MASTER_REFACTOR_PLAN_V2.md` §6.3 SOP 完成编辑器 Browser MCP / Computer Use 全链路端到端验收。
+- [x] T16.6 按 `MASTER_REFACTOR_PLAN_V2.md` §6.3 SOP 完成编辑器 Browser MCP / Computer Use 全链路端到端验收。
 
 ### Wave F：桌面外壳打包、硬件设备矩阵与正式发布（开工前须用户决策 D2）
 - [ ] T17.1 桌面应用外壳集成（`NEED-DECISION`：由用户选定 WebView2 / Electron / Tauri）。

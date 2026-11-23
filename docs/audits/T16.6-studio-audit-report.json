@@ -1,0 +1,141 @@
+{
+  "taskId": "T16.6",
+  "title": "DogSC Studio Interactive Editor Live Chrome E2E Audit",
+  "auditedAt": "2026-11-23T13:07:00+08:00",
+  "targetUrl": "http://127.0.0.1:18421/web/studio.html",
+  "isolatedSessionId": "20261120-175917",
+  "viewport": {
+    "width": 1436,
+    "height": 901,
+    "devicePixelRatio": 1
+  },
+  "unitAndBoundaryChecks": {
+    "coreCount": 54,
+    "webCount": 18,
+    "nodeHitsInCoreAndWeb": 0,
+    "stripTypeScriptTypesWebAllPass": true,
+    "npmTest": {
+      "total": 349,
+      "pass": 344,
+      "fail": 0,
+      "skipped": 5
+    }
+  },
+  "chromeAuditPasses": {
+    "pass1": {
+      "verifiedFeatures": [
+        "WebGL2 non-blank stage rendering (2176x1812 @ 60fps -> 960x800 canvas intrinsic)",
+        "All 6 inspector tabs present and switchable: ▣ 画面, ⊕ 运镜, ✦ 开场, ⌖ 光标, ◉ 摄像头, ♫ 声音",
+        "Zero-fake-switch persistence: cornerRadius 24->48, backgroundSource -> dynamicFlow(极光流体星云), screenFrame -> windowLight saved via PUT /api/recordings/20261120-175917/project [200] and survived reload",
+        "Multi-track timeline scrub (4s -> 00:04.05), Space playback, clip split (1段 -> 2段), and Undo restore",
+        "Export Sheet modal centered at exact 760px x 469.875px with live ExportPolicy file-size estimates (29.0 MB -> 91.9 MB -> 66.8 MB -> 50.1 MB -> 21.4 MB -> 10.9 MB -> 6.6 MB -> 0.2 MB M4A -> 16.4 MB HEVC Maximum)",
+        "Recording Island modal centered at 540px x 423px populated by GET /api/devices [200]"
+      ],
+      "defectsDiscovered": [
+        {
+          "id": "BUG-1",
+          "severity": "high",
+          "summary": "#studio-stage (960x800) overflowed .stage-canvas-wrap (960x512) vertically (y=-86..714), clipping top ~130px chrome titlebar and intercepting all 9 .monitor-bar buttons",
+          "fix": "web/studio/styles.css (.stage-viewport overflow hidden, .stage-canvas-wrap inline-flex shrink 0, #studio-stage 100%x100%, .monitor-bar-wrap z-index 2) + web/studio/player.ts fitStageDisplaySize() & ResizeObserver"
+        },
+        {
+          "id": "BUG-2",
+          "severity": "low",
+          "summary": "GET /favicon.ico returned HTTP 404 (sole initial console error)",
+          "fix": "web/studio.html inline SVG icon + src/server/StudioServer.ts GET /favicon.ico -> HTTP 204"
+        },
+        {
+          "id": "UX-M4A",
+          "severity": "low",
+          "summary": "纯音频 M4A allowed clicking 开始导出 even when session had no audio tracks",
+          "fix": "web/studio/exportSheet.ts disables #exp-start-btn with red diagnostic hint when outputFormat === 'm4a' && !hasAudio"
+        }
+      ]
+    },
+    "pass2": {
+      "verifiedFixes": [
+        "BUG-1 fixed: #studio-stage and #stage-canvas-wrap measured 614x512 strictly inside .stage-viewport (534px tall) above .monitor-bar (y=593..637); top windowLight titlebar & 48px rounded corners unclipped",
+        "All 9 .monitor-bar buttons hit <button> cleanly via document.elementFromPoint (interceptedByStage: false)",
+        "Aspect switching via real clicks verified contained across 16:9 (910x512), 9:16 (288x512), 1:1 (512x512), and 适应 (614x512)",
+        "BUG-2 fixed: fetch('/favicon.ico') returned HTTP 204; pass2_http_gte_400=0 (89 requests), initial console errors=0",
+        "UX-M4A fixed: #exp-start-btn disabled on M4A without audio tracks and re-enabled on MP4"
+      ],
+      "defectsDiscovered": [
+        {
+          "id": "BUG-3",
+          "severity": "high",
+          "summary": "Clicking zoom clip threw Uncaught TypeError: this.setInspectorTab is not a function at web/studio/app.ts:138, leaving #focus-target-marker hidden",
+          "fix": "Promoted private setInspectorTab() method on StudioApp and fixed setSelection() in web/studio/app.ts"
+        }
+      ]
+    },
+    "pass3": {
+      "consoleErrors": 0,
+      "httpGte400": 0,
+      "totalRequests": 78,
+      "verifiedFixes": [
+        "BUG-3 fixed: clicking ⊕ 1.8× zoom clip auto-switched Inspector to ⊕运镜 and displayed #focus-target-marker inside #studio-stage with 0 console errors"
+      ],
+      "defectsDiscovered": [
+        {
+          "id": "BUG-4",
+          "severity": "medium",
+          "summary": "syncStageFocusOverlay() and canvasClientPointToNormalizedScreen() read undefined scene.screen.contentRect instead of decoration.chrome.contentRect / sourceContentRect",
+          "fix": "Added getRenderedScreenContentRect() on StudioWebGLPlayer (web/studio/player.ts) and wired app.ts syncStageFocusOverlay() + onTimeUpdate refresh"
+        }
+      ]
+    },
+    "pass4": {
+      "consoleErrors": 0,
+      "httpGte400": 0,
+      "totalRequests": 69,
+      "remainingDefects": [],
+      "initialFocusProjection": {
+        "style": { "left": "29.2552%", "top": "53.8834%", "display": "block" },
+        "markerCenter": { "x": 392.625, "y": 334.04168701171875 },
+        "visualResult": "Orange #focus-target-marker aligned over blue target A inside padded windowLight frame"
+      },
+      "clickToFocusRoundtrip": {
+        "clickedClient": { "x": 647.1, "y": 333.62 },
+        "markerCenterAfterClick": { "x": 646.9896240234375, "y": 333 },
+        "euclideanDeltaPx": 0.629748248272384,
+        "within3pxTolerance": true,
+        "putSaveStatus": 200
+      },
+      "postUndoRestore": {
+        "style": { "left": "29.2552%", "top": "53.8834%" },
+        "persistedFocusJson": { "x": 0.24540441176470587, "y": 0.5215231788079471 },
+        "putSaveStatus": 200
+      }
+    }
+  },
+  "postAuditCliReExport": {
+    "command": "node scripts/export.ts --dir out/t166-studio-audit/recordings/20261120-175917 --resolution 1080p --fps 30 --max-frames 60 --out out/t166-studio-audit/studio_edited_1080p30.mp4",
+    "elapsedSeconds": 8.48,
+    "honoredProjectExportSettings": true,
+    "ffprobe": {
+      "codec_name": "hevc",
+      "width": 1920,
+      "height": 1598,
+      "r_frame_rate": "30/1",
+      "nb_frames": "60"
+    }
+  },
+  "baselineVerification": {
+    "recordingDir": "recordings/20261120-175917",
+    "verifyExportNonSync": {
+      "exitCode": 0,
+      "ok": true,
+      "checksPassed": 7,
+      "durationsSpreadSeconds": 0.0
+    },
+    "verifyExportWithSync": {
+      "exitCode": 1,
+      "structuralSyncFramesOk": true,
+      "structuralMaxDeltaFrames": 0,
+      "pointerTimingSyncOk": false,
+      "pointerTimingMaxDeltaFrames": 24,
+      "note": "Expected on historic 2026-11-20 pre-T12.9 recording lacking -vf showinfo anchor; fresh live T12.9+ capture sync scheduled in Wave F T17.3 hardware matrix."
+    }
+  }
+}

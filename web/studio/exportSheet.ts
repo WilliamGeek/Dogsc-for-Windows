@@ -111,6 +111,7 @@ export function openExportSheetModal(ctx: StudioRuntimeContext): void {
 
   const renderSheet = () => {
     const est = computeEstimate();
+    const m4aBlocked = outputFormat === 'm4a' && !hasAudio;
     card.className = 'modal-card export-sheet-card';
 
     const leftPreview = `
@@ -173,7 +174,7 @@ export function openExportSheetModal(ctx: StudioRuntimeContext): void {
               <div class="insp-card-title">画质挡位</div>
               <div class="pill-grid">${qualPills}</div>
             </div>`
-              : '<div class="insp-card"><div class="insp-card-title">M4A 音频规范</div><p style="margin:0;color:var(--ink-secondary);line-height:1.5;">跳过视频重编码，直接使用 FFmpeg 按时间线片段混音输出 192kbps AAC M4A 文件。</p></div>'
+              : `<div class="insp-card"><div class="insp-card-title">M4A 音频规范</div><p style="margin:0;color:var(--ink-secondary);line-height:1.5;">跳过视频重编码，直接使用 FFmpeg 按时间线片段混音输出 192kbps AAC M4A 文件。</p>${hasAudio ? '' : '<p style="margin:6px 0 0;color:#e0705b;font-size:11px;">当前录制未检测到可用音轨，无法导出纯音频 M4A。</p>'}</div>`
           }
           <div class="insp-row">
             <span class="insp-label">文件名</span>
@@ -218,7 +219,7 @@ export function openExportSheetModal(ctx: StudioRuntimeContext): void {
         ? `<span style="color:var(--ink-secondary);font-size:12px;">预估大小：约 <strong style="color:var(--ink);">${formatBytes(est.estimatedBytes)}</strong></span>
            <div style="display:flex;gap:8px;">
              <button id="exp-close-btn" class="chrome-btn">取消</button>
-             <button id="exp-start-btn" class="primary-export-btn">开始导出</button>
+             <button id="exp-start-btn" class="primary-export-btn" ${m4aBlocked ? 'disabled title="当前会话无可用音轨" style="opacity:0.45;cursor:not-allowed;"' : ''}>开始导出</button>
            </div>`
         : phase === 'running'
           ? `<span style="color:var(--ink-secondary);font-size:11px;">WebGL2 与 FFmpeg 管线运行中</span>
