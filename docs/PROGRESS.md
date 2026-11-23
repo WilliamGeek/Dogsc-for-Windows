@@ -121,7 +121,9 @@
 
 2026-11-23 13:21 | T17.2 | DONE | 新增 scripts/package-windows.ts 与 test/desktop/PackageWindows.test.ts，更新 THIRD_PARTY_NOTICES.md 与 package.json（studio/build:desktop/package:win）；实测打包 109 项干净运行时产物并生成 dist/DogSC.exe (26,112B)、DogSC-Windows-x64-v1.0.0.zip (384,204B)、iexpress Setup DogSC-Setup-x64-v1.0.0.exe (577,536B) 与 dist/SHA256SUMS.txt；完整标注未代码签名状态及 FFmpeg/Node/Edge 非捆绑合规声明；core=54/web=18 全零 node:* | 350 pass / 355 total (0 fail, 5 skip E2E)
 
-下一个任务：T17.3 Win10/11、NVENC/libx264、多屏/混合DPI、4K/60fps 与音视频外设硬件矩阵实测与 T17.4 最终归档发布 v1.0.0-windows
+2026-11-23 13:30 | T17.3 | DONE | 新增 scripts/run-device-matrix.ts 并输出严谨区分 VERIFIED/UNTESTED 的 docs/DEVICE_MATRIX_REPORT.md：在 Win11 Build 26200 (i7-13700HX / 16GB / RTX 4060 Laptop) 实测通过显示器(1)/摄像头(1)/麦克风(9)枚举、--display 9 越界零残留、1080p60/1440p30/4K30(3840x3198)/HEVC WebGL2+NVENC 导出、libx264/libx265 软编、AAC M4A 混音与 DogSC.exe --check (13项 VERIFIED)；并如实标注后台锁定桌面会话下 ddagrab access denied/windowCount=0、Win10、AMD/Intel、物理多屏与 D4 T11.7 待交互复核为 UNTESTED | 350 pass / 355 total
+
+下一个任务：T17.4 版本号升级 v1.0.0、最终 README/USAGE/CHANGELOG 归档、ARCH-DAG-WaveF Chrome 终审与打标 v1.0.0-windows
 
 
 
