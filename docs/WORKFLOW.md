@@ -1,6 +1,6 @@
 # DogSC Windows · 项目级全栈架构与开发进度看板
 
-> **拓扑概览**：高亮绿流 = Wave A-E 全链路采集/混音/渲染与交互式编辑器已落地 | 虚化节点 (opacity 0.65) = 待开发 Wave F 桌面封装与 T11.7 人工终审 | **渲染模式**：`instance` | **规模**：24 节点 · 35 路径
+> **拓扑概览**：高亮绿流 = Wave A-F 全栈采集/渲染/交互式编辑器与 Windows 桌面安装包已落地 | 虚化节点 (opacity 0.65) = T11.7 待用户肉眼终审 | **渲染模式**：`instance` | **规模**：24 节点 · 35 路径
 
 ## 一、 全景拓扑图 (Mermaid 同步版)
 
@@ -15,7 +15,7 @@ flowchart LR
   classDef block fill:#450a0a,stroke:#ef4444,stroke-width:2px,color:#fca5a5;
 
   subgraph S0 ["阶段 0-2: 多源采集与时钟对齐"]
-    Start["录制与重构总入口 (CLI) (✓ 54核心/18前端 / 344单测)"]:::endpoint
+    Start["录制与重构总入口 (CLI) (✓ 54核心/18前端 / 350单测)"]:::endpoint
     C_MultiSrc["窗口/区域/摄像头与分段 (✓ 区域/窗口/摄像头/分段)"]:::action
     C_Audio["系统音频与麦克风采集 (✓ WASAPI+Mic)"]:::action
     C_Screen["整屏 GPU 采集 (ddagrab) (✓ draw_mouse=0)"]:::action
@@ -41,9 +41,9 @@ flowchart LR
   subgraph S3 ["Wave E-F: 质检门禁、编辑器与交付"]
     M_EditorUI["交互式编辑器与录制岛 (✓ Studio E2E 通过)"]:::action
     G_Verify["自动质检与真同步门禁 (✓ G1-G3+Studio E2E)"]:::gate
-    M_ShellPkg["Windows 桌面外壳与打包 (○ 未开发 Wave F)"]:::action
-    H_Review["人工与浏览器视觉终审 (⏳ 待复核 T11.7)"]:::human
-    Deliver["最终交付产物 (✓ Wave A-E 就绪)"]:::endpoint
+    M_ShellPkg["Windows 桌面外壳与打包 (✓ DogSC.exe+安装包+G6)"]:::action
+    H_Review["人工与浏览器视觉终审 (⏳ 待用户终审 T11.7)"]:::human
+    Deliver["最终交付产物 (✓ v1.0.0-windows)"]:::endpoint
     X_Term["统一异常收口终端 (✓ 异常收口)"]:::block
   end
 
@@ -88,7 +88,7 @@ flowchart LR
 
 | 节点 ID | 类型 | 阶段 | 名称 | 核心规则 / 代码锚点 / 状态 |
 | :--- | :--- | :--- | :--- | :--- |
-| `Start` | `endpoint` | 阶段 0-2: 多源采集与时钟对齐 | 录制与重构总入口 (CLI) | **[✓ 54核心/18前端 / 344单测]** scripts/record.ts |
+| `Start` | `endpoint` | 阶段 0-2: 多源采集与时钟对齐 | 录制与重构总入口 (CLI) | **[✓ 54核心/18前端 / 350单测]** scripts/record.ts |
 | `C_MultiSrc` | `action` | 阶段 0-2: 多源采集与时钟对齐 | 窗口/区域/摄像头与分段 | **[✓ 区域/窗口/摄像头/分段]** src/capture/WindowEnumeration.ts / CameraRecorder.ts / SegmentedSession.ts |
 | `C_Audio` | `action` | 阶段 0-2: 多源采集与时钟对齐 | 系统音频与麦克风采集 | **[✓ WASAPI+Mic]** src/capture/SystemAudioRecorder.ts / MicRecorder.ts / MediaDevices.ts |
 | `C_Screen` | `action` | 阶段 0-2: 多源采集与时钟对齐 | 整屏 GPU 采集 (ddagrab) | **[✓ draw_mouse=0]** src/capture/ScreenRecorder.ts:79 |
@@ -108,7 +108,7 @@ flowchart LR
 | `X_ExpFail` | `block` | 阶段 3 / Wave C-D: WebGL2 渲染与导出 | 导出看门狗阻断 | **[✓ 30s/409 熔断]** src/server/ExportServer.ts:265 |
 | `M_EditorUI` | `action` | Wave E-F: 质检门禁、编辑器与交付 | 交互式编辑器与录制岛 | **[✓ Studio E2E 通过]** src/server/StudioServer.ts / web/studio/* |
 | `G_Verify` | `gate` | Wave E-F: 质检门禁、编辑器与交付 | 自动质检与真同步门禁 | **[✓ G1-G3+Studio E2E]** scripts/verify-export.ts |
-| `M_ShellPkg` | `action` | Wave E-F: 质检门禁、编辑器与交付 | Windows 桌面外壳与打包 | 需用户拍板打包选型 D2 并完成 Win10/11 硬件设备矩阵实测 |
-| `H_Review` | `human` | Wave E-F: 质检门禁、编辑器与交付 | 人工与浏览器视觉终审 | T12.9 showinfo 时钟修复已落地，待用户/视觉终审成片后勾选 T11.7 |
-| `Deliver` | `endpoint` | Wave E-F: 质检门禁、编辑器与交付 | 最终交付产物 | **[✓ Wave A-E 就绪]** Wave A-E 全源采集与交互编辑器就绪 → v1.0.0-windows |
+| `M_ShellPkg` | `action` | Wave E-F: 质检门禁、编辑器与交付 | Windows 桌面外壳与打包 | **[✓ DogSC.exe+安装包+G6]** desktop/DogSC.cs / scripts/package-windows.ts |
+| `H_Review` | `human` | Wave E-F: 质检门禁、编辑器与交付 | 人工与浏览器视觉终审 | T12.9 showinfo 时钟修复已落地，待用户在交互桌面实录并肉眼终审成片后勾选 T11.7 (D4) |
+| `Deliver` | `endpoint` | Wave E-F: 质检门禁、编辑器与交付 | 最终交付产物 | **[✓ v1.0.0-windows]** Wave A-F 全栈桌面版 v1.0.0-windows 交付就绪 |
 | `X_Term` | `block` | Wave E-F: 质检门禁、编辑器与交付 | 统一异常收口终端 | **[✓ 异常收口]** scripts/export.ts:186 |

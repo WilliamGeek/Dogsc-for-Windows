@@ -123,7 +123,9 @@
 
 2026-11-23 13:30 | T17.3 | DONE | 新增 scripts/run-device-matrix.ts 并输出严谨区分 VERIFIED/UNTESTED 的 docs/DEVICE_MATRIX_REPORT.md：在 Win11 Build 26200 (i7-13700HX / 16GB / RTX 4060 Laptop) 实测通过显示器(1)/摄像头(1)/麦克风(9)枚举、--display 9 越界零残留、1080p60/1440p30/4K30(3840x3198)/HEVC WebGL2+NVENC 导出、libx264/libx265 软编、AAC M4A 混音与 DogSC.exe --check (13项 VERIFIED)；并如实标注后台锁定桌面会话下 ddagrab access denied/windowCount=0、Win10、AMD/Intel、物理多屏与 D4 T11.7 待交互复核为 UNTESTED | 350 pass / 355 total
 
-下一个任务：T17.4 版本号升级 v1.0.0、最终 README/USAGE/CHANGELOG 归档、ARCH-DAG-WaveF Chrome 终审与打标 v1.0.0-windows
+2026-11-23 13:58 | T17.4 | DONE | 版本号升级 1.0.0（package.json + StudioServer /api/health）并重编 dist/ 终版安装包（DogSC.exe 26,112B、DogSC-Windows-x64-v1.0.0.zip 388,130B、DogSC-Setup-x64-v1.0.0.exe 585,728B + SHA256SUMS.txt）；更新 README.md / docs/USAGE.md / CHANGELOG.md 与最终 ARCH-DAG-WaveF（24 节点 / 35 路径 / 0 警告，Chrome 1440x900 复核 0 Console Error、0 重叠、M_EditorUI/M_ShellPkg/Deliver 亮起且 H_Review 保持 0.65 虚化）；切分标签 T17.4-v1.0.0-windows正式发布 与 v1.0.0-windows | 350 pass / 355 total (0 fail, 5 skip E2E)
+
+当前状态：Wave A–F（T10–T17）全部代码/测试/Studio Chrome 四轮 E2E/Windows 安装包与 G6 矩阵报告均已完成并打标 v1.0.0-windows；仅 T11.7（按决策 D4 待用户在已解锁本地桌面交互终端实录并肉眼复核“单光标 + 无尾帧冻结 + 同步闪帧”）保持待确认。
 
 
 

@@ -1,10 +1,10 @@
 {
   "title": "DogSC Windows · 项目级全栈架构与开发进度看板",
-  "subtitle": "高亮绿流 = Wave A-E 全链路采集/混音/渲染与交互式编辑器已落地 | 虚化节点 (opacity 0.65) = 待开发 Wave F 桌面封装与 T11.7 人工终审",
+  "subtitle": "高亮绿流 = Wave A-F 全栈采集/渲染/交互式编辑器与 Windows 桌面安装包已落地 | 虚化节点 (opacity 0.65) = T11.7 待用户肉眼终审",
   "mode": "instance",
   "run_meta": {
-    "run_id": "dogsc-win-v0.5.0",
-    "duration": "Wave A-E 已完成 / Wave F 待开发",
+    "run_id": "dogsc-win-v1.0.0-windows",
+    "duration": "Wave A-F 已完成 / 待用户终审 T11.7",
     "status": "in_progress"
   },
   "spine_y": 500,
@@ -21,12 +21,12 @@
       "type": "endpoint",
       "badge_id": "START",
       "label": "录制与重构总入口 (CLI)",
-      "subtitle": "record.ts / export.ts / studio.ts / 344通过 (349单测)",
+      "subtitle": "record.ts / export.ts / studio.ts / DogSC.exe / 350通过 (355单测)",
       "stage": "阶段 0-2: 多源采集与时钟对齐",
       "col": 0,
       "y": 500,
       "executed": true,
-      "execution_badge": "✓ 54核心/18前端 / 344单测",
+      "execution_badge": "✓ 54核心/18前端 / 350单测",
       "details": {
         "inputs": "CLI 参数 (--seconds / --fps / --display / --format) 或 recordings/<id>",
         "outputs": "多源会话产物与 MP4/M4A 成片",
@@ -353,14 +353,16 @@
       "type": "action",
       "badge_id": "WAVE F · T17.1-4",
       "label": "Windows 桌面外壳与打包",
-      "subtitle": "WebView2/Electron/Tauri + 硬件矩阵 + 许可证",
+      "subtitle": "DogSC.exe 托盘热键 + ZIP/Setup + G6矩阵 + 合规",
       "stage": "Wave E-F: 质检门禁、编辑器与交付",
       "col": 8,
       "y": 350,
-      "executed": false,
-      "execution_badge": "○ 未开发 Wave F",
+      "executed": true,
+      "execution_badge": "✓ DogSC.exe+安装包+G6",
       "details": {
-        "gate_rule": "需用户拍板打包选型 D2 并完成 Win10/11 硬件设备矩阵实测"
+        "outputs": "dist/DogSC.exe + DogSC-Setup-x64-v1.0.0.exe + SHA256SUMS + DEVICE_MATRIX_REPORT.md",
+        "gate_rule": "原生 C# 5 托盘热键外壳、iexpress Setup、未签名/非捆绑声明与实机设备矩阵已归档",
+        "code_anchor": "desktop/DogSC.cs / scripts/package-windows.ts"
       }
     },
     {
@@ -373,9 +375,9 @@
       "col": 8,
       "y": 500,
       "executed": false,
-      "execution_badge": "⏳ 待复核 T11.7",
+      "execution_badge": "⏳ 待用户终审 T11.7",
       "details": {
-        "gate_rule": "T12.9 showinfo 时钟修复已落地，待用户/视觉终审成片后勾选 T11.7"
+        "gate_rule": "T12.9 showinfo 时钟修复已落地，待用户在交互桌面实录并肉眼终审成片后勾选 T11.7 (D4)"
       }
     },
     {
@@ -383,14 +385,14 @@
       "type": "endpoint",
       "badge_id": "DELIVER",
       "label": "最终交付产物",
-      "subtitle": "Wave A-E 全源采集与交互编辑器就绪 → v1.0.0-windows",
+      "subtitle": "Wave A-F 全栈桌面版 v1.0.0-windows 交付就绪",
       "stage": "Wave E-F: 质检门禁、编辑器与交付",
       "col": 9,
       "y": 500,
       "executed": true,
-      "execution_badge": "✓ Wave A-E 就绪",
+      "execution_badge": "✓ v1.0.0-windows",
       "details": {
-        "outputs": "已完成全源采集/混音/v0.2.0 54核心+18前端模块/WebGL2全通道/交互式 Studio E2E；Wave F 完成后交付 Windows 桌面版"
+        "outputs": "完成 Wave A-F 全源采集/混音/v0.2.0 54核心+18前端/WebGL2全通道/交互式 Studio E2E/DogSC.exe 与 Setup 安装包，发布 v1.0.0-windows"
       }
     },
     {
@@ -441,9 +443,9 @@
     { "id": "e_expsrv_editor", "source": "M_ExportSrv", "target": "M_EditorUI", "label": "StudioServer对接", "className": "edge-main", "executed": true },
     { "id": "e_verify_review", "source": "G_Verify", "target": "H_Review", "label": "G1-G3通过→待肉眼", "className": "edge-main", "executed": false },
     { "id": "e_verify_deliver", "source": "G_Verify", "target": "Deliver", "label": "Wave A 自动闭环成片", "className": "edge-main", "executed": true, "route": { "busY": 620 } },
-    { "id": "e_editor_pkg", "source": "M_EditorUI", "target": "M_ShellPkg", "label": "GUI工作台就绪", "className": "edge-main", "executed": false },
+    { "id": "e_editor_pkg", "source": "M_EditorUI", "target": "M_ShellPkg", "label": "GUI工作台就绪", "className": "edge-main", "executed": true },
     { "id": "e_editor_review", "source": "M_EditorUI", "target": "H_Review", "className": "edge-main", "executed": false },
-    { "id": "e_pkg_deliver", "source": "M_ShellPkg", "target": "Deliver", "label": "v1.0.0安装包", "className": "edge-main", "executed": false },
+    { "id": "e_pkg_deliver", "source": "M_ShellPkg", "target": "Deliver", "label": "v1.0.0安装包", "className": "edge-main", "executed": true },
     { "id": "e_review_deliver", "source": "H_Review", "target": "Deliver", "label": "用户确认T11.7", "className": "edge-main", "executed": false }
   ]
 }
