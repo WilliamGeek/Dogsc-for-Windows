@@ -258,6 +258,7 @@ async function loadPlanContext(params: URLSearchParams): Promise<RendererPlanCon
         ? payload.pointerEvents
         : [];
       const fps = Number(payload.fps) || 60;
+      const sourceFps = Number(payload.sourceFps) || fps;
       const width = Number(payload.width) || 1920;
       const height = Number(payload.height) || 1080;
       const durationSeconds = Number(payload.durationSeconds) || 1;
@@ -266,6 +267,7 @@ async function loadPlanContext(params: URLSearchParams): Promise<RendererPlanCon
         project,
         pointerEvents,
         fps,
+        sourceFps,
         durationSeconds,
         sourceFrameCount,
         canvas: { width, height },

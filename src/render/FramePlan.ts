@@ -28,6 +28,7 @@ export interface FramePlanInput {
   project: RecorderProject;
   pointerEvents: PointerEventRecord[];
   fps: number;
+  sourceFps?: number;
   durationSeconds: number;
   sourceFrameCount: number;
   canvas: { width: number; height: number };
@@ -43,12 +44,20 @@ export interface FramePlanResult {
  */
 export function makeFramePlan(i: FramePlanInput): FramePlanResult {
   const safeFps = i.fps > 0 ? i.fps : 60;
+  const safeSourceFps = i.sourceFps && i.sourceFps > 0 ? i.sourceFps : safeFps;
   const safeDuration = Number.isFinite(i.durationSeconds) && i.durationSeconds > 0 ? i.durationSeconds : 0.001;
-  const maxSourceDuration = i.sourceFrameCount > 0 ? i.sourceFrameCount / safeFps : safeDuration;
-  const effectiveDuration = Math.min(safeDuration, maxSourceDuration);
+  const isFullRecording = i.project.timeline.sourceSequence.kind === 'fullRecording';
+  const maxSourceDuration =
+    i.sourceFrameCount > 0 ? i.sourceFrameCount / safeSourceFps : safeDuration;
+  const effectiveDuration = isFullRecording
+    ? Math.min(safeDuration, maxSourceDuration)
+    : safeDuration;
   const schedule = makeOutputFrameSchedule(effectiveDuration, safeFps as OutputFrameRate);
 
-  const timelineMap = new TimelineMap(i.project.timeline.sourceSequence, effectiveDuration);
+  const timelineMap = new TimelineMap(
+    i.project.timeline.sourceSequence,
+    isFullRecording ? effectiveDuration : maxSourceDuration
+  );
   const pointerTrack = new ProjectPointerTrack(timelineMap, i.pointerEvents);
   const canvasSize = makeCompositionSize(i.canvas.width, i.canvas.height);
   const sourceAspectRatio = i.canvas.width / (i.canvas.height > 0 ? i.canvas.height : 1);
@@ -67,7 +76,7 @@ export function makeFramePlan(i: FramePlanInput): FramePlanResult {
       const tOut = frame ? frame.presentationTimeSeconds : safeN / safeFps;
 
       const sourceTime = timelineMap.sourceTime(tOut) ?? tOut;
-      const rawFrame = Math.round(sourceTime * safeFps) + 1;
+      const rawFrame = Math.round(sourceTime * safeSourceFps) + 1;
       const sourceFrameFile = Math.min(Math.max(rawFrame, 1), Math.max(i.sourceFrameCount, 1));
 
       const scene = FrameSceneEvaluator.scene(

@@ -25,6 +25,8 @@ export interface ExportFfmpegArgsOptions {
   fps: number;
   encoder: VideoEncoderKind;
   outFile: string;
+  videoCodec?: 'h264' | 'hevc';
+  quality?: 'compact' | 'high' | 'maximum';
   audioInputs?: readonly string[];
   audioFilterComplex?: string;
   audioMapLabel?: string;
@@ -32,13 +34,17 @@ export interface ExportFfmpegArgsOptions {
 }
 
 /**
- * Pure function: builds ffmpeg rawvideo RGBA stdin -> flipped H.264 MP4 arguments per CONTRACTS §4,
+ * Pure function: builds ffmpeg rawvideo RGBA stdin -> flipped H.264/HEVC MP4 arguments per CONTRACTS §4,
  * optionally muxing pre-built audio filtergraphs (`audioInputs` + `audioFilterComplex`).
  */
 export function buildExportFfmpegArgs(o: ExportFfmpegArgsOptions): string[] {
   const fps = o.fps > 0 ? o.fps : 60;
   const width = o.width > 0 ? o.width : 1920;
   const height = o.height > 0 ? o.height : 1080;
+  const videoCodec = o.videoCodec ?? 'h264';
+  const quality = o.quality ?? 'high';
+  const nvencCq = quality === 'compact' ? '28' : quality === 'maximum' ? '17' : '23';
+  const x26xCrf = quality === 'compact' ? '25' : quality === 'maximum' ? '16' : '20';
 
   const hasAudioMux = Boolean(
     o.audioInputs &&
@@ -77,32 +83,66 @@ export function buildExportFfmpegArgs(o: ExportFfmpegArgsOptions): string[] {
     baseArgs.push('-vf', 'vflip');
   }
 
-  const videoCodecArgs =
-    o.encoder === 'h264_nvenc'
-      ? [
-          '-c:v',
-          'h264_nvenc',
-          '-preset',
-          'p4',
-          '-rc',
-          'vbr',
-          '-cq',
-          '23',
-          '-b:v',
-          '0',
-          '-pix_fmt',
-          'yuv420p',
-        ]
-      : [
-          '-c:v',
-          'libx264',
-          '-preset',
-          'veryfast',
-          '-crf',
-          '20',
-          '-pix_fmt',
-          'yuv420p',
-        ];
+  let videoCodecArgs: string[];
+  if (videoCodec === 'hevc') {
+    videoCodecArgs =
+      o.encoder === 'h264_nvenc'
+        ? [
+            '-c:v',
+            'hevc_nvenc',
+            '-preset',
+            'p4',
+            '-rc',
+            'vbr',
+            '-cq',
+            nvencCq,
+            '-b:v',
+            '0',
+            '-pix_fmt',
+            'yuv420p',
+            '-tag:v',
+            'hvc1',
+          ]
+        : [
+            '-c:v',
+            'libx265',
+            '-preset',
+            'veryfast',
+            '-crf',
+            x26xCrf,
+            '-pix_fmt',
+            'yuv420p',
+            '-tag:v',
+            'hvc1',
+          ];
+  } else {
+    videoCodecArgs =
+      o.encoder === 'h264_nvenc'
+        ? [
+            '-c:v',
+            'h264_nvenc',
+            '-preset',
+            'p4',
+            '-rc',
+            'vbr',
+            '-cq',
+            nvencCq,
+            '-b:v',
+            '0',
+            '-pix_fmt',
+            'yuv420p',
+          ]
+        : [
+            '-c:v',
+            'libx264',
+            '-preset',
+            'veryfast',
+            '-crf',
+            x26xCrf,
+            '-pix_fmt',
+            'yuv420p',
+          ];
+  }
 
   if (hasAudioMux) {
     return [
@@ -122,6 +162,7 @@ export function buildExportFfmpegArgs(o: ExportFfmpegArgsOptions): string[] {
 
 export interface ExportPlanPayload {
   fps: number;
+  sourceFps?: number;
   width: number;
   height: number;
   frameCount: number;
@@ -149,6 +190,8 @@ export interface ExportServerOptions {
   plan: ExportPlanPayload;
   outFile: string;
   encoder?: VideoEncoderKind;
+  videoCodec?: 'h264' | 'hevc';
+  quality?: 'compact' | 'high' | 'maximum';
   audioMix?: {
     inputs: readonly string[];
     filterComplex: string;
@@ -232,6 +275,8 @@ export async function startExportServer(o: ExportServerOptions): Promise<ExportS
       fps: o.plan.fps,
       encoder,
       outFile: resolve(o.outFile),
+      videoCodec: o.videoCodec,
+      quality: o.quality,
       audioInputs: o.audioMix?.inputs,
       audioFilterComplex: o.audioMix?.filterComplex,
       audioMapLabel: o.audioMix?.audioMapLabel,

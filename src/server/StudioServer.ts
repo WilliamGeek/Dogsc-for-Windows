@@ -44,6 +44,7 @@ import {
 } from '../core/ExportSettings.ts';
 import { ExportEncodingPolicy } from '../core/ExportPolicy.ts';
 import { makeOutputFrameSchedule } from '../core/OutputFrameSchedule.ts';
+import { TimelineMap } from '../core/TimelineMap.ts';
 import type { OutputFrameRate } from '../core/CaptureConfiguration.ts';
 import { makePointerEventRecord } from '../core/ZoomAnimation.ts';
 import { parsePointerJsonl } from '../capture/PointerJsonl.ts';
@@ -113,6 +114,8 @@ export interface StudioExportJobState {
   width: number;
   height: number;
   fps: number;
+  quality: ExportQuality;
+  videoCodec: ExportVideoCodec;
   outFile: string;
   estimatedBytes: number;
   error: string | null;
@@ -163,12 +166,16 @@ export function resolveExportSpec(options: {
   durationSeconds?: number;
 }): ResolvedStudioExportSpec {
   const format: 'mp4' | 'm4a' = options.format === 'm4a' ? 'm4a' : 'mp4';
+  const rawSourceDuration = Math.max(Number(options.meta?.durationSeconds) || 1, 0.05);
   const durationSeconds =
     typeof options.durationSeconds === 'number' &&
     Number.isFinite(options.durationSeconds) &&
     options.durationSeconds > 0
       ? options.durationSeconds
-      : Math.max(Number(options.meta?.durationSeconds) || 1, 0.05);
+      : Math.max(
+          0.05,
+          new TimelineMap(options.project.timeline.sourceSequence, rawSourceDuration).outputDuration
+        );
 
   const srcW = Math.max(Math.trunc(Number(options.meta?.width) || 1920), 2);
   const srcH = Math.max(Math.trunc(Number(options.meta?.height) || 1080), 2);
@@ -377,13 +384,14 @@ export async function startStudioServer(o: StudioServerOptions): Promise<StudioS
       }
 
       // MP4 export via ExportServer + headless Edge
+      const sourceFps = Number(meta.fps) || 60;
       const framesDir = join(recDir, 'frames');
       let sourceFrameCount = countJpegFrames(framesDir);
       if (sourceFrameCount === 0) {
         sourceFrameCount = await extractFrames({
           video: join(recDir, 'screen.mp4'),
           outDir: framesDir,
-          fps: job.fps,
+          fps: sourceFps,
         });
       }
       if (job.cancelRequested) throw new Error('导出已取消');
@@ -395,7 +403,7 @@ export async function startStudioServer(o: StudioServerOptions): Promise<StudioS
         const camDir = join(recDir, 'camera_frames');
         let camCount = countJpegFrames(camDir);
         if (camCount === 0) {
-          camCount = await extractCameraFrames({ video: cameraMp4, outDir: camDir, fps: job.fps });
+          camCount = await extractCameraFrames({ video: cameraMp4, outDir: camDir, fps: sourceFps });
         }
         if (camCount > 0) {
           cameraFramesDir = camDir;
@@ -421,7 +429,9 @@ export async function startStudioServer(o: StudioServerOptions): Promise<StudioS
       }
 
       const rawDur = Number(meta.durationSeconds) || 1;
-      const trueDuration = Math.min(rawDur, sourceFrameCount > 0 ? sourceFrameCount / job.fps : rawDur);
+      const maxSourceDur = sourceFrameCount > 0 ? Math.min(rawDur, sourceFrameCount / sourceFps) : rawDur;
+      const tlMap = new TimelineMap(project.timeline.sourceSequence, maxSourceDur);
+      const trueDuration = Math.max(0.05, tlMap.outputDuration);
       const schedule = makeOutputFrameSchedule(trueDuration, job.fps as OutputFrameRate);
       job.totalFrames = schedule.frameCount;
 
@@ -438,9 +448,12 @@ export async function startStudioServer(o: StudioServerOptions): Promise<StudioS
         cameraFramesDir,
         outFile: job.outFile,
         encoder,
+        videoCodec: job.videoCodec,
+        quality: job.quality,
         audioMix: audioMix ?? undefined,
         plan: {
           fps: job.fps,
+          sourceFps,
           width: job.width,
           height: job.height,
           frameCount: schedule.frameCount,
@@ -837,6 +850,8 @@ export async function startStudioServer(o: StudioServerOptions): Promise<StudioS
             width: spec.width,
             height: spec.height,
             fps: spec.fps,
+            quality: spec.quality,
+            videoCodec: spec.videoCodec,
             outFile,
             estimatedBytes: spec.estimatedBytes,
             error: null,

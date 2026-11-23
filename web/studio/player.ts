@@ -31,6 +31,7 @@ export interface StudioPlayerSessionInput {
   project: RecorderProject;
   pointerEvents: PointerEventRecord[];
   fps: number;
+  sourceFps?: number;
   sourceWidth: number;
   sourceHeight: number;
   durationSeconds: number;
@@ -160,6 +161,7 @@ export class StudioWebGLPlayer {
       project: input.project,
       pointerEvents: input.pointerEvents,
       fps: input.fps,
+      sourceFps: input.sourceFps ?? input.fps,
       durationSeconds: input.durationSeconds,
       sourceFrameCount: Math.max(input.sourceFrameCount, 1),
       canvas: this.renderDims,

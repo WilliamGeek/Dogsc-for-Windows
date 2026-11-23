@@ -111,7 +111,9 @@
 2026-11-23 11:22 | T16.3 | DONE | 新增 web/studio/timeline.ts（4 轨多色家族时间线：主视频分割/删段/1×-4×倍速与剪刀光标、缩放轨拖拽移动与双边句柄伸缩+双击新建、马赛克/聚光灯区域轨与音频轨，时间标尺刷屏、录制打点 pin 与首帧防抖撤销融合）与 test/render/StudioState.test.ts，全部编辑器算子均通过 ProjectValidator | 343 pass / 348 total (0 fail, 5 skip E2E)
 2026-11-23 11:25 | T16.4 | DONE | 新增 web/studio/inspector.ts（画面/运镜/开场/光标/摄像头/声音 6 大标签零假开关实时调节器，含 5 类图案+3 类流动背景、6 类设备外框、4 种点击特效、美颜滑块与马赛克/聚光灯属性）与 web/studio/recorderIsland.ts（Windows 多源显示/窗口/WASAPI/Mic/摄像头录制岛弹窗）；core=54/web=17 全零 node:* 且全过 stripTypeScriptTypes | 343 pass / 348 total (0 fail, 5 skip E2E)
 
-下一个任务：Stage 10 规划与收官（T16.5 多规格导出面板 + T16.6 Chrome Studio 端到端审核 + Wave F Windows 桌面外壳与安装包 T17.1-T17.4）
+2026-11-23 11:42 | T16.5 | DONE | 完成 web/studio/exportSheet.ts（760px 双栏三阶段交互导出弹窗：MP4/M4A、原始素材/1080p/1440p/4K、30/60fps、H.264/HEVC、3 档画质、ExportPolicy 实时预估体积、进度条/取消/打开目录）与全链路 sourceFps/quality/videoCodec/TimelineMap 对齐（FramePlan/ExportServer/StudioServer/renderer/player/app/scripts/export.ts）；实测 2176x1812@60fps 源导出 --resolution 1080p --fps 30 生成 1920x1598@30fps H.264 MP4（core=54/web=18 全零 node:*） | 344 pass / 349 total (0 fail, 5 skip E2E)
+
+下一个任务：T16.6 Chrome Live Studio E2E 视觉与功能全链路验收 + ARCH-DAG-WaveE + Wave F Windows 桌面外壳与安装包 (T17.1-T17.4)
 
 
 

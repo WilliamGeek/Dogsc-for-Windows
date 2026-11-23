@@ -371,6 +371,7 @@ export class StudioApp {
         project,
         pointerEvents: this.detail.pointerEvents,
         fps,
+        sourceFps: fps,
         sourceWidth: srcW,
         sourceHeight: srcH,
         durationSeconds: outDur,

@@ -3,7 +3,7 @@
  *
  * CLI entrypoint for exporting a recorded DogSC session to a rendered MP4 video
  * using headless Edge WebGL2 rendering + ExportServer + ffmpeg hardware/software encoding.
- * Usage: node scripts/export.ts --dir <recordingDir> [--out <outFile>] [--format <mp4|m4a>] [--max-frames <N>]
+ * Usage: node scripts/export.ts --dir <recordingDir> [--out <outFile>] [--format <mp4|m4a>] [--resolution <original|1080p|1440p|4K>] [--fps <30|60>] [--quality <compact|high|maximum>] [--codec <h264|hevc>] [--max-frames <N>]
  */
 
 import * as fs from 'node:fs/promises';
@@ -24,8 +24,11 @@ import {
   extractAudioSourceSlices,
 } from '../src/render/AudioMixPlan.ts';
 import { makeOutputFrameSchedule } from '../src/core/OutputFrameSchedule.ts';
+import { decodeRecorderProject, encodeRecorderProject } from '../src/core/ProjectMediaModel.ts';
+import { TimelineMap } from '../src/core/TimelineMap.ts';
 import { makePointerEventRecord } from '../src/core/ZoomAnimation.ts';
 import { startExportServer } from '../src/server/ExportServer.ts';
+import { resolveExportSpec } from '../src/server/StudioServer.ts';
 import type { OutputFrameRate } from '../src/core/CaptureConfiguration.ts';
 
 const EDGE_EXE = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
@@ -54,6 +57,10 @@ async function main(): Promise<void> {
       dir: { type: 'string' },
       out: { type: 'string' },
       format: { type: 'string' },
+      resolution: { type: 'string' },
+      fps: { type: 'string' },
+      quality: { type: 'string' },
+      codec: { type: 'string' },
       'max-frames': { type: 'string' },
     },
     strict: false,
@@ -61,9 +68,55 @@ async function main(): Promise<void> {
 
   if (!values.dir || typeof values.dir !== 'string') {
     console.error(
-      '用法: node scripts/export.ts --dir <录制目录> [--out <输出文件>] [--format <mp4|m4a>] [--max-frames <N>]'
+      '用法: node scripts/export.ts --dir <录制目录> [--out <输出文件>] [--format <mp4|m4a>] [--resolution <original|1080p|1440p|4K>] [--fps <30|60>] [--quality <compact|high|maximum>] [--codec <h264|hevc>] [--max-frames <N>]'
     );
     process.exit(1);
+  }
+
+  let cliResolution: '原始素材' | '1080p' | '1440p' | '4K' | undefined;
+  if (typeof values.resolution === 'string') {
+    const rawRes = values.resolution.trim();
+    if (rawRes === 'original' || rawRes === '原始素材') cliResolution = '原始素材';
+    else if (rawRes === '1080p') cliResolution = '1080p';
+    else if (rawRes === '1440p') cliResolution = '1440p';
+    else if (rawRes === '4K' || rawRes === '4k') cliResolution = '4K';
+    else {
+      console.error(`不支持的 --resolution 参数: ${rawRes}（可选 original | 原始素材 | 1080p | 1440p | 4K）`);
+      process.exit(1);
+    }
+  }
+
+  let cliFps: OutputFrameRate | undefined;
+  if (typeof values.fps === 'string') {
+    const parsedFps = Number(values.fps);
+    if (parsedFps === 30 || parsedFps === 60) {
+      cliFps = parsedFps;
+    } else {
+      console.error(`不支持的 --fps 参数: ${values.fps}（可选 30 | 60）`);
+      process.exit(1);
+    }
+  }
+
+  let cliQuality: 'compact' | 'high' | 'maximum' | undefined;
+  if (typeof values.quality === 'string') {
+    const rawQ = values.quality.trim();
+    if (rawQ === 'compact' || rawQ === 'high' || rawQ === 'maximum') {
+      cliQuality = rawQ;
+    } else {
+      console.error(`不支持的 --quality 参数: ${rawQ}（可选 compact | high | maximum）`);
+      process.exit(1);
+    }
+  }
+
+  let cliCodec: 'h264' | 'hevc' | undefined;
+  if (typeof values.codec === 'string') {
+    const rawCodec = values.codec.trim().toLowerCase();
+    if (rawCodec === 'h264' || rawCodec === 'hevc') {
+      cliCodec = rawCodec;
+    } else {
+      console.error(`不支持的 --codec 参数: ${values.codec}（可选 h264 | hevc）`);
+      process.exit(1);
+    }
   }
 
   const formatRaw =
@@ -88,15 +141,38 @@ async function main(): Promise<void> {
   console.log(`[Export] 读取录制目录: ${recDir}`);
 
   const meta = JSON.parse(await fs.readFile(path.join(recDir, 'meta.json'), 'utf8'));
-  const projectJson = JSON.parse(await fs.readFile(path.join(recDir, 'project.json'), 'utf8'));
+  const rawProjectJson = JSON.parse(await fs.readFile(path.join(recDir, 'project.json'), 'utf8'));
+  const projectJson = JSON.parse(encodeRecorderProject(decodeRecorderProject(rawProjectJson)));
 
-  const fps = Number(meta.fps) || 60;
+  const sourceFps = Number(meta.fps) || 60;
   const probed = await probeMediaFile(path.join(recDir, 'screen.mp4'));
-  const width = probed.width > 0 ? probed.width : (Number(meta.width) || 1920);
-  const height = probed.height > 0 ? probed.height : (Number(meta.height) || 1080);
+  const sourceWidth = probed.width > 0 ? probed.width : (Number(meta.width) || 1920);
+  const sourceHeight = probed.height > 0 ? probed.height : (Number(meta.height) || 1080);
 
   const audioTracks = buildSessionAudioTracks({ project: projectJson, recDir, meta });
   const sourceSlices = extractAudioSourceSlices(projectJson, probed.durationSeconds);
+
+  const exportSpec = resolveExportSpec({
+    project: projectJson,
+    meta: {
+      ...meta,
+      width: sourceWidth,
+      height: sourceHeight,
+      fps: sourceFps,
+      durationSeconds: Math.max(probed.durationSeconds, 0.05),
+    },
+    format: values.format === 'm4a' ? 'm4a' : 'mp4',
+    resolution: cliResolution,
+    fps: cliFps,
+    quality: cliQuality,
+    videoCodec: cliCodec,
+    includesAudio: audioTracks.length > 0,
+  });
+  const width = exportSpec.width;
+  const height = exportSpec.height;
+  const fps = exportSpec.fps;
+  const videoCodec = exportSpec.videoCodec;
+  const quality = exportSpec.quality;
 
   if (formatRaw === 'm4a') {
     const m4aArgs = buildAudioOnlyM4aArgs(audioTracks, outFile, {
@@ -146,7 +222,7 @@ async function main(): Promise<void> {
     sourceFrameCount = await extractFrames({
       video: path.join(recDir, 'screen.mp4'),
       outDir: framesDir,
-      fps: Number(meta.fps) || 60,
+      fps: sourceFps,
     });
     console.log(`[Export] 预解码完成，共提取 ${sourceFrameCount} 帧`);
   } else {
@@ -174,7 +250,7 @@ async function main(): Promise<void> {
       camFrameCount = await extractCameraFrames({
         video: cameraMp4Path,
         outDir: camFramesDir,
-        fps,
+        fps: sourceFps,
       });
     }
     if (camFrameCount > 0) {
@@ -183,10 +259,15 @@ async function main(): Promise<void> {
     }
   }
 
-  const trueDuration = Math.min(
+  const rawSourceDuration = Math.min(
     probed.durationSeconds,
-    sourceFrameCount > 0 ? sourceFrameCount / fps : probed.durationSeconds
+    sourceFrameCount > 0 ? sourceFrameCount / sourceFps : probed.durationSeconds
   );
+  const editedTimelineDuration = new TimelineMap(
+    projectJson.timeline.sourceSequence,
+    Math.max(rawSourceDuration, 0.05)
+  ).outputDuration;
+  const trueDuration = Math.max(0.05, editedTimelineDuration);
   const schedule = makeOutputFrameSchedule(trueDuration, fps as OutputFrameRate);
   let frameCount = schedule.frameCount;
   if (Number.isFinite(maxFrames) && maxFrames > 0) {
@@ -206,7 +287,7 @@ async function main(): Promise<void> {
     sourceSlices,
   });
   console.log(
-    `[Export] 输出规格: ${width}x${height} @ ${fps}fps, 共 ${frameCount} 帧, 编码器: ${encoder}` +
+    `[Export] 输出规格: ${width}x${height} @ ${fps}fps (${videoCodec}/${quality}), 共 ${frameCount} 帧, 编码器: ${encoder}` +
       (audioMix ? `, 混音轨: ${audioMix.inputs.length}` : '')
   );
 
@@ -216,9 +297,12 @@ async function main(): Promise<void> {
     cameraFramesDir,
     outFile,
     encoder,
+    videoCodec,
+    quality,
     audioMix: audioMix ?? undefined,
     plan: {
       fps,
+      sourceFps,
       width,
       height,
       frameCount,

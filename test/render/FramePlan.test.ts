@@ -111,3 +111,22 @@ test('T11.2: makeFramePlan satisfies CONTRACTS §4 mapping and idempotency', () 
     assert.ok(f.scene.screen.fittedRect.height > 0);
   }
 });
+
+test('T16.5: makeFramePlan decodes 60fps sourceFrames accurately when exporting at 30fps', () => {
+  const project = makeRecorderProject({ timeline: makeProjectTimeline({}) });
+  const plan = makeFramePlan({
+    project,
+    pointerEvents: [],
+    fps: 30,
+    sourceFps: 60,
+    durationSeconds: 2.0,
+    sourceFrameCount: 120,
+    canvas: { width: 1920, height: 1080 },
+  });
+
+  assert.equal(plan.frameCount, 60);
+  assert.equal(plan.frameAt(0).sourceFrameFile, 1);
+  // At 1.0s output (frame 30 @ 30fps), source frame must be frame 61 (at 60fps), NOT frame 31!
+  assert.equal(plan.frameAt(30).sourceFrameFile, 61);
+  assert.equal(plan.frameAt(59).sourceFrameFile, 119);
+});

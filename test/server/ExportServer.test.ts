@@ -56,6 +56,33 @@ test('T11.6: buildExportFfmpegArgs constructs rawvideo RGBA vflip arguments for 
   assert.ok(x264.includes('libx264'));
   assert.ok(x264.includes('1280x720'));
   assert.ok(x264.includes('vflip'));
+
+  // T16.5: HEVC + quality tiers
+  const hevcMax = buildExportFfmpegArgs({
+    width: 3840,
+    height: 2160,
+    fps: 60,
+    encoder: 'h264_nvenc',
+    videoCodec: 'hevc',
+    quality: 'maximum',
+    outFile: 'out4k.mp4',
+  });
+  assert.ok(hevcMax.includes('hevc_nvenc'));
+  assert.ok(hevcMax.includes('hvc1'));
+  assert.ok(hevcMax.includes('17'));
+
+  const hevcCompactSw = buildExportFfmpegArgs({
+    width: 1920,
+    height: 1080,
+    fps: 30,
+    encoder: 'libx264',
+    videoCodec: 'hevc',
+    quality: 'compact',
+    outFile: 'compact.mp4',
+  });
+  assert.ok(hevcCompactSw.includes('libx265'));
+  assert.ok(hevcCompactSw.includes('hvc1'));
+  assert.ok(hevcCompactSw.includes('25'));
 });
 
 test('T12.4: /api/done rejects incomplete exports with 409 and removes the partial file', async () => {
