@@ -119,7 +119,9 @@
 
 2026-11-23 13:18 | T17.1 | DONE | 新增 src/desktop/DesktopBuilder.ts（零依赖双分辨率 32/64 PNG-in-ICO 图标生成、csc.exe/iexpress 定位与构建参数）、desktop/DogSC.cs（严格 C# 5 单实例 WinForms 托盘 + RegisterHotKey Ctrl+Alt+Shift+S/R/M + --version/--check/--install/--uninstall + StudioServer/Edge --app 无栏工作台）、desktop/assets/dogsc.ico、scripts/build-desktop.ts 与 test/desktop/DesktopShell.test.ts；web/studio/app.ts 支持 ?action=record 直达录制岛；实测编译 dist/DogSC.exe (26,112B) 并通过 --version / --check 全绿；core=54/web=18 全零 node:* | 347 pass / 352 total (0 fail, 5 skip E2E)
 
-下一个任务：T17.2 Windows x64 便携 ZIP + IExpress Setup 安装包与第三方合规声明
+2026-11-23 13:21 | T17.2 | DONE | 新增 scripts/package-windows.ts 与 test/desktop/PackageWindows.test.ts，更新 THIRD_PARTY_NOTICES.md 与 package.json（studio/build:desktop/package:win）；实测打包 109 项干净运行时产物并生成 dist/DogSC.exe (26,112B)、DogSC-Windows-x64-v1.0.0.zip (384,204B)、iexpress Setup DogSC-Setup-x64-v1.0.0.exe (577,536B) 与 dist/SHA256SUMS.txt；完整标注未代码签名状态及 FFmpeg/Node/Edge 非捆绑合规声明；core=54/web=18 全零 node:* | 350 pass / 355 total (0 fail, 5 skip E2E)
+
+下一个任务：T17.3 Win10/11、NVENC/libx264、多屏/混合DPI、4K/60fps 与音视频外设硬件矩阵实测与 T17.4 最终归档发布 v1.0.0-windows
 
 
 

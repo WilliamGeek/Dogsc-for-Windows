@@ -9,7 +9,10 @@
   },
   "scripts": {
     "test": "node --test-concurrency=4 --test \"test/**/*.test.ts\"",
-    "test:one": "node --test"
+    "test:one": "node --test",
+    "studio": "node scripts/studio.ts",
+    "build:desktop": "node scripts/build-desktop.ts",
+    "package:win": "node scripts/package-windows.ts"
   },
   "license": "MIT"
 }
