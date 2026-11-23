@@ -92,6 +92,7 @@ export interface ExportPlanPayload {
   sourceFrameCount: number;
   durationSeconds: number;
   framesBaseUrl: string;
+  cameraFramesBaseUrl?: string | null;
   project: Record<string, unknown>;
   pointerEvents: PointerEventRecord[];
 }
@@ -108,6 +109,7 @@ export function defaultTotalTimeoutMs(frameCount: number): number {
 export interface ExportServerOptions {
   rootDir: string;
   framesDir: string;
+  cameraFramesDir?: string;
   plan: ExportPlanPayload;
   outFile: string;
   encoder?: VideoEncoderKind;
@@ -171,6 +173,7 @@ function sendText(res: ServerResponse, status: number, text: string): void {
 export async function startExportServer(o: ExportServerOptions): Promise<ExportServerHandle> {
   const rootDir = resolve(o.rootDir);
   const framesDir = resolve(o.framesDir);
+  const cameraFramesDir = o.cameraFramesDir ? resolve(o.cameraFramesDir) : null;
   const encoder: VideoEncoderKind = o.encoder ?? 'h264_nvenc';
   const expectedByteLength = o.plan.width * o.plan.height * 4;
 
@@ -438,6 +441,32 @@ export async function startExportServer(o: ExportServerOptions): Promise<ExportS
         }
         if (!existsSync(targetFramePath) || statSync(targetFramePath).isDirectory()) {
           sendText(res, 404, '404 Frame Not Found');
+          return;
+        }
+        const buf = readFileSync(targetFramePath);
+        res.writeHead(200, {
+          'Content-Type': 'image/jpeg',
+          'Content-Length': buf.length,
+          'Cache-Control': 'no-cache',
+        });
+        res.end(buf);
+        return;
+      }
+
+      // 4b. GET /camera_frames/<name>
+      if (decodedPath.startsWith('/camera_frames/')) {
+        if (!cameraFramesDir) {
+          sendText(res, 404, '404 Camera Frames Disabled');
+          return;
+        }
+        const relFrame = decodedPath.slice('/camera_frames/'.length);
+        const targetFramePath = resolveSafeChildPath(cameraFramesDir, relFrame);
+        if (!targetFramePath) {
+          sendText(res, 403, '403 Forbidden: Path traversal prohibited');
+          return;
+        }
+        if (!existsSync(targetFramePath) || statSync(targetFramePath).isDirectory()) {
+          sendText(res, 404, '404 Camera Frame Not Found');
           return;
         }
         const buf = readFileSync(targetFramePath);

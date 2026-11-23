@@ -169,7 +169,7 @@
 - [x] T15.1 支持自选区域（`ddagrab` GPU `offset_x/y + video_size` 偶对齐）与单个窗口（`gdigrab -draw_mouse 0` + 窗口枚举）。
 - [x] T15.2 零依赖系统音频回环采集 `tools/wasapi-loopback.ps1` + `src/capture/SystemAudioRecorder.ts`。
 - [x] T15.3 DirectShow 音视频设备枚举 `src/capture/MediaDevices.ts` 与麦克风录制 `src/capture/MicRecorder.ts`。
-- [ ] T15.4 DirectShow 摄像头同步录制 `src/capture/CameraRecorder.ts` + 同步锚点 + `camera_frames/` 预解码。
+- [x] T15.4 DirectShow 摄像头同步录制 `src/capture/CameraRecorder.ts` + 同步锚点 + `camera_frames/` 预解码。
 - [ ] T15.5 导出多音轨按时间线与音量/静音过滤混音进 MP4，并支持 `--format m4a` 纯音频导出。
 - [ ] T15.6 录制中分段暂停/恢复无损拼接与热键实时打点 `RecordingMarker`。
 

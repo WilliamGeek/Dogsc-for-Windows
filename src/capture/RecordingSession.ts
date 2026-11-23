@@ -26,6 +26,8 @@ import {
 } from '../core/CaptureConfiguration.ts';
 import {
   makeRecorderProject,
+  makeProjectMediaManifest,
+  makeProjectMediaReference,
   encodeRecorderProject,
   type RecorderProject,
 } from '../core/ProjectMediaModel.ts';
@@ -48,6 +50,21 @@ import {
   type CaptureMode,
   type CaptureRegion,
 } from './ScreenRecorder.ts';
+import {
+  startSystemAudioRecording,
+  computeAudioOffsetSeconds,
+  type SystemAudioRecorderHandle,
+} from './SystemAudioRecorder.ts';
+import {
+  startMicRecording,
+  type MicRecorderHandle,
+} from './MicRecorder.ts';
+import {
+  startCameraRecording,
+  computeCameraOffsetSeconds,
+  buildCameraSyncAnchor,
+  type CameraRecorderHandle,
+} from './CameraRecorder.ts';
 import { probeMediaFile } from './MediaProbe.ts';
 import { enumerateDisplays, type DisplayDescriptor } from './DisplayEnumeration.ts';
 
@@ -64,6 +81,12 @@ export interface RecordingMetaInput {
   durationSeconds: number;
   frameCount?: number;
   displayDescriptor?: DisplayDescriptor;
+  systemAudioFile?: string;
+  systemAudioOffsetSeconds?: number;
+  micAudioFile?: string;
+  micAudioOffsetSeconds?: number;
+  cameraFile?: string;
+  cameraOffsetSeconds?: number;
 }
 
 export interface RecordingMeta {
@@ -80,6 +103,12 @@ export interface RecordingMeta {
   durationSeconds: number;
   frameCount?: number;
   displayDescriptor?: DisplayDescriptor;
+  systemAudioFile?: string;
+  systemAudioOffsetSeconds?: number;
+  micAudioFile?: string;
+  micAudioOffsetSeconds?: number;
+  cameraFile?: string;
+  cameraOffsetSeconds?: number;
 }
 
 export interface RecordSessionOptions {
@@ -92,6 +121,14 @@ export interface RecordSessionOptions {
   windowTitle?: string;
   windowBounds?: { x: number; y: number; width: number; height: number };
   baseDir?: string;
+  /** Enable zero-dependency WASAPI loopback system audio capture (`system-audio.wav`). */
+  recordSystemAudio?: boolean;
+  /** DirectShow microphone device name to capture (`mic-audio.wav`). */
+  micDeviceName?: string;
+  /** DirectShow camera device name to capture (`camera.mp4`). */
+  cameraDeviceName?: string;
+  /** Optional requested camera capture resolution. */
+  cameraResolution?: { width: number; height: number };
   /** Injected descriptors for deterministic tests; production enumerates WMI. */
   displays?: DisplayDescriptor[];
 }
@@ -231,6 +268,18 @@ export function buildMeta(i: RecordingMetaInput): RecordingMeta {
     durationSeconds: i.durationSeconds,
     frameCount: i.frameCount,
     displayDescriptor: i.displayDescriptor,
+    ...(i.systemAudioFile !== undefined ? { systemAudioFile: i.systemAudioFile } : {}),
+    ...(i.systemAudioOffsetSeconds !== undefined
+      ? { systemAudioOffsetSeconds: i.systemAudioOffsetSeconds }
+      : {}),
+    ...(i.micAudioFile !== undefined ? { micAudioFile: i.micAudioFile } : {}),
+    ...(i.micAudioOffsetSeconds !== undefined
+      ? { micAudioOffsetSeconds: i.micAudioOffsetSeconds }
+      : {}),
+    ...(i.cameraFile !== undefined ? { cameraFile: i.cameraFile } : {}),
+    ...(i.cameraOffsetSeconds !== undefined
+      ? { cameraOffsetSeconds: i.cameraOffsetSeconds }
+      : {}),
   };
 }
 
@@ -242,7 +291,8 @@ export function buildProjectFromRecording(
   events: readonly PointerEventRecord[],
   offsetSeconds: number,
   durationSeconds: number,
-  captureOptions?: Partial<CaptureConfiguration>
+  captureOptions?: Partial<CaptureConfiguration>,
+  media?: RecorderProject['media']
 ): RecorderProject {
   // Shift event timestamp onto video timeline (CONTRACTS §3)
   const alignedEvents: PointerEventRecord[] = events.map((e) =>
@@ -269,6 +319,7 @@ export function buildProjectFromRecording(
     capture: makeCaptureConfiguration(captureOptions),
     timeline,
     zoomAnimations: zoomClips,
+    media: media ?? null,
   });
 
   return project;
@@ -316,10 +367,19 @@ export async function recordSession(o: RecordSessionOptions): Promise<string> {
   const pointerJsonlPath = resolve(sessionDir, 'pointer.jsonl');
   const metaJsonPath = resolve(sessionDir, 'meta.json');
   const projectJsonPath = resolve(sessionDir, 'project.json');
+  const systemAudioWavPath = resolve(sessionDir, 'system-audio.wav');
+  const micAudioWavPath = resolve(sessionDir, 'mic-audio.wav');
+  const cameraMp4Path = resolve(sessionDir, 'camera.mp4');
 
   let jsonlStream: WriteStream | null = null;
   let hook: ReturnType<typeof startMouseHook> | null = null;
   let recorder: ReturnType<typeof startScreenRecording> | null = null;
+  let sysAudioRecorder: SystemAudioRecorderHandle | null = null;
+  let micRecorder: MicRecorderHandle | null = null;
+  let cameraRecorder: CameraRecorderHandle | null = null;
+  let sysAudioStartUnixMs: number | null = null;
+  let micFirstSampleUnixMs: number | null = null;
+  let cameraFirstFrameUnixMs: number | null = null;
   let isPumping = false;
   let pumpPromise: Promise<void> | null = null;
 
@@ -367,7 +427,7 @@ export async function recordSession(o: RecordSessionOptions): Promise<string> {
       }
     })();
 
-    // Step 2: Start screen recording.
+    // Step 2: Start screen recording and any enabled auxiliary tracks.
     recorder = startScreenRecording({
       outFile: screenMp4Path,
       fps,
@@ -377,6 +437,46 @@ export async function recordSession(o: RecordSessionOptions): Promise<string> {
       region: captureGeometry.alignedRegion,
       windowTitle: captureGeometry.windowTitle,
     });
+
+    if (o.recordSystemAudio) {
+      sysAudioRecorder = startSystemAudioRecording({ outFile: systemAudioWavPath });
+      sysAudioRecorder.ready.then(
+        (hdr) => {
+          sysAudioStartUnixMs = hdr.startUnixMs;
+        },
+        () => {}
+      );
+    }
+
+    if (o.micDeviceName) {
+      micRecorder = startMicRecording({
+        deviceName: o.micDeviceName,
+        outFile: micAudioWavPath,
+      });
+      micRecorder.ready.then(
+        (ts) => {
+          micFirstSampleUnixMs = ts;
+        },
+        () => {}
+      );
+    }
+
+    if (o.cameraDeviceName) {
+      cameraRecorder = startCameraRecording({
+        deviceName: o.cameraDeviceName,
+        outFile: cameraMp4Path,
+        fps,
+        width: o.cameraResolution?.width,
+        height: o.cameraResolution?.height,
+        encoder,
+      });
+      cameraRecorder.ready.then(
+        (ts) => {
+          cameraFirstFrameUnixMs = ts;
+        },
+        () => {}
+      );
+    }
 
     // Step 3: Wait for the first captured frame, then start the requested
     // duration clock. Spawn-to-first-frame latency must not count as content.
@@ -415,8 +515,17 @@ export async function recordSession(o: RecordSessionOptions): Promise<string> {
     await Promise.race([requestedWait, earlyExit]);
     stoppingNormally = true;
 
-    // Step 4: Stop screen recorder and hook.
+    // Step 4: Stop screen recorder, auxiliary recorders, and hook.
     await recorder.stop();
+    if (cameraRecorder) {
+      await cameraRecorder.stop();
+    }
+    if (micRecorder) {
+      await micRecorder.stop();
+    }
+    if (sysAudioRecorder) {
+      await sysAudioRecorder.stop();
+    }
     isPumping = false;
     await hook.stop();
     await pumpPromise;
@@ -425,6 +534,26 @@ export async function recordSession(o: RecordSessionOptions): Promise<string> {
     jsonlStream.end();
     await finished(jsonlStream);
     jsonlStream = null;
+
+    // Compute clock offsets relative to screen's first frame timestamp.
+    const systemAudioOffsetSeconds = sysAudioRecorder
+      ? computeAudioOffsetSeconds(
+          sysAudioStartUnixMs ?? sysAudioRecorder.audioStartUnixMs,
+          firstFrameUnixMs
+        )
+      : undefined;
+    const micAudioOffsetSeconds = micRecorder
+      ? computeAudioOffsetSeconds(
+          micFirstSampleUnixMs ?? micRecorder.micStartUnixMs,
+          firstFrameUnixMs
+        )
+      : undefined;
+    const cameraOffsetSeconds = cameraRecorder
+      ? computeCameraOffsetSeconds(
+          cameraFirstFrameUnixMs ?? cameraRecorder.cameraStartUnixMs,
+          firstFrameUnixMs
+        )
+      : undefined;
 
     // Step 5: Save metadata and project using ffprobe's real media truth.
     // Never fall back to wall-clock duration here: ffmpeg startup/finalization
@@ -443,8 +572,42 @@ export async function recordSession(o: RecordSessionOptions): Promise<string> {
       durationSeconds: probed.durationSeconds,
       frameCount: probed.frameCount,
       displayDescriptor: display,
+      ...(sysAudioRecorder
+        ? { systemAudioFile: 'system-audio.wav', systemAudioOffsetSeconds }
+        : {}),
+      ...(micRecorder ? { micAudioFile: 'mic-audio.wav', micAudioOffsetSeconds } : {}),
+      ...(cameraRecorder ? { cameraFile: 'camera.mp4', cameraOffsetSeconds } : {}),
     });
     writeFileSync(metaJsonPath, JSON.stringify(meta, null, 2), 'utf-8');
+
+    const media = makeProjectMediaManifest({
+      screen: makeProjectMediaReference({ relativePath: 'screen.mp4' }),
+      pointerEvents: makeProjectMediaReference({
+        relativePath: 'pointer.jsonl',
+        startOffset: Math.max(meta.pointerOffsetSeconds, 0),
+        sourceStartTime: Math.max(-meta.pointerOffsetSeconds, 0),
+      }),
+      camera: cameraRecorder
+        ? makeProjectMediaReference({
+            relativePath: 'camera.mp4',
+            startOffset: Math.max(cameraOffsetSeconds ?? 0, 0),
+            sourceStartTime: Math.max(-(cameraOffsetSeconds ?? 0), 0),
+            syncAnchors: [
+              buildCameraSyncAnchor(
+                cameraFirstFrameUnixMs ?? cameraRecorder.cameraStartUnixMs,
+                firstFrameUnixMs
+              ),
+            ],
+          })
+        : null,
+      microphone: micRecorder
+        ? makeProjectMediaReference({
+            relativePath: 'mic-audio.wav',
+            startOffset: Math.max(micAudioOffsetSeconds ?? 0, 0),
+            sourceStartTime: Math.max(-(micAudioOffsetSeconds ?? 0), 0),
+          })
+        : null,
+    });
 
     // Parse pointer events and generate project.
     const fullJsonlText = rawLines.join('\n');
@@ -461,16 +624,17 @@ export async function recordSession(o: RecordSessionOptions): Promise<string> {
         area: captureGeometry.normalizedArea,
         captureFrameRate: fps as OutputFrameRate,
         captureCodec: 'H.264',
-        recordsSystemAudio: false,
-        recordsMicrophone: false,
-        recordsCamera: false,
-      }
+        recordsSystemAudio: Boolean(o.recordSystemAudio),
+        recordsMicrophone: Boolean(o.micDeviceName),
+        recordsCamera: Boolean(o.cameraDeviceName),
+      },
+      media
     );
     writeFileSync(projectJsonPath, encodeRecorderProject(project), 'utf-8');
 
     return sessionDir;
   } catch (err) {
-    // Failure is not a recording. Stop both producers, close the JSONL
+    // Failure is not a recording. Stop all producers, close the JSONL
     // stream, and remove the partial session directory before surfacing the
     // original error.
     isPumping = false;
@@ -486,6 +650,15 @@ export async function recordSession(o: RecordSessionOptions): Promise<string> {
 
     if (recorder) {
       await recorder.stop().catch(() => {});
+    }
+    if (cameraRecorder) {
+      await cameraRecorder.stop().catch(() => {});
+    }
+    if (micRecorder) {
+      await micRecorder.stop().catch(() => {});
+    }
+    if (sysAudioRecorder) {
+      await sysAudioRecorder.stop().catch(() => {});
     }
 
     if (jsonlStream) {
