@@ -23,6 +23,8 @@ import { SpotlightPass } from '../passes/spotlight.ts';
 import { CursorPass } from '../passes/cursor.ts';
 import { CameraPass } from '../passes/camera.ts';
 import { BackdropBlurRelay, StickerPass, computeStickerRenderPlan } from '../passes/stickers.ts';
+import { SubtitlePass } from '../passes/subtitles.ts';
+import { HtmlMotionPass } from '../passes/htmlMotion.ts';
 import { createTexture2D, dispatchSceneLayers } from '../passes/glUtils.ts';
 
 export type PreviewQualityMode = 'low' | 'full';
@@ -38,6 +40,7 @@ export interface StudioPlayerSessionInput {
   sourceFrameCount: number;
   framesBaseUrl: string | null;
   cameraFramesBaseUrl: string | null;
+  assetsBaseUrl?: string | null;
 }
 
 interface FrameCacheEntry {
@@ -57,8 +60,14 @@ export class StudioWebGLPlayer {
   private readonly cameraPass: CameraPass;
   private readonly blurRelay: BackdropBlurRelay;
   private readonly stickerPass: StickerPass;
+  private readonly subtitlePass: SubtitlePass;
+  private readonly htmlMotionPass: HtmlMotionPass;
   private readonly screenTex: WebGLTexture | null;
   private cameraTex: WebGLTexture | null = null;
+  private wallpaperTex: WebGLTexture | null = null;
+  private wallpaperDims = { width: 0, height: 0 };
+  private lastLoadedWallpaperUrl = '';
+  private readonly dmhtmlDocs = new Map<string, string>();
 
   private readonly cache = new Map<string, FrameCacheEntry>();
   private readonly maxCacheEntries = 36;
@@ -115,6 +124,8 @@ export class StudioWebGLPlayer {
     this.cameraPass = new CameraPass(gl);
     this.blurRelay = new BackdropBlurRelay(gl);
     this.stickerPass = new StickerPass(gl);
+    this.subtitlePass = new SubtitlePass(gl);
+    this.htmlMotionPass = new HtmlMotionPass(gl);
     this.screenTex = createTexture2D(gl, true);
 
     this.onWindowResize = () => this.fitStageDisplaySize();
@@ -187,6 +198,9 @@ export class StudioWebGLPlayer {
       this.clearCache();
       this.lastUploadedScreenUrl = '';
       this.lastUploadedCameraUrl = '';
+      this.lastLoadedWallpaperUrl = '';
+      this.wallpaperDims = { width: 0, height: 0 };
+      this.dmhtmlDocs.clear();
     }
 
     this.session = input;
@@ -465,6 +479,55 @@ export class StudioWebGLPlayer {
       }
     }
 
+    let activeWallpaper: { texture: WebGLTexture; width: number; height: number } | null = null;
+    if (scene.background.source.kind === 'projectImage' && this.session.assetsBaseUrl) {
+      const rel = scene.background.source.relativePath.replace(/^\/+/, '');
+      const cleanRel = rel.startsWith('assets/') ? rel.slice('assets/'.length) : rel;
+      const wpUrl = `${this.session.assetsBaseUrl}/${cleanRel}`;
+      if (wpUrl !== this.lastLoadedWallpaperUrl) {
+        const wpBmp = await this.fetchCachedBitmap(wpUrl);
+        if (myToken !== this.renderToken) return scene;
+        if (wpBmp) {
+          const gl = this.gl;
+          if (!this.wallpaperTex) {
+            this.wallpaperTex = createTexture2D(gl, true);
+          }
+          gl.bindTexture(gl.TEXTURE_2D, this.wallpaperTex);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, wpBmp);
+          this.wallpaperDims = { width: wpBmp.width, height: wpBmp.height };
+          this.lastLoadedWallpaperUrl = wpUrl;
+        }
+      }
+      if (
+        this.wallpaperTex &&
+        this.lastLoadedWallpaperUrl === wpUrl &&
+        this.wallpaperDims.width > 0
+      ) {
+        activeWallpaper = {
+          texture: this.wallpaperTex,
+          width: this.wallpaperDims.width,
+          height: this.wallpaperDims.height,
+        };
+      }
+    }
+
+    if (this.session.assetsBaseUrl && scene.animations.length > 0) {
+      for (const anim of scene.animations) {
+        if (!anim.sourcePath || anim.sourcePath.startsWith('builtin://')) continue;
+        if (this.dmhtmlDocs.has(anim.sourcePath)) continue;
+        const cleanRel = anim.sourcePath.replace(/^\/+/, '');
+        const rel = cleanRel.startsWith('assets/') ? cleanRel.slice('assets/'.length) : cleanRel;
+        try {
+          const res = await fetch(`${this.session.assetsBaseUrl}/${rel}`);
+          if (res.ok) {
+            this.dmhtmlDocs.set(anim.sourcePath, await res.text());
+          }
+        } catch {
+          // ignore external doc fetch error
+        }
+      }
+    }
+
     const gl = this.gl;
     const w = this.renderDims.width;
     const h = this.renderDims.height;
@@ -487,7 +550,7 @@ export class StudioWebGLPlayer {
     }
 
     dispatchSceneLayers(scene, {
-      background: () => this.bgPass.render(scene, w, h),
+      background: () => this.bgPass.render(scene, w, h, activeWallpaper),
       screen: () => {
         this.screenPass.renderShadow(scene, w, h);
         this.chromePass.render(scene, w, h);
@@ -504,6 +567,8 @@ export class StudioWebGLPlayer {
         flushBlurIfDue('beforeStickers');
         this.stickerPass.render(scene, w, h);
       },
+      animations: () => this.htmlMotionPass.render(scene, w, h, this.dmhtmlDocs),
+      subtitles: () => this.subtitlePass.render(scene, w, h),
     });
 
     if (blurPending) {

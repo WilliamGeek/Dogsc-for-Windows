@@ -22,9 +22,28 @@ import {
 import { runExportLoop } from './exporter.ts';
 import {
   BackgroundPass,
+  computeAspectFillUvRect,
   resolveBackgroundShaderParams,
   type BackgroundShaderParams,
 } from './passes/background.ts';
+import {
+  SubtitlePass,
+  resolveActiveSubtitleState,
+  resolveSubtitleFontFamily,
+  type SubtitleRenderState,
+} from './passes/subtitles.ts';
+import {
+  HtmlMotionPass,
+  HTML_MOTION_TEMPLATES,
+  buildDmhtmlDocument,
+  parseDmhtmlMeta,
+  computeMotionEnvelope,
+  resolveMotionClipRenderSpec,
+  type HtmlMotionTemplateId,
+  type HtmlMotionTemplateInfo,
+  type DmhtmlMeta,
+  type MotionClipRenderSpec,
+} from './passes/htmlMotion.ts';
 import {
   ScreenPass,
   buildProjectedQuadVertices,
@@ -91,7 +110,15 @@ import {
 } from './passes/glUtils.ts';
 
 export {
+  computeAspectFillUvRect,
   resolveBackgroundShaderParams,
+  resolveActiveSubtitleState,
+  resolveSubtitleFontFamily,
+  HTML_MOTION_TEMPLATES,
+  buildDmhtmlDocument,
+  parseDmhtmlMeta,
+  computeMotionEnvelope,
+  resolveMotionClipRenderSpec,
   buildProjectedQuadVertices,
   computeScreenShaderUniforms,
   buildShadowQuadVertices,
@@ -119,6 +146,11 @@ export {
 };
 export type {
   BackgroundShaderParams,
+  SubtitleRenderState,
+  HtmlMotionTemplateId,
+  HtmlMotionTemplateInfo,
+  DmhtmlMeta,
+  MotionClipRenderSpec,
   ScreenShaderUniforms,
   CursorClickEffectPass,
   NormalizedCursorShape,
@@ -145,6 +177,7 @@ export interface RendererPlanContext {
   durationSeconds: number;
   framesBaseUrl: string | null;
   cameraFramesBaseUrl?: string | null;
+  assetsBaseUrl?: string | null;
   plan: FramePlanResult;
 }
 
@@ -282,6 +315,8 @@ async function loadPlanContext(params: URLSearchParams): Promise<RendererPlanCon
         framesBaseUrl: typeof payload.framesBaseUrl === 'string' ? payload.framesBaseUrl : '/frames',
         cameraFramesBaseUrl:
           typeof payload.cameraFramesBaseUrl === 'string' ? payload.cameraFramesBaseUrl : null,
+        assetsBaseUrl:
+          typeof payload.assetsBaseUrl === 'string' ? payload.assetsBaseUrl : '/assets',
         plan,
       };
     }
@@ -333,6 +368,7 @@ async function loadPlanContext(params: URLSearchParams): Promise<RendererPlanCon
           sourceFrameCount,
           durationSeconds,
           framesBaseUrl: `${normalizedDir}/frames`,
+          assetsBaseUrl: normalizedDir,
           plan,
         };
       }
@@ -461,8 +497,14 @@ async function bootstrapBrowser(): Promise<void> {
   const cameraPass = new CameraPass(gl);
   const blurRelay = new BackdropBlurRelay(gl);
   const stickerPass = new StickerPass(gl);
+  const subtitlePass = new SubtitlePass(gl);
+  const htmlMotionPass = new HtmlMotionPass(gl);
   const screenTex = createTexture2D(gl, true);
   let cameraTex: WebGLTexture | null = null;
+  let wallpaperTex: WebGLTexture | null = null;
+  let wallpaperDims = { width: 0, height: 0 };
+  let lastLoadedWallpaperUrl = '';
+  const dmhtmlDocs = new Map<string, string>();
 
   let cachedFileNum = -1;
   let cachedCameraFileNum = -1;
@@ -516,6 +558,53 @@ async function bootstrapBrowser(): Promise<void> {
       cachedCameraFileNum = sourceFrameFile;
     }
 
+    let activeWallpaper: { texture: WebGLTexture; width: number; height: number } | null = null;
+    if (scene.background.source.kind === 'projectImage' && ctx.assetsBaseUrl) {
+      const rel = scene.background.source.relativePath.replace(/^\/+/, '');
+      const wpUrl = `${ctx.assetsBaseUrl}/${rel}`;
+      if (wpUrl !== lastLoadedWallpaperUrl) {
+        const wpImg = await loadFrameBitmap(wpUrl);
+        if (wpImg) {
+          try {
+            if (!wallpaperTex) {
+              wallpaperTex = createTexture2D(gl, true);
+            }
+            gl.bindTexture(gl.TEXTURE_2D, wallpaperTex);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, wpImg);
+            wallpaperDims = { width: wpImg.width, height: wpImg.height };
+            lastLoadedWallpaperUrl = wpUrl;
+          } finally {
+            if ('close' in wpImg && typeof wpImg.close === 'function') {
+              wpImg.close();
+            }
+          }
+        }
+      }
+      if (wallpaperTex && lastLoadedWallpaperUrl === wpUrl && wallpaperDims.width > 0) {
+        activeWallpaper = {
+          texture: wallpaperTex,
+          width: wallpaperDims.width,
+          height: wallpaperDims.height,
+        };
+      }
+    }
+
+    if (ctx.assetsBaseUrl && scene.animations.length > 0) {
+      for (const anim of scene.animations) {
+        if (!anim.sourcePath || anim.sourcePath.startsWith('builtin://')) continue;
+        if (dmhtmlDocs.has(anim.sourcePath)) continue;
+        const cleanRel = anim.sourcePath.replace(/^\/+/, '');
+        try {
+          const res = await fetch(`${ctx.assetsBaseUrl}/${cleanRel}`);
+          if (res.ok) {
+            dmhtmlDocs.set(anim.sourcePath, await res.text());
+          }
+        } catch {
+          // ignore
+        }
+      }
+    }
+
     const stickerPlan = computeStickerRenderPlan(scene, ctx.width, ctx.height);
     let blurPending = stickerPlan.blurStage !== 'none';
     const flushBlurIfDue = (stage: 'beforeCamera' | 'beforeStickers'): void => {
@@ -534,7 +623,7 @@ async function bootstrapBrowser(): Promise<void> {
     }
 
     dispatchSceneLayers(scene, {
-      background: () => bgPass.render(scene, ctx.width, ctx.height),
+      background: () => bgPass.render(scene, ctx.width, ctx.height, activeWallpaper),
       screen: () => {
         screenPass.renderShadow(scene, ctx.width, ctx.height);
         chromePass.render(scene, ctx.width, ctx.height);
@@ -551,6 +640,8 @@ async function bootstrapBrowser(): Promise<void> {
         flushBlurIfDue('beforeStickers');
         stickerPass.render(scene, ctx.width, ctx.height);
       },
+      animations: () => htmlMotionPass.render(scene, ctx.width, ctx.height, dmhtmlDocs),
+      subtitles: () => subtitlePass.render(scene, ctx.width, ctx.height),
     });
 
     if (blurPending) {

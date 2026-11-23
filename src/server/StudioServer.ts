@@ -464,6 +464,7 @@ export async function startStudioServer(o: StudioServerOptions): Promise<StudioS
         rootDir,
         framesDir,
         cameraFramesDir,
+        sessionDir: recDir,
         outFile: job.outFile,
         encoder,
         videoCodec: job.videoCodec,
@@ -479,6 +480,7 @@ export async function startStudioServer(o: StudioServerOptions): Promise<StudioS
           durationSeconds: trueDuration,
           framesBaseUrl: '/frames',
           cameraFramesBaseUrl,
+          assetsBaseUrl: '/assets',
           project: JSON.parse(encodeRecorderProject(project)),
           pointerEvents,
         },
@@ -735,6 +737,53 @@ export async function startStudioServer(o: StudioServerOptions): Promise<StudioS
         const buf = readFileSync(safePath);
         res.writeHead(200, {
           'Content-Type': 'image/jpeg',
+          'Content-Length': buf.length,
+          'Cache-Control': 'no-cache',
+        });
+        res.end(buf);
+        return;
+      }
+
+      // 6b. Session media assets: /recordings/:id/assets/<relPath>
+      const recAssetMatch = /^\/recordings\/([^/]+)\/assets\/(.+)$/.exec(decodedPath);
+      if (req.method === 'GET' && recAssetMatch) {
+        const [, recId, relAsset] = recAssetMatch;
+        const sessionDir = resolveSessionDir(recId);
+        if (!sessionDir || !existsSync(sessionDir)) {
+          sendText(res, 403, '403 Forbidden: Invalid recording ID');
+          return;
+        }
+        const directSafe = resolveSafeChildPath(sessionDir, relAsset);
+        if (!directSafe) {
+          sendText(res, 403, '403 Forbidden: Path traversal prohibited');
+          return;
+        }
+        const assetsChild = resolveSafeChildPath(sessionDir, `assets/${relAsset}`);
+        const fallbackSafe =
+          assetsChild && existsSync(assetsChild) && !statSync(assetsChild).isDirectory()
+            ? assetsChild
+            : directSafe;
+        if (!existsSync(fallbackSafe) || statSync(fallbackSafe).isDirectory()) {
+          sendText(res, 404, '404 Asset Not Found');
+          return;
+        }
+        const dotIdx = fallbackSafe.lastIndexOf('.');
+        const ext = dotIdx >= 0 ? fallbackSafe.slice(dotIdx).toLowerCase() : '';
+        const assetMimeMap: Record<string, string> = {
+          '.png': 'image/png',
+          '.jpg': 'image/jpeg',
+          '.jpeg': 'image/jpeg',
+          '.webp': 'image/webp',
+          '.svg': 'image/svg+xml',
+          '.dmhtml': 'text/html; charset=utf-8',
+          '.wav': 'audio/wav',
+          '.mp3': 'audio/mpeg',
+          '.m4a': 'audio/mp4',
+          '.mp4': 'video/mp4',
+        };
+        const buf = readFileSync(fallbackSafe);
+        res.writeHead(200, {
+          'Content-Type': assetMimeMap[ext] ?? 'application/octet-stream',
           'Content-Length': buf.length,
           'Cache-Control': 'no-cache',
         });

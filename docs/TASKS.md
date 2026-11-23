@@ -189,7 +189,7 @@
 
 ## Wave G: v0.2.0 桌面应用层全量对齐（T18.1–T18.7）
 - [x] T18.1 AI 智能编辑助手、Windows DPAPI 安全存储、本地 Agent Bridge（Bearer 鉴权 + 单轮快照撤销 + Studio UI 可折叠左抽屉）。
-- [ ] T18.2 WebGL2 双语字幕渲染（5 种入场动效）、HTML/SVG 动效贴纸（`.dmhtml`）与图片壁纸纹理加载。
+- [x] T18.2 WebGL2 双语字幕渲染（5 种入场动效）、HTML/SVG 动效贴纸（`.dmhtml`）与图片壁纸纹理加载。
 - [ ] T18.3 内置合成音效（`SoundSynth`）、人声闪避混音（BGM Ducking）、音轨波形与左栏素材库面板。
 - [ ] T18.4 双语字幕、停顿静音剪辑与智能剪辑右侧/左栏交互面板。
 - [ ] T18.5 HTML 动效模板编辑器与画布交互式裁剪（Crop Overlay）手柄。

@@ -131,6 +131,7 @@
 | 任务 | 状态 | 核心交付与验证结果 |
 | :--- | :--- | :--- |
 | T18.1 | DONE | 新增 `AiSecrets.ts`（Windows DPAPI 无 Bypass 加解密 + 本机 AI CLI 发现）、`AgentBridge.ts`（32-hex Bearer 鉴权 + 确定性规则/OpenAI/Gemini 工具执行 + ProjectValidator + 单轮快照回撤）、`StudioServer` AI 路由及 Studio 左栏 `AI 助手`（`libraryShell.ts` + `aiPanel.ts`，`Ctrl+K` / `Ctrl+Alt+L`）；边界检查与 359 测试通过（`354 pass / 0 fail / 5 skip`）。 |
+| T18.2 | DONE | 新增 WebGL2 `SubtitlePass`（5 种入场动画与双语胶囊排版）、`HtmlMotionPass`（5 种 `.dmhtml` 动效模板与解析器）、`BackgroundPass` AspectFill 图片壁纸与模糊支持，并双端接入 `player.ts` / `renderer.ts` 与 `ExportServer` / `StudioServer` 安全 `/assets/` 路由；边界检查与 364 测试全绿（`359 pass / 0 fail / 5 skip`）。 |
 
 
 

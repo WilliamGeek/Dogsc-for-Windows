@@ -141,18 +141,39 @@ export function resolveBackgroundShaderParams(
     }
   }
 
-  return {
-    topLeftColor: [0.07, 0.09, 0.14],
-    bottomRightColor: [0.15, 0.19, 0.28],
-    accentColor: [0.28, 0.38, 0.62],
-    gridColor: [0.6, 0.7, 0.9],
-    patternMode: 1,
-    patternScale: safeScale,
-    patternOpacity: safeOpacity * 0.6,
-    blurRadius,
-    time: safeTime,
-  };
-}
+    return {
+      topLeftColor: [0.07, 0.09, 0.14],
+      bottomRightColor: [0.15, 0.19, 0.28],
+      accentColor: [0.28, 0.38, 0.62],
+      gridColor: [0.6, 0.7, 0.9],
+      patternMode:
+        bg.source.kind === 'projectImage' || bg.source.kind === 'systemImage' ? 0 : 1,
+      patternScale: safeScale,
+      patternOpacity: safeOpacity * 0.6,
+      blurRadius,
+      time: safeTime,
+    };
+  }
+
+  export function computeAspectFillUvRect(
+    imageWidth: number,
+    imageHeight: number,
+    canvasWidth: number,
+    canvasHeight: number
+  ): [number, number, number, number] {
+    const iw = Math.max(1, Number.isFinite(imageWidth) ? imageWidth : 1920);
+    const ih = Math.max(1, Number.isFinite(imageHeight) ? imageHeight : 1080);
+    const cw = Math.max(1, Number.isFinite(canvasWidth) ? canvasWidth : 1920);
+    const ch = Math.max(1, Number.isFinite(canvasHeight) ? canvasHeight : 1080);
+    const imgAspect = iw / ih;
+    const canvasAspect = cw / ch;
+    if (imgAspect > canvasAspect) {
+      const uScale = canvasAspect / imgAspect;
+      return [(1 - uScale) * 0.5, 0, uScale, 1];
+    }
+    const vScale = imgAspect / canvasAspect;
+    return [0, (1 - vScale) * 0.5, 1, vScale];
+  }
 
 export const BG_VERTEX_SHADER = `#version 300 es
 layout(location = 0) in vec2 a_pos;
@@ -176,10 +197,35 @@ uniform float u_patternScale;
 uniform float u_patternOpacity;
 uniform float u_blurRadius;
 uniform float u_time;
+uniform int u_hasWallpaperTex;
+uniform sampler2D u_wallpaperTex;
+uniform vec4 u_wallpaperUvRect;
 out vec4 fragColor;
 
 void main() {
   vec2 uv = vec2(v_uv.x, 1.0 - v_uv.y);
+  if (u_hasWallpaperTex == 1) {
+    vec2 baseWp = u_wallpaperUvRect.xy + uv * u_wallpaperUvRect.zw;
+    vec3 imgCol;
+    if (u_blurRadius > 0.5) {
+      vec2 stepUv = (min(u_blurRadius, 24.0) * 0.45) / max(u_resolution, vec2(1.0));
+      vec3 acc = texture(u_wallpaperTex, clamp(baseWp, 0.0, 1.0)).rgb;
+      acc += texture(u_wallpaperTex, clamp(baseWp + vec2(stepUv.x, 0.0), 0.0, 1.0)).rgb;
+      acc += texture(u_wallpaperTex, clamp(baseWp - vec2(stepUv.x, 0.0), 0.0, 1.0)).rgb;
+      acc += texture(u_wallpaperTex, clamp(baseWp + vec2(0.0, stepUv.y), 0.0, 1.0)).rgb;
+      acc += texture(u_wallpaperTex, clamp(baseWp - vec2(0.0, stepUv.y), 0.0, 1.0)).rgb;
+      acc += texture(u_wallpaperTex, clamp(baseWp + stepUv, 0.0, 1.0)).rgb;
+      acc += texture(u_wallpaperTex, clamp(baseWp - stepUv, 0.0, 1.0)).rgb;
+      acc += texture(u_wallpaperTex, clamp(baseWp + vec2(stepUv.x, -stepUv.y), 0.0, 1.0)).rgb;
+      acc += texture(u_wallpaperTex, clamp(baseWp + vec2(-stepUv.x, stepUv.y), 0.0, 1.0)).rgb;
+      imgCol = acc / 9.0;
+    } else {
+      imgCol = texture(u_wallpaperTex, clamp(baseWp, 0.0, 1.0)).rgb;
+    }
+    fragColor = vec4(imgCol, 1.0);
+    return;
+  }
+
   float diag = clamp(uv.x * 0.55 + uv.y * 0.45, 0.0, 1.0);
   vec3 base = mix(u_topLeftColor, u_bottomRightColor, diag);
 
@@ -236,6 +282,9 @@ export class BackgroundPass {
   private readonly uPatternOpacity: WebGLUniformLocation | null;
   private readonly uBlurRadius: WebGLUniformLocation | null;
   private readonly uTime: WebGLUniformLocation | null;
+  private readonly uHasWallpaperTex: WebGLUniformLocation | null;
+  private readonly uWallpaperTex: WebGLUniformLocation | null;
+  private readonly uWallpaperUvRect: WebGLUniformLocation | null;
 
   constructor(gl: WebGL2RenderingContext) {
     this.gl = gl;
@@ -250,6 +299,9 @@ export class BackgroundPass {
     this.uPatternOpacity = gl.getUniformLocation(this.program, 'u_patternOpacity');
     this.uBlurRadius = gl.getUniformLocation(this.program, 'u_blurRadius');
     this.uTime = gl.getUniformLocation(this.program, 'u_time');
+    this.uHasWallpaperTex = gl.getUniformLocation(this.program, 'u_hasWallpaperTex');
+    this.uWallpaperTex = gl.getUniformLocation(this.program, 'u_wallpaperTex');
+    this.uWallpaperUvRect = gl.getUniformLocation(this.program, 'u_wallpaperUvRect');
 
     const vao = gl.createVertexArray();
     const vbo = gl.createBuffer();
@@ -266,7 +318,12 @@ export class BackgroundPass {
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 2 * 4, 0);
   }
 
-  render(scene: FrameScene, canvasWidth: number, canvasHeight: number): void {
+  render(
+    scene: FrameScene,
+    canvasWidth: number,
+    canvasHeight: number,
+    wallpaper?: { texture: WebGLTexture; width: number; height: number } | null
+  ): void {
     const gl = this.gl;
     const { width, height } = safeCanvasDimensions(canvasWidth, canvasHeight);
     const params = resolveBackgroundShaderParams(scene.background, scene.time);
@@ -283,6 +340,17 @@ export class BackgroundPass {
     gl.uniform1f(this.uPatternOpacity, params.patternOpacity);
     gl.uniform1f(this.uBlurRadius, params.blurRadius);
     gl.uniform1f(this.uTime, params.time);
+    if (wallpaper && wallpaper.texture) {
+      const uvRect = computeAspectFillUvRect(wallpaper.width, wallpaper.height, width, height);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, wallpaper.texture);
+      gl.uniform1i(this.uWallpaperTex, 0);
+      gl.uniform1i(this.uHasWallpaperTex, 1);
+      gl.uniform4f(this.uWallpaperUvRect, uvRect[0], uvRect[1], uvRect[2], uvRect[3]);
+    } else {
+      gl.uniform1i(this.uHasWallpaperTex, 0);
+      gl.uniform4f(this.uWallpaperUvRect, 0, 0, 1, 1);
+    }
     gl.drawArrays(gl.TRIANGLES, 0, 6);
   }
 

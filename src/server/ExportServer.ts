@@ -170,6 +170,7 @@ export interface ExportPlanPayload {
   durationSeconds: number;
   framesBaseUrl: string;
   cameraFramesBaseUrl?: string | null;
+  assetsBaseUrl?: string | null;
   project: Record<string, unknown>;
   pointerEvents: PointerEventRecord[];
 }
@@ -187,6 +188,7 @@ export interface ExportServerOptions {
   rootDir: string;
   framesDir: string;
   cameraFramesDir?: string;
+  sessionDir?: string;
   plan: ExportPlanPayload;
   outFile: string;
   encoder?: VideoEncoderKind;
@@ -224,7 +226,12 @@ const MIME_MAP: Record<string, string> = {
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
   '.png': 'image/png',
+  '.webp': 'image/webp',
   '.svg': 'image/svg+xml',
+  '.dmhtml': 'text/html; charset=utf-8',
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.m4a': 'audio/mp4',
   '.ico': 'image/x-icon',
 };
 
@@ -407,6 +414,12 @@ export async function startExportServer(o: ExportServerOptions): Promise<ExportS
   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     try {
       const reqUrl = req.url ?? '/';
+      const rawPathOnly = reqUrl.split('?')[0] ?? '/';
+      const rawDecoded = decodeURIComponent(rawPathOnly);
+      if (rawDecoded.split(/[\\/]/).includes('..')) {
+        sendText(res, 403, '403 Forbidden: Path traversal prohibited');
+        return;
+      }
       const parsed = new URL(reqUrl, 'http://127.0.0.1');
       const decodedPath = decodeURIComponent(parsed.pathname);
 
@@ -563,6 +576,38 @@ export async function startExportServer(o: ExportServerOptions): Promise<ExportS
         const buf = readFileSync(targetFramePath);
         res.writeHead(200, {
           'Content-Type': 'image/jpeg',
+          'Content-Length': buf.length,
+          'Cache-Control': 'no-cache',
+        });
+        res.end(buf);
+        return;
+      }
+
+      // 4c. GET /assets/<relPath>
+      if (decodedPath.startsWith('/assets/')) {
+        if (!o.sessionDir) {
+          sendText(res, 404, '404 Session Assets Disabled');
+          return;
+        }
+        const relAsset = decodedPath.slice('/assets/'.length);
+        const sessionRoot = resolve(o.sessionDir);
+        const directSafe = resolveSafeChildPath(sessionRoot, relAsset);
+        if (!directSafe) {
+          sendText(res, 403, '403 Forbidden: Path traversal prohibited');
+          return;
+        }
+        const safeAsset =
+          existsSync(directSafe) && !statSync(directSafe).isDirectory()
+            ? directSafe
+            : resolveSafeChildPath(sessionRoot, `assets/${relAsset}`);
+        if (!safeAsset || !existsSync(safeAsset) || statSync(safeAsset).isDirectory()) {
+          sendText(res, 404, '404 Asset Not Found');
+          return;
+        }
+        const buf = readFileSync(safeAsset);
+        const mime = MIME_MAP[extname(safeAsset).toLowerCase()] ?? 'application/octet-stream';
+        res.writeHead(200, {
+          'Content-Type': mime,
           'Content-Length': buf.length,
           'Cache-Control': 'no-cache',
         });

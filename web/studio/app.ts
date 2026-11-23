@@ -385,6 +385,7 @@ export class StudioApp {
           this.detail.cameraFrameCount > 0
             ? `/recordings/${encodeURIComponent(this.detail.id)}/camera_frames`
             : null,
+        assetsBaseUrl: `/recordings/${encodeURIComponent(this.detail.id)}/assets`,
       },
       true
     );
@@ -504,6 +505,7 @@ export class StudioApp {
           this.detail.cameraFrameCount > 0
             ? `/recordings/${encodeURIComponent(id)}/camera_frames`
             : null,
+        assetsBaseUrl: `/recordings/${encodeURIComponent(id)}/assets`,
       },
       false
     );
