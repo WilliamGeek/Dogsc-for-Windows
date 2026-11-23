@@ -85,10 +85,15 @@ function escapeHtml(text: string): string {
 }
 
 function formatClock(sec: number): string {
-  const s = Math.max(0, Math.floor(sec));
+  const s = Math.max(0, sec);
   const m = Math.floor(s / 60);
-  const r = s % 60;
-  return `${m}:${String(r).padStart(2, '0')}`;
+  const r = s - m * 60;
+  const whole = Math.floor(r);
+  const tenth = Math.round((r - whole) * 10);
+  if (tenth > 0 && tenth < 10) {
+    return `${m}:${String(whole).padStart(2, '0')}.${tenth}`;
+  }
+  return `${m}:${String(Math.round(r)).padStart(2, '0')}`;
 }
 
 function providerLabel(settings: AiSettingsPublic | null): string {
@@ -212,10 +217,10 @@ export class AiAssistantPanel {
 
     const setupHtml = this.setupOpen
       ? `
-      <div class="ai-setup-card">
+      <form class="ai-setup-card" autocomplete="off" onsubmit="return false;">
         <div class="insp-row">
-          <span class="insp-label">推理引擎</span>
-          <select id="ai-provider-select" class="chrome-select ai-select">
+          <label class="insp-label" for="ai-provider-select">推理引擎</label>
+          <select id="ai-provider-select" name="aiProvider" class="chrome-select ai-select">
             <option value="local" ${effectiveProvider === 'local' ? 'selected' : ''}>本地离线规则引擎</option>
             <option value="openai" ${effectiveProvider === 'openai' ? 'selected' : ''}>OpenAI 兼容接口</option>
             <option value="gemini" ${effectiveProvider === 'gemini' ? 'selected' : ''}>Google Gemini API</option>
@@ -228,7 +233,7 @@ export class AiAssistantPanel {
             ? `
         <div class="ai-field-col">
           <label class="ai-field-label" for="ai-base-url">API Base URL</label>
-          <input id="ai-base-url" class="ai-input" type="text" value="${escapeHtml(
+          <input id="ai-base-url" name="aiBaseUrl" class="ai-input" type="text" autocomplete="off" value="${escapeHtml(
             settings?.baseUrl ??
               (effectiveProvider === 'gemini'
                 ? 'https://generativelanguage.googleapis.com/v1beta'
@@ -237,16 +242,16 @@ export class AiAssistantPanel {
         </div>
         <div class="ai-field-col">
           <label class="ai-field-label" for="ai-model-name">模型名称</label>
-          <input id="ai-model-name" class="ai-input" type="text" value="${escapeHtml(
+          <input id="ai-model-name" name="aiModel" class="ai-input" type="text" autocomplete="off" value="${escapeHtml(
             settings?.model ?? (effectiveProvider === 'gemini' ? 'gemini-2.5-flash' : 'gpt-4o-mini')
           )}" />
         </div>
         <div class="ai-field-col">
-          <label class="ai-field-label" for="ai-api-key">API Key（Windows DPAPI 用户态加密存储）</label>
-          <input id="ai-api-key" class="ai-input" type="password" autocomplete="off" placeholder="${escapeHtml(
+          <label class="ai-field-label" for="ai-api-key">API Key（Windows DPAPI 加密）</label>
+          <input id="ai-api-key" name="aiApiKey" class="ai-input" type="password" autocomplete="new-password" placeholder="${escapeHtml(
             settings?.hasApiKey
-              ? `已加密保存 (${settings.maskedKeyHint ?? '••••'})，留空保持不变`
-              : '输入 API Key，仅本机 Windows 用户可解密'
+              ? `已保存 (${settings.maskedKeyHint ?? '••••'})，留空不变`
+              : '输入密钥，DPAPI 用户态加密存储'
           )}" />
         </div>
         `
@@ -258,7 +263,7 @@ export class AiAssistantPanel {
             ? `
         <div class="ai-field-col">
           <label class="ai-field-label" for="ai-cli-select">选择本机 CLI 代理</label>
-          <select id="ai-cli-select" class="chrome-select ai-select">
+          <select id="ai-cli-select" name="aiCliTool" class="chrome-select ai-select">
             <option value="">自动（Agent Bridge 被动接管）</option>
             ${clis
               .map(
@@ -275,10 +280,10 @@ export class AiAssistantPanel {
         }
 
         <div class="ai-setup-actions">
-          <button id="ai-save-settings-btn" class="chrome-btn subtle-well">保存配置</button>
+          <button type="button" id="ai-save-settings-btn" class="chrome-btn subtle-well">保存配置</button>
           ${
             settings?.hasApiKey
-              ? `<button id="ai-clear-key-btn" class="chrome-btn">清除密钥</button>`
+              ? `<button type="button" id="ai-clear-key-btn" class="chrome-btn">清除密钥</button>`
               : ''
           }
         </div>
@@ -290,9 +295,9 @@ export class AiAssistantPanel {
           </div>
           <div class="ai-bridge-meta">Token: <code>${escapeHtml(tokenHint)}</code></div>
           ${cliMarkup ? `<div class="ai-cli-row">${cliMarkup}</div>` : ''}
-          <button id="ai-copy-bridge-btn" class="chrome-btn subtle-well" style="width:100%">复制外部 Agent 接入指令</button>
+          <button type="button" id="ai-copy-bridge-btn" class="chrome-btn subtle-well" style="width:100%">复制外部 Agent 接入指令</button>
         </div>
-      </div>`
+      </form>`
       : '';
 
     const streamHtml =
@@ -638,3 +643,4 @@ export class AiAssistantPanel {
     }
   }
 }
+

@@ -4,8 +4,8 @@
  * Builds Windows x64 distribution artifacts under `dist/`:
  *   1. `dist/DogSC.exe` (via `buildDesktopBinary`)
  *   2. `dist/DogSC-Windows-x64/` portable directory
- *   3. `dist/DogSC-Windows-x64-v1.0.0.zip` portable archive
- *   4. `dist/DogSC-Setup-x64-v1.0.0.exe` self-extracting setup installer (built with `iexpress.exe`)
+ *   3. `dist/DogSC-Windows-x64-v1.1.0.zip` portable archive
+ *   4. `dist/DogSC-Setup-x64-v1.1.0.exe` self-extracting setup installer (built with `iexpress.exe`)
  *   5. `dist/SHA256SUMS.txt` cryptographic integrity manifest
  */
 
@@ -54,11 +54,11 @@ async function copyPackagedPayload(rootDir: string, stageDir: string, exePath: s
   await fs.writeFile(
     path.join(stageDir, 'SIGNING_AND_DISTRIBUTION.txt'),
     [
-      'DogSC Windows v1.0.0 (x64)',
+      'DogSC Windows v1.1.0 (x64)',
       '============================',
       '',
       '1. Signing Status: UNSIGNED BUILD',
-      '   DogSC.exe and DogSC-Setup-x64-v1.0.0.exe do NOT carry an Authenticode code-signing certificate.',
+      '   DogSC.exe and DogSC-Setup-x64-v1.1.0.exe do NOT carry an Authenticode code-signing certificate.',
       '   Verify binary integrity against SHA256SUMS.txt before execution:',
       '     Get-FileHash -Algorithm SHA256 <file>',
       '',
@@ -94,8 +94,8 @@ export async function packageWindowsRelease(options?: {
   const rootDir = options?.rootDir ?? path.resolve(import.meta.dirname, '..');
   const distDir = path.join(rootDir, 'dist');
   const portableDir = path.join(distDir, 'DogSC-Windows-x64');
-  const zipPath = path.join(distDir, 'DogSC-Windows-x64-v1.0.0.zip');
-  const setupExePath = path.join(distDir, 'DogSC-Setup-x64-v1.0.0.exe');
+  const zipPath = path.join(distDir, 'DogSC-Windows-x64-v1.1.0.zip');
+  const setupExePath = path.join(distDir, 'DogSC-Setup-x64-v1.1.0.exe');
   const shaSumsPath = path.join(distDir, 'SHA256SUMS.txt');
 
   const built = await buildDesktopBinary({ rootDir });
@@ -144,7 +144,7 @@ export async function packageWindowsRelease(options?: {
       sourceDir: iexpStage,
       files: ['DogSC.exe', 'payload.zip', 'setup-bootstrap.cmd'],
       appLaunched: 'cmd.exe /c setup-bootstrap.cmd',
-      friendlyName: 'DogSC Studio Windows x64 v1.0.0 Setup',
+      friendlyName: 'DogSC Studio Windows x64 v1.1.0 Setup',
     });
     await fs.writeFile(sedPath, sedContent, 'ascii');
     await fs.rm(setupExePath, { force: true });
@@ -164,8 +164,8 @@ export async function packageWindowsRelease(options?: {
 
   const targets = [
     { file: 'DogSC.exe', abs: built.exePath },
-    { file: 'DogSC-Windows-x64-v1.0.0.zip', abs: zipPath },
-    { file: 'DogSC-Setup-x64-v1.0.0.exe', abs: setupExePath },
+    { file: 'DogSC-Windows-x64-v1.1.0.zip', abs: zipPath },
+    { file: 'DogSC-Setup-x64-v1.1.0.exe', abs: setupExePath },
   ];
 
   const checksums: Array<{ file: string; sha256: string; bytes: number }> = [];
@@ -211,3 +211,4 @@ if (isMain) {
       process.exit(1);
     });
 }
+

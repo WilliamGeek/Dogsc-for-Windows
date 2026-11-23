@@ -136,6 +136,9 @@
 | T18.4 | DONE | 新增 Studio 左栏 `字幕` 面板（`subtitlesPanel.ts`）：支持 5 种入场动画/4 种字体/字号边距底色/双语开关、行内编辑与 SRT 导入导出、基于波峰检测的 `detectSilentIntervals` 静音识别与 `removeSilentIntervalsFromProject` 一键停顿波纹删剪；边界检查与 370 测试全绿（`365 pass / 0 fail / 5 skip`）。 |
 | T18.5 | DONE | 新增 Studio 左栏 `动效` 模板编辑器（`motionPanel.ts`，5 套内置模板一键插入与 `.dmhtml` 导出）与画布 8 手柄交互式裁剪浮层（`cropOverlay.ts`，`applyCropDragDelta` 限幅与 `Ctrl+Z` 合并）；边界检查与 372 测试全绿（`367 pass / 0 fail / 5 skip`）。 |
 | T18.6 | DONE | 升级时间线为 macOS 对齐 7 轨波形面板（`timeline.ts` + `state.ts` 扩展 6 个字幕/动效/音轨校验器 + 实时 PCM 波形 Canvas）及 `?` 快捷键速查弹窗（`app.ts`）；边界检查与 373 测试全绿（`368 pass / 0 fail / 5 skip`）。 |
+| T18.7 | DONE | Chrome 1440×900 多轮 E2E 交互与布局零裁切验证通过（AI/素材/字幕/动效 4 合 1 左抽屉、7 轨波形时间线、8 手柄画布裁剪、快捷键弹窗、浅/深双主题，零 JS 异常）；更新 `ARCHITECTURE_DAG.json` + `WORKFLOW.html/.md`（28 节点 / 41 路径 / 0 警告）；构建并发布 `DogSC.exe` / `v1.1.0-windows` 安装包与 SHA256SUMS，桌面快捷方式指向最新 `v1.1.0`。 |
+
+Wave G 总结：Windows 版已完成与上游 macOS `v0.2.0` 的桌面应用层与编辑/渲染全栈对齐（54 核心模块 + 26 前端/服务端新增能力）；仅 `T11.7` 按决策 D4 留待用户交互桌面实录终审。
 
 
 

@@ -23,14 +23,14 @@ using Microsoft.Win32;
 
 [assembly: AssemblyTitle("DogSC Windows")]
 [assembly: AssemblyDescription("DogSC Screen Studio Windows Shell")]
-[assembly: AssemblyVersion("1.0.0.0")]
-[assembly: AssemblyFileVersion("1.0.0.0")]
+[assembly: AssemblyVersion("1.1.0.0")]
+[assembly: AssemblyFileVersion("1.1.0.0")]
 
 namespace DogSCDesktop
 {
     internal static class Program
     {
-        private const string AppVersion = "1.0.0";
+        private const string AppVersion = "1.1.0";
         private const string SingleInstanceMutexName = "Local\\DogSC_Windows_Studio_SingleInstance";
         private const string UninstallRegPath = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\DogSC";
         private const string RunRegPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
