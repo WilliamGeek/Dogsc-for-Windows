@@ -1507,3 +1507,67 @@ button {
   font-size: 11px;
   flex-shrink: 0;
 }
+
+/* Subtitles & Silence Pause-Cut Panel */
+.sub-panel-root {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sub-actions-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.sub-import-lbl {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.sub-checks-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.pause-chips-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.pause-chip {
+  font-size: 10.5px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--panel-surface);
+  border: 1px solid var(--hairline);
+  color: var(--ink-secondary);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+
+.pause-chip:hover {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+.sub-cue-card {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  background: var(--panel-surface);
+  border: 1px solid var(--hairline);
+}
+
+.sub-cue-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}

@@ -133,6 +133,7 @@
 | T18.1 | DONE | 新增 `AiSecrets.ts`（Windows DPAPI 无 Bypass 加解密 + 本机 AI CLI 发现）、`AgentBridge.ts`（32-hex Bearer 鉴权 + 确定性规则/OpenAI/Gemini 工具执行 + ProjectValidator + 单轮快照回撤）、`StudioServer` AI 路由及 Studio 左栏 `AI 助手`（`libraryShell.ts` + `aiPanel.ts`，`Ctrl+K` / `Ctrl+Alt+L`）；边界检查与 359 测试通过（`354 pass / 0 fail / 5 skip`）。 |
 | T18.2 | DONE | 新增 WebGL2 `SubtitlePass`（5 种入场动画与双语胶囊排版）、`HtmlMotionPass`（5 种 `.dmhtml` 动效模板与解析器）、`BackgroundPass` AspectFill 图片壁纸与模糊支持，并双端接入 `player.ts` / `renderer.ts` 与 `ExportServer` / `StudioServer` 安全 `/assets/` 路由；边界检查与 364 测试全绿（`359 pass / 0 fail / 5 skip`）。 |
 | T18.3 | DONE | 新增 `SoundSynth.ts`（5 种 48kHz 立体声内置音效 WAV 合成）、`AudioMixPlan.ts`（字幕区间语音提取与 FFmpeg `:eval=frame` 动态闪避滤镜，已真机 `ffmpeg` 编码 `.m4a` 验证）、`MediaAssetsService.ts`（素材上传、PCM 波形峰值缓存 `.waveform.json`、`RecordingProjectImport` 多录制合并）与 Studio 左栏 `素材库` 面板（`assetsPanel.ts`）；边界检查与 367 测试全绿（`362 pass / 0 fail / 5 skip`）。 |
+| T18.4 | DONE | 新增 Studio 左栏 `字幕` 面板（`subtitlesPanel.ts`）：支持 5 种入场动画/4 种字体/字号边距底色/双语开关、行内编辑与 SRT 导入导出、基于波峰检测的 `detectSilentIntervals` 静音识别与 `removeSilentIntervalsFromProject` 一键停顿波纹删剪；边界检查与 370 测试全绿（`365 pass / 0 fail / 5 skip`）。 |
 
 
 
