@@ -778,6 +778,30 @@ export class StudioApp {
     document.getElementById('modal-close-ok')?.addEventListener('click', () => bd.classList.remove('open'));
   }
 
+  private openShortcutsModal(): void {
+    this.openFallbackModal(
+      '键盘快捷键速查',
+      `
+      <div class="shortcuts-grid">
+        <div class="shortcuts-col">
+          <div class="shortcuts-cat">播放与检视</div>
+          <div class="sc-row"><span>播放 / 暂停</span><kbd>Space</kbd></div>
+          <div class="sc-row"><span>上一帧 / 下一帧</span><kbd>←</kbd> <kbd>→</kbd></div>
+          <div class="sc-row"><span>撤销 / 重做</span><kbd>Ctrl+Z</kbd> <kbd>Ctrl+Y</kbd></div>
+          <div class="sc-row"><span>快捷键速查表</span><kbd>?</kbd></div>
+        </div>
+        <div class="shortcuts-col">
+          <div class="shortcuts-cat">剪辑与 AI 助手</div>
+          <div class="sc-row"><span>选择 / 剪刀分割工具</span><kbd>A</kbd> <kbd>B</kbd></div>
+          <div class="sc-row"><span>从播放头拆分主片段</span><kbd>S</kbd></div>
+          <div class="sc-row"><span>删除选中片段 / 字幕 / 动效</span><kbd>Del</kbd></div>
+          <div class="sc-row"><span>聚焦 AI 编辑对话</span><kbd>Ctrl+K</kbd></div>
+          <div class="sc-row"><span>展开 / 收起左侧面板</span><kbd>Ctrl+Alt+L</kbd></div>
+        </div>
+      </div>`
+    );
+  }
+
   private bindTransportControls(): void {
     document.getElementById('btn-play-toggle')?.addEventListener('click', () => this.player.togglePlay());
     document.getElementById('btn-step-back')?.addEventListener('click', () => this.player.stepFrame(-1));
@@ -816,6 +840,20 @@ export class StudioApp {
     });
     window.addEventListener('dogsc:toggle-crop', () => {
       this.toggleCropMode();
+    });
+    window.addEventListener('dogsc:open-library-tab', (ev) => {
+      const tab = (ev as CustomEvent).detail;
+      if (tab === 'ai' || tab === 'assets' || tab === 'subtitles' || tab === 'motion') {
+        const host = this.buildLibraryHost();
+        if (this.libraryShellInstance) {
+          this.libraryShellInstance.setActiveTab(tab, host);
+        } else {
+          this.syncLibraryView();
+        }
+      }
+    });
+    document.getElementById('btn-shortcuts-help')?.addEventListener('click', () => {
+      this.openShortcutsModal();
     });
 
     // Monitor progress bar scrub
@@ -903,6 +941,15 @@ export class StudioApp {
         } catch {
           // Ignore split outside valid interior bounds
         }
+      } else if (ev.key === '?' || (ev.key === '/' && ev.shiftKey)) {
+        ev.preventDefault();
+        this.openShortcutsModal();
+      } else if (ev.key === 'Escape') {
+        this.getContext().closeModal();
+        if (this.cropOverlayController?.isActive()) {
+          this.cropOverlayController.setActive(false);
+          this.syncCropOverlayView();
+        }
       } else if ((ev.key === 'Delete' || ev.key === 'Backspace') && this.detail && this.selection) {
         try {
           const srcDur = Math.max(Number(this.detail.meta?.durationSeconds) || 1, 0.05);
@@ -912,6 +959,24 @@ export class StudioApp {
           } else if (this.selection.kind === 'mosaic') {
             const res = deleteMosaicClipById(this.detail.project, this.selection.id);
             this.getContext().applyProjectMutation(res.project, { selection: null });
+          } else if (this.selection.kind === 'subtitle') {
+            const nextCues = this.detail.project.timeline.subtitleCues.filter((c) => c.id !== this.selection!.id);
+            this.getContext().applyProjectMutation(
+              { ...this.detail.project, timeline: { ...this.detail.project.timeline, subtitleCues: nextCues } },
+              { selection: null }
+            );
+          } else if (this.selection.kind === 'animation') {
+            const nextAnims = this.detail.project.timeline.animationClips.filter((c) => c.id !== this.selection!.id);
+            this.getContext().applyProjectMutation(
+              { ...this.detail.project, timeline: { ...this.detail.project.timeline, animationClips: nextAnims } },
+              { selection: null }
+            );
+          } else if (this.selection.kind === 'audio') {
+            const nextAudio = this.detail.project.timeline.audioClips.filter((c) => c.id !== this.selection!.id);
+            this.getContext().applyProjectMutation(
+              { ...this.detail.project, timeline: { ...this.detail.project.timeline, audioClips: nextAudio } },
+              { selection: null }
+            );
           } else if (this.selection.kind === 'segment') {
             const res = deleteSegmentById(this.detail.project, srcDur, this.selection.id);
             this.getContext().applyProjectMutation(res.project, { selection: res.selection });

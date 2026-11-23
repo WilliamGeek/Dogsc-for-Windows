@@ -135,6 +135,7 @@
 | T18.3 | DONE | 新增 `SoundSynth.ts`（5 种 48kHz 立体声内置音效 WAV 合成）、`AudioMixPlan.ts`（字幕区间语音提取与 FFmpeg `:eval=frame` 动态闪避滤镜，已真机 `ffmpeg` 编码 `.m4a` 验证）、`MediaAssetsService.ts`（素材上传、PCM 波形峰值缓存 `.waveform.json`、`RecordingProjectImport` 多录制合并）与 Studio 左栏 `素材库` 面板（`assetsPanel.ts`）；边界检查与 367 测试全绿（`362 pass / 0 fail / 5 skip`）。 |
 | T18.4 | DONE | 新增 Studio 左栏 `字幕` 面板（`subtitlesPanel.ts`）：支持 5 种入场动画/4 种字体/字号边距底色/双语开关、行内编辑与 SRT 导入导出、基于波峰检测的 `detectSilentIntervals` 静音识别与 `removeSilentIntervalsFromProject` 一键停顿波纹删剪；边界检查与 370 测试全绿（`365 pass / 0 fail / 5 skip`）。 |
 | T18.5 | DONE | 新增 Studio 左栏 `动效` 模板编辑器（`motionPanel.ts`，5 套内置模板一键插入与 `.dmhtml` 导出）与画布 8 手柄交互式裁剪浮层（`cropOverlay.ts`，`applyCropDragDelta` 限幅与 `Ctrl+Z` 合并）；边界检查与 372 测试全绿（`367 pass / 0 fail / 5 skip`）。 |
+| T18.6 | DONE | 升级时间线为 macOS 对齐 7 轨波形面板（`timeline.ts` + `state.ts` 扩展 6 个字幕/动效/音轨校验器 + 实时 PCM 波形 Canvas）及 `?` 快捷键速查弹窗（`app.ts`）；边界检查与 373 测试全绿（`368 pass / 0 fail / 5 skip`）。 |
 
 
 

@@ -1,14 +1,16 @@
 /**
  * web/studio/timeline.ts
  *
- * Interactive 4-lane multi-track timeline aligned with macOS EditorTimelineView &
- * EditorTimelineTrackHues (--t-zoom, --t-region, --t-audio).
- * Supports Select / Cut tool, segment split/delete/retime, zoom move/resize drag,
- * mosaic drag/insert, marker jump pins, and smooth playhead scrubbing.
+ * Interactive 7-lane waveform timeline aligned with macOS EditorTimelineView &
+ * EditorTimelineTrackHues (--t-zoom, --t-region, --t-subtitle, --t-overlay, --t-audio).
+ * Lanes:
+ *   1. 主视频    2. 缩放运镜  3. 区域效果
+ *   4. 双语字幕  5. 动效贴纸  6. 叠加音轨  7. 录制声轨 (+ live PCM waveform canvas)
  * Strictly ZERO node:* imports.
  */
 
 import type { StudioRuntimeContext } from './app.ts';
+import type { RecorderProject } from '../../src/core/ProjectMediaModel.ts';
 import {
   resolveTimelineSegments,
   splitSegmentAtTime,
@@ -21,9 +23,25 @@ import {
   addMosaicClipAtTime,
   moveMosaicClipById,
   deleteMosaicClipById,
+  moveSubtitleCueById,
+  deleteSubtitleCueById,
+  moveAnimationClipById,
+  deleteAnimationClipById,
+  moveAudioClipById,
+  deleteAudioClipById,
+  type StudioMutationResult,
+  type StudioSelection,
 } from './state.ts';
 
 const SPEED_OPTIONS = [1, 1.5, 2, 4] as const;
+
+interface CachedWaveform {
+  hasAudio: boolean;
+  peaks: number[];
+}
+
+const waveformCache = new Map<string, CachedWaveform>();
+const waveformInFlight = new Set<string>();
 
 function escapeHtml(text: string): string {
   return text
@@ -41,6 +59,61 @@ function chooseRulerStep(durationSeconds: number): number {
   return 10;
 }
 
+function ensureWaveformLoaded(sessionId: string): void {
+  if (waveformCache.has(sessionId) || waveformInFlight.has(sessionId)) {
+    return;
+  }
+  waveformInFlight.add(sessionId);
+  void fetch(`/api/recordings/${encodeURIComponent(sessionId)}/waveform?samples=240`, {
+    cache: 'no-store',
+  })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((data) => {
+      if (data && Array.isArray(data.peaks)) {
+        waveformCache.set(sessionId, {
+          hasAudio: Boolean(data.hasAudio),
+          peaks: data.peaks,
+        });
+        paintWaveformCanvas(sessionId);
+      }
+    })
+    .catch(() => {
+      // Ignore waveform load error
+    })
+    .finally(() => {
+      waveformInFlight.delete(sessionId);
+    });
+}
+
+function paintWaveformCanvas(sessionId: string): void {
+  const canvas = document.getElementById('tl-waveform-canvas') as HTMLCanvasElement | null;
+  if (!canvas) return;
+  const cached = waveformCache.get(sessionId);
+  if (!cached || !cached.hasAudio || cached.peaks.length === 0) return;
+
+  const rect = canvas.getBoundingClientRect();
+  const w = Math.max(300, Math.round(rect.width || canvas.parentElement?.clientWidth || 600));
+  const h = Math.max(24, Math.round(rect.height || 26));
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width = w;
+    canvas.height = h;
+  }
+  const ctx2d = canvas.getContext('2d');
+  if (!ctx2d) return;
+
+  ctx2d.clearRect(0, 0, w, h);
+  ctx2d.fillStyle = 'rgba(130, 178, 228, 0.55)';
+  const peaks = cached.peaks;
+  const stepX = w / peaks.length;
+  const midY = h * 0.5;
+  for (let i = 0; i < peaks.length; i++) {
+    const p = Math.min(1, Math.max(0.05, Number(peaks[i]) || 0));
+    const barH = Math.max(2, p * (h - 6));
+    const barW = Math.max(1, stepX * 0.72);
+    ctx2d.fillRect(i * stepX, midY - barH * 0.5, barW, barH);
+  }
+}
+
 export function renderStudioTimeline(ctx: StudioRuntimeContext): void {
   const dock = document.getElementById('studio-timeline');
   if (!dock) return;
@@ -49,9 +122,11 @@ export function renderStudioTimeline(ctx: StudioRuntimeContext): void {
   const project = ctx.getProject();
   if (!detail || !project) {
     dock.innerHTML =
-      '<div style="padding:18px;color:var(--ink-secondary);font-size:12px;">打开任意录制或点击“+ 新建录制”后，可在此交互编辑主视频、缩放运镜、马赛克与音轨。</div>';
+      '<div style="padding:18px;color:var(--ink-secondary);font-size:12px;">打开任意录制或点击“+ 新建录制”后，可在此交互编辑主视频、缩放运镜、字幕、动效与 7 轨波形时间线。</div>';
     return;
   }
+
+  ensureWaveformLoaded(detail.id);
 
   const srcDur = Math.max(Number(detail.meta?.durationSeconds) || 1, 0.05);
   const outDur = Math.max(ctx.getOutputDuration(), 0.05);
@@ -69,7 +144,6 @@ export function renderStudioTimeline(ctx: StudioRuntimeContext): void {
       : segments[0] ?? null;
   const activeSpeed = selectedSegment?.playbackRate ?? 1;
 
-  // Compute scrollable tracks width percentage
   const widthPct = Math.round(tlZoom * 100);
   const tickStep = chooseRulerStep(outDur / tlZoom);
   let ticksHtml = '';
@@ -79,7 +153,6 @@ export function renderStudioTimeline(ctx: StudioRuntimeContext): void {
     ticksHtml += `<span class="ruler-tick" style="left:${pct.toFixed(3)}%">${t.toFixed(tickStep < 1 ? 1 : 0)}s</span>`;
   }
 
-  // Recording markers
   let markersHtml = '';
   for (const m of project.recordingMarkers) {
     const mPct = Math.min(100, Math.max(0, (m.sourceTime / outDur) * 100));
@@ -119,7 +192,7 @@ export function renderStudioTimeline(ctx: StudioRuntimeContext): void {
       </div>`;
   }
 
-  // Lane 3: Mosaic / spotlight region clips
+  // Lane 3: Mosaic / spotlight regions
   let mosaicsHtml = '';
   for (const m of project.timeline.mosaicClips) {
     const leftPct = Math.min(100, Math.max(0, (m.timing.startTime / outDur) * 100));
@@ -135,16 +208,67 @@ export function renderStudioTimeline(ctx: StudioRuntimeContext): void {
       </div>`;
   }
 
-  // Lane 4: Audio tracks
-  let audioHtml = '';
-  if (detail.hasSystemAudio || project.capture.recordsSystemAudio) {
-    audioHtml += `<div class="tl-clip audio ${project.audio.isSystemMuted ? 'muted' : ''}" data-audio-kind="system" style="left:0%;width:100%;" title="点击切换系统音频 / 打开声音面板">🔊 系统声音 (${Math.round(project.audio.systemVolume * 100)}%)</div>`;
-  } else if (!detail.hasMicAudio) {
-    audioHtml += `<div class="tl-clip audio muted" data-audio-kind="none" style="left:0%;width:100%;">未检测到系统音/麦克风音轨（可点声音面板配置）</div>`;
+  // Lane 4: Bilingual subtitles
+  const subtitles = project.timeline.subtitleCues ?? [];
+  let subtitlesHtml = '';
+  for (const cue of subtitles) {
+    const leftPct = Math.min(100, Math.max(0, (cue.timing.startTime / outDur) * 100));
+    const wPct = Math.max(1.5, (cue.timing.duration / outDur) * 100);
+    const isSel = sel?.kind === 'subtitle' && sel.id === cue.id;
+    subtitlesHtml += `
+      <div class="tl-clip subtitle ${isSel ? 'selected' : ''}"
+           data-sub-id="${escapeHtml(cue.id)}"
+           style="left:${leftPct.toFixed(3)}%;width:${wPct.toFixed(3)}%;"
+           title="${escapeHtml(cue.text)} (${cue.timing.startTime.toFixed(2)}s - ${cue.timing.endTime.toFixed(2)}s)">
+        <span>💬 ${escapeHtml(cue.text)}</span>
+      </div>`;
   }
 
+  // Lane 5: HTML Motion stickers
+  const animations = project.timeline.animationClips ?? [];
+  let motionHtml = '';
+  for (const anim of animations) {
+    const leftPct = Math.min(100, Math.max(0, (anim.timing.startTime / outDur) * 100));
+    const wPct = Math.max(1.5, (anim.timing.duration / outDur) * 100);
+    const isSel = sel?.kind === 'animation' && sel.id === anim.id;
+    const tProp = anim.properties?.title;
+    const title = tProp && tProp.kind === 'string' && tProp.value ? tProp.value : '动效卡片';
+    motionHtml += `
+      <div class="tl-clip motion ${isSel ? 'selected' : ''}"
+           data-motion-id="${escapeHtml(anim.id)}"
+           style="left:${leftPct.toFixed(3)}%;width:${wPct.toFixed(3)}%;"
+           title="${escapeHtml(title)} (${anim.timing.startTime.toFixed(2)}s - ${anim.timing.endTime.toFixed(2)}s)">
+        <span>✦ ${escapeHtml(title)}</span>
+      </div>`;
+  }
+
+  // Lane 6: Overlay Audio Clips (BGM & SoundSynth SFX)
+  const audioClips = project.timeline.audioClips ?? [];
+  let audioClipsHtml = '';
+  for (const ac of audioClips) {
+    const leftPct = Math.min(100, Math.max(0, (ac.timing.startTime / outDur) * 100));
+    const wPct = Math.max(1.4, (ac.timing.duration / outDur) * 100);
+    const isSel = sel?.kind === 'audio' && sel.id === ac.id;
+    const shortName = ac.sourcePath.split(/[\\/]/).pop() ?? '音频';
+    const duckTag = ac.ducksUnderSpeech ? ' 🦆' : '';
+    audioClipsHtml += `
+      <div class="tl-clip sfx ${isSel ? 'selected' : ''}"
+           data-audioclip-id="${escapeHtml(ac.id)}"
+           style="left:${leftPct.toFixed(3)}%;width:${wPct.toFixed(3)}%;"
+           title="${escapeHtml(shortName)} (${ac.timing.startTime.toFixed(2)}s)${ac.ducksUnderSpeech ? ' · 人声压低开启' : ''}">
+        <span>♪ ${escapeHtml(shortName)}${duckTag}</span>
+      </div>`;
+  }
+
+  // Lane 7: Recorded audio tracks + PCM waveform overlay canvas
+  let audioBaseHtml = '<canvas id="tl-waveform-canvas" class="tl-waveform-canvas"></canvas>';
+  if (detail.hasSystemAudio || project.capture.recordsSystemAudio) {
+    audioBaseHtml += `<div class="tl-clip audio ${project.audio.isSystemMuted ? 'muted' : ''}" data-audio-kind="system" style="left:0%;width:100%;" title="点击打开声音面板">🔊 系统声音 (${Math.round(project.audio.systemVolume * 100)}%)</div>`;
+  } else if (!detail.hasMicAudio) {
+    audioBaseHtml += `<div class="tl-clip audio muted" data-audio-kind="none" style="left:0%;width:100%;">未检测到系统音/麦克风（可点素材库插入音效或 BGM）</div>`;
+  }
   if (detail.hasMicAudio || project.capture.recordsMicrophone) {
-    audioHtml += `<div class="tl-clip audio ${project.audio.isMicrophoneMuted ? 'muted' : ''}" data-audio-kind="mic" style="left:0%;width:48%;top:22px;height:18px;font-size:10px;" title="点击打开麦克风控制">🎙 麦克风 (${Math.round(project.audio.microphoneVolume * 100)}%)</div>`;
+    audioBaseHtml += `<div class="tl-clip audio mic-chip ${project.audio.isMicrophoneMuted ? 'muted' : ''}" data-audio-kind="mic" style="left:0%;width:45%;" title="点击打开麦克风控制">🎙 麦克风 (${Math.round(project.audio.microphoneVolume * 100)}%)</div>`;
   }
 
   const speedButtonsHtml = SPEED_OPTIONS.map(
@@ -161,15 +285,15 @@ export function renderStudioTimeline(ctx: StudioRuntimeContext): void {
         </div>
         <button id="tl-btn-split" class="chrome-btn subtle-well" title="在播放头位置拆分主片段 (S)">从此处分割 (S)</button>
         <button id="tl-btn-delete" class="chrome-btn" ${sel ? '' : 'disabled'} title="删除选中项 (Delete)">删除选中</button>
-        <span style="color:var(--ink-tertiary);font-size:11px;margin-left:6px;">片段倍速</span>
+        <span style="color:var(--ink-tertiary);font-size:11px;margin-left:6px;">倍速</span>
         <div class="pill-grid">${speedButtonsHtml}</div>
       </div>
 
       <div class="transport-cluster">
         <button id="tl-btn-add-zoom" class="chrome-btn subtle-well" title="在播放头添加缩放关键段">+ 缩放</button>
         <button id="tl-btn-add-mosaic" class="chrome-btn subtle-well" title="在播放头添加马赛克遮挡">+ 马赛克</button>
-        <span style="color:var(--ink-tertiary);font-size:11px;margin-left:6px;">视图缩放</span>
-        <input id="tl-zoom-slider" class="insp-slider" style="width:90px" type="range" min="1" max="4" step="0.25" value="${tlZoom}" />
+        <span style="color:var(--ink-tertiary);font-size:11px;margin-left:6px;">视图</span>
+        <input id="tl-zoom-slider" class="insp-slider" style="width:86px" type="range" min="1" max="4" step="0.25" value="${tlZoom}" />
       </div>
     </div>
 
@@ -179,7 +303,10 @@ export function renderStudioTimeline(ctx: StudioRuntimeContext): void {
         <div class="lane-header-row"><span>主视频</span><span>${segments.length}段</span></div>
         <div class="lane-header-row"><span><i class="lane-dot" style="background:var(--t-zoom)"></i>缩放运镜</span><span>${project.timeline.zoomClips.length}</span></div>
         <div class="lane-header-row"><span><i class="lane-dot" style="background:var(--t-region)"></i>区域效果</span><span>${project.timeline.mosaicClips.length}</span></div>
-        <div class="lane-header-row"><span><i class="lane-dot" style="background:var(--t-audio)"></i>音频轨道</span></div>
+        <div class="lane-header-row"><span><i class="lane-dot" style="background:var(--t-subtitle)"></i>双语字幕</span><span>${subtitles.length}</span></div>
+        <div class="lane-header-row"><span><i class="lane-dot" style="background:var(--t-overlay)"></i>动效贴纸</span><span>${animations.length}</span></div>
+        <div class="lane-header-row"><span><i class="lane-dot" style="background:var(--t-audio)"></i>叠加音轨</span><span>${audioClips.length}</span></div>
+        <div class="lane-header-row"><span><i class="lane-dot" style="background:var(--t-audio)"></i>录制声轨</span></div>
       </div>
 
       <div class="timeline-tracks-canvas" id="tl-tracks-canvas" style="min-width:${widthPct}%;">
@@ -187,13 +314,73 @@ export function renderStudioTimeline(ctx: StudioRuntimeContext): void {
         <div class="timeline-lane ${tool === 'cut' ? 'cut-cursor' : ''}" id="tl-lane-primary">${segsHtml}</div>
         <div class="timeline-lane" id="tl-lane-zoom" title="双击空白处添加缩放段">${zoomsHtml}</div>
         <div class="timeline-lane" id="tl-lane-mosaic" title="双击空白处添加马赛克">${mosaicsHtml}</div>
-        <div class="timeline-lane" id="tl-lane-audio">${audioHtml}</div>
+        <div class="timeline-lane" id="tl-lane-subtitle">${subtitlesHtml}</div>
+        <div class="timeline-lane" id="tl-lane-motion">${motionHtml}</div>
+        <div class="timeline-lane" id="tl-lane-audio-clips">${audioClipsHtml}</div>
+        <div class="timeline-lane" id="tl-lane-audio">${audioBaseHtml}</div>
         <div id="timeline-playhead-line" class="timeline-playhead" style="left:${playheadPct.toFixed(3)}%;"></div>
       </div>
     </div>
   `;
 
+  paintWaveformCanvas(detail.id);
   wireTimelineEvents(ctx, outDur, srcDur, selectedSegment?.id ?? null);
+}
+
+function wireHorizontalClipDrag(
+  ctx: StudioRuntimeContext,
+  tracksCanvas: HTMLElement | null,
+  outDur: number,
+  attrName: string,
+  selectionKind: Exclude<StudioSelection, null>['kind'],
+  getOrigStart: (project: RecorderProject, clipId: string) => number | null,
+  onMoveClip: (project: RecorderProject, outDur: number, clipId: string, nextStart: number) => StudioMutationResult,
+  onSelectHook?: () => void
+): void {
+  document.querySelectorAll(`[${attrName}]`).forEach((el) => {
+    const htmlEl = el as HTMLElement;
+    const clipId = htmlEl.getAttribute(attrName);
+    if (!clipId) return;
+
+    htmlEl.addEventListener('pointerdown', (ev) => {
+      ev.stopPropagation();
+      const project = ctx.getProject();
+      if (!project) return;
+      const origStart = getOrigStart(project, clipId);
+      if (origStart === null) return;
+
+      ctx.setSelection({ kind: selectionKind, id: clipId } as StudioSelection);
+      onSelectHook?.();
+
+      const startX = ev.clientX;
+      const trackWidth = tracksCanvas?.getBoundingClientRect().width || 600;
+      let pushedHistory = false;
+      let dragged = false;
+
+      const onMove = (moveEv: PointerEvent) => {
+        const dx = moveEv.clientX - startX;
+        if (!dragged && Math.abs(dx) < 3) return;
+        dragged = true;
+        const dt = (dx / trackWidth) * outDur;
+        const latestProj = ctx.getProject();
+        if (!latestProj) return;
+        const res = onMoveClip(latestProj, outDur, clipId, origStart + dt);
+        ctx.applyProjectMutation(res.project, {
+          recordHistory: !pushedHistory,
+          selection: res.selection,
+        });
+        pushedHistory = true;
+      };
+
+      const onUp = () => {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+      };
+
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    });
+  });
 }
 
 function wireTimelineEvents(
@@ -212,7 +399,6 @@ function wireTimelineEvents(
     return Math.min(Math.max(0, ((clientX - rect.left) / rect.width) * outDur), outDur);
   };
 
-  // Tool switch
   document.querySelectorAll('#tl-tool-switch .seg-opt').forEach((btn) => {
     btn.addEventListener('click', () => {
       const tool = btn.getAttribute('data-tool') as 'select' | 'cut' | null;
@@ -220,7 +406,6 @@ function wireTimelineEvents(
     });
   });
 
-  // Toolbar actions
   document.getElementById('tl-btn-split')?.addEventListener('click', () => {
     const project = ctx.getProject();
     if (!project) return;
@@ -228,7 +413,7 @@ function wireTimelineEvents(
       const res = splitSegmentAtTime(project, srcDur, player.getCurrentTime());
       ctx.applyProjectMutation(res.project, { selection: res.selection });
     } catch {
-      // ignore invalid split at boundary
+      // ignore boundary split
     }
   });
 
@@ -243,12 +428,21 @@ function wireTimelineEvents(
       } else if (sel.kind === 'mosaic') {
         const res = deleteMosaicClipById(project, sel.id);
         ctx.applyProjectMutation(res.project, { selection: null });
+      } else if (sel.kind === 'subtitle') {
+        const res = deleteSubtitleCueById(project, sel.id);
+        ctx.applyProjectMutation(res.project, { selection: null });
+      } else if (sel.kind === 'animation') {
+        const res = deleteAnimationClipById(project, sel.id);
+        ctx.applyProjectMutation(res.project, { selection: null });
+      } else if (sel.kind === 'audio') {
+        const res = deleteAudioClipById(project, sel.id);
+        ctx.applyProjectMutation(res.project, { selection: null });
       } else if (sel.kind === 'segment') {
         const res = deleteSegmentById(project, srcDur, sel.id);
         ctx.applyProjectMutation(res.project, { selection: res.selection });
       }
     } catch {
-      // ignore if cannot delete last segment
+      // ignore invalid delete
     }
   });
 
@@ -274,7 +468,7 @@ function wireTimelineEvents(
       ctx.applyProjectMutation(res.project, { selection: res.selection });
       ctx.setInspectorTab('zoom');
     } catch {
-      // ignore if lane full
+      // ignore
     }
   });
 
@@ -290,7 +484,6 @@ function wireTimelineEvents(
     ctx.setTimelineZoom(Number(zoomSlider.value) || 1);
   });
 
-  // Marker pin jump
   document.querySelectorAll('.marker-pin').forEach((pin) => {
     pin.addEventListener('click', (ev) => {
       ev.stopPropagation();
@@ -302,7 +495,6 @@ function wireTimelineEvents(
     });
   });
 
-  // Ruler scrub
   const ruler = document.getElementById('tl-ruler');
   ruler?.addEventListener('pointerdown', (ev) => {
     if ((ev.target as HTMLElement)?.classList.contains('marker-pin')) return;
@@ -316,7 +508,6 @@ function wireTimelineEvents(
     }
   });
 
-  // Primary lane segment clicks / cuts
   document.querySelectorAll('[data-seg-id]').forEach((el) => {
     el.addEventListener('click', (ev) => {
       const project = ctx.getProject();
@@ -337,7 +528,6 @@ function wireTimelineEvents(
     });
   });
 
-  // Zoom lane double click to add
   const zoomLane = document.getElementById('tl-lane-zoom');
   zoomLane?.addEventListener('dblclick', (ev) => {
     if (ev.target !== zoomLane) return;
@@ -348,11 +538,10 @@ function wireTimelineEvents(
       ctx.applyProjectMutation(res.project, { selection: res.selection });
       ctx.setInspectorTab('zoom');
     } catch {
-      // ignore if full
+      // ignore
     }
   });
 
-  // Zoom clip select + move + resize drag
   document.querySelectorAll('[data-zoom-id]').forEach((el) => {
     const htmlEl = el as HTMLElement;
     const clipId = htmlEl.getAttribute('data-zoom-id');
@@ -412,7 +601,6 @@ function wireTimelineEvents(
     });
   });
 
-  // Mosaic lane double-click & drag
   const mosaicLane = document.getElementById('tl-lane-mosaic');
   mosaicLane?.addEventListener('dblclick', (ev) => {
     if (ev.target !== mosaicLane) return;
@@ -422,52 +610,49 @@ function wireTimelineEvents(
     ctx.applyProjectMutation(res.project, { selection: res.selection });
   });
 
-  document.querySelectorAll('[data-mosaic-id]').forEach((el) => {
-    const htmlEl = el as HTMLElement;
-    const clipId = htmlEl.getAttribute('data-mosaic-id');
-    if (!clipId) return;
+  wireHorizontalClipDrag(
+    ctx,
+    tracksCanvas,
+    outDur,
+    'data-mosaic-id',
+    'mosaic',
+    (p, id) => p.timeline.mosaicClips.find((c) => c.id === id)?.timing.startTime ?? null,
+    moveMosaicClipById
+  );
 
-    htmlEl.addEventListener('pointerdown', (ev) => {
-      ev.stopPropagation();
-      const project = ctx.getProject();
-      if (!project) return;
-      const clip = project.timeline.mosaicClips.find((c) => c.id === clipId);
-      if (!clip) return;
+  wireHorizontalClipDrag(
+    ctx,
+    tracksCanvas,
+    outDur,
+    'data-sub-id',
+    'subtitle',
+    (p, id) => p.timeline.subtitleCues.find((c) => c.id === id)?.timing.startTime ?? null,
+    moveSubtitleCueById,
+    () => window.dispatchEvent(new CustomEvent('dogsc:open-library-tab', { detail: 'subtitles' }))
+  );
 
-      ctx.setSelection({ kind: 'mosaic', id: clipId });
+  wireHorizontalClipDrag(
+    ctx,
+    tracksCanvas,
+    outDur,
+    'data-motion-id',
+    'animation',
+    (p, id) => p.timeline.animationClips.find((c) => c.id === id)?.timing.startTime ?? null,
+    moveAnimationClipById,
+    () => window.dispatchEvent(new CustomEvent('dogsc:open-library-tab', { detail: 'motion' }))
+  );
 
-      const startX = ev.clientX;
-      const origStart = clip.timing.startTime;
-      const trackWidth = tracksCanvas?.getBoundingClientRect().width || 600;
-      let pushedHistory = false;
-      let dragged = false;
+  wireHorizontalClipDrag(
+    ctx,
+    tracksCanvas,
+    outDur,
+    'data-audioclip-id',
+    'audio',
+    (p, id) => p.timeline.audioClips.find((c) => c.id === id)?.timing.startTime ?? null,
+    moveAudioClipById,
+    () => window.dispatchEvent(new CustomEvent('dogsc:open-library-tab', { detail: 'assets' }))
+  );
 
-      const onMove = (moveEv: PointerEvent) => {
-        const dx = moveEv.clientX - startX;
-        if (!dragged && Math.abs(dx) < 3) return;
-        dragged = true;
-        const dt = (dx / trackWidth) * outDur;
-        const latestProj = ctx.getProject();
-        if (!latestProj) return;
-        const res = moveMosaicClipById(latestProj, outDur, clipId, origStart + dt);
-        ctx.applyProjectMutation(res.project, {
-          recordHistory: !pushedHistory,
-          selection: res.selection,
-        });
-        pushedHistory = true;
-      };
-
-      const onUp = () => {
-        window.removeEventListener('pointermove', onMove);
-        window.removeEventListener('pointerup', onUp);
-      };
-
-      window.addEventListener('pointermove', onMove);
-      window.addEventListener('pointerup', onUp);
-    });
-  });
-
-  // Audio lane click -> switch to audio tab
   document.querySelectorAll('[data-audio-kind]').forEach((el) => {
     el.addEventListener('click', () => {
       ctx.setInspectorTab('audio');

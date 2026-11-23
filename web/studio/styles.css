@@ -681,7 +681,7 @@ button {
 }
 
 .lane-header-row {
-  height: 44px;
+  height: 34px;
   padding: 0 10px;
   display: flex;
   align-items: center;
@@ -747,7 +747,7 @@ button {
 }
 
 .timeline-lane {
-  height: 44px;
+  height: 34px;
   border-bottom: 1px solid var(--hairline);
   position: relative;
   overflow: hidden;
@@ -759,13 +759,13 @@ button {
 
 .tl-clip {
   position: absolute;
-  top: 5px;
-  height: 34px;
+  top: 4px;
+  height: 26px;
   border-radius: 6px;
   display: flex;
   align-items: center;
-  padding: 0 8px;
-  font-size: 11px;
+  padding: 0 7px;
+  font-size: 10.5px;
   font-weight: 500;
   overflow: hidden;
   white-space: nowrap;
@@ -1725,4 +1725,105 @@ button {
   height: 24px;
   padding: 0 10px;
   font-size: 11px;
+}
+
+/* 7-Lane Waveform Timeline Clips & Shortcuts Cheatsheet */
+.tl-clip.subtitle {
+  background: rgba(196, 152, 92, 0.24);
+  color: #f0d7b1;
+  border-color: rgba(196, 152, 92, 0.5);
+}
+
+[data-theme="light"] .tl-clip.subtitle {
+  color: #5c4017;
+}
+
+.tl-clip.subtitle.selected {
+  border-color: var(--t-subtitle);
+  box-shadow: inset 0 0 0 1px var(--t-subtitle);
+}
+
+.tl-clip.motion {
+  background: rgba(164, 124, 198, 0.24);
+  color: #decbf2;
+  border-color: rgba(164, 124, 198, 0.48);
+}
+
+[data-theme="light"] .tl-clip.motion {
+  color: #482867;
+}
+
+.tl-clip.motion.selected {
+  border-color: var(--t-overlay);
+  box-shadow: inset 0 0 0 1px var(--t-overlay);
+}
+
+.tl-clip.sfx {
+  background: rgba(107, 143, 184, 0.24);
+  color: #c8def5;
+  border-color: rgba(107, 143, 184, 0.48);
+}
+
+[data-theme="light"] .tl-clip.sfx {
+  color: #1f3c5c;
+}
+
+.tl-clip.sfx.selected {
+  border-color: var(--t-audio);
+  box-shadow: inset 0 0 0 1px var(--t-audio);
+}
+
+.tl-clip.audio.mic-chip {
+  top: 7px;
+  height: 20px;
+  font-size: 10px;
+  z-index: 2;
+}
+
+.tl-waveform-canvas {
+  position: absolute;
+  inset: 2px 0;
+  width: 100%;
+  height: calc(100% - 4px);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.shortcuts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.shortcuts-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.shortcuts-cat {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.sc-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--ink-secondary);
+}
+
+.sc-row kbd {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: var(--control-well);
+  border: 1px solid var(--hairline);
+  color: var(--ink);
 }

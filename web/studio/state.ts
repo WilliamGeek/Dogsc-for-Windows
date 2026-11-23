@@ -31,8 +31,10 @@ import {
   makeMosaicClip,
   makeOverlayTiming,
   makeNormalizedOverlayRect,
+  type AnimationClip,
   type MosaicClip,
 } from '../../src/core/OverlayTimeline.ts';
+import type { AudioClip, SubtitleCue } from '../../src/core/PostProductionModel.ts';
 import {
   makeZoomAnimationClip,
   type ZoomAnimationClip,
@@ -49,7 +51,10 @@ export type StudioSelection =
   | { kind: 'segment'; id: string }
   | { kind: 'zoom'; id: string }
   | { kind: 'mosaic'; id: string }
-  | { kind: 'marker'; id: string };
+  | { kind: 'marker'; id: string }
+  | { kind: 'subtitle'; id: string }
+  | { kind: 'animation'; id: string }
+  | { kind: 'audio'; id: string };
 
 export interface StudioMutationResult {
   project: RecorderProject;
@@ -441,4 +446,99 @@ export function recomputeAutoZoomClips(
     nextProject,
     zoomClips.length > 0 ? { kind: 'zoom', id: zoomClips[0].id } : null
   );
+}
+
+function moveTimedClips<T extends { id: string; timing: { startTime: number; duration: number } }>(
+  list: readonly T[],
+  outputDuration: number,
+  clipId: string,
+  proposedStart: number,
+  kindLabel: string
+): T[] {
+  const existing = list.find((c) => c.id === clipId);
+  if (!existing) throw new Error(`找不到${kindLabel}: ${clipId}`);
+  const maxStart = Math.max(0, outputDuration - existing.timing.duration);
+  const clampedStart = clamp(proposedStart, 0, maxStart);
+  const updated: T = {
+    ...existing,
+    timing: makeOverlayTiming(clampedStart, existing.timing.duration),
+  };
+  return list
+    .map((c) => (c.id === clipId ? updated : c))
+    .sort((a, b) => a.timing.startTime - b.timing.startTime);
+}
+
+export function moveSubtitleCueById(
+  project: RecorderProject,
+  outputDuration: number,
+  cueId: string,
+  proposedStart: number
+): StudioMutationResult {
+  const subtitleCues = moveTimedClips<SubtitleCue>(
+    project.timeline.subtitleCues,
+    outputDuration,
+    cueId,
+    proposedStart,
+    '字幕片段'
+  );
+  return validateAndWrap(
+    { ...project, timeline: { ...project.timeline, subtitleCues } },
+    { kind: 'subtitle', id: cueId }
+  );
+}
+
+export function deleteSubtitleCueById(project: RecorderProject, cueId: string): StudioMutationResult {
+  const subtitleCues = project.timeline.subtitleCues.filter((c) => c.id !== cueId);
+  return validateAndWrap({ ...project, timeline: { ...project.timeline, subtitleCues } }, null);
+}
+
+export function moveAnimationClipById(
+  project: RecorderProject,
+  outputDuration: number,
+  clipId: string,
+  proposedStart: number
+): StudioMutationResult {
+  const animationClips = moveTimedClips<AnimationClip>(
+    project.timeline.animationClips,
+    outputDuration,
+    clipId,
+    proposedStart,
+    '动效片段'
+  );
+  return validateAndWrap(
+    { ...project, timeline: { ...project.timeline, animationClips } },
+    { kind: 'animation', id: clipId }
+  );
+}
+
+export function deleteAnimationClipById(
+  project: RecorderProject,
+  clipId: string
+): StudioMutationResult {
+  const animationClips = project.timeline.animationClips.filter((c) => c.id !== clipId);
+  return validateAndWrap({ ...project, timeline: { ...project.timeline, animationClips } }, null);
+}
+
+export function moveAudioClipById(
+  project: RecorderProject,
+  outputDuration: number,
+  clipId: string,
+  proposedStart: number
+): StudioMutationResult {
+  const audioClips = moveTimedClips<AudioClip>(
+    project.timeline.audioClips,
+    outputDuration,
+    clipId,
+    proposedStart,
+    '音轨片段'
+  );
+  return validateAndWrap(
+    { ...project, timeline: { ...project.timeline, audioClips } },
+    { kind: 'audio', id: clipId }
+  );
+}
+
+export function deleteAudioClipById(project: RecorderProject, clipId: string): StudioMutationResult {
+  const audioClips = project.timeline.audioClips.filter((c) => c.id !== clipId);
+  return validateAndWrap({ ...project, timeline: { ...project.timeline, audioClips } }, null);
 }
