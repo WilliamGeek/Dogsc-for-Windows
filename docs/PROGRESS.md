@@ -127,6 +127,11 @@
 
 当前状态：Wave A–F（T10–T17）全部代码/测试/Studio Chrome 四轮 E2E/Windows 安装包与 G6 矩阵报告均已完成并打标 v1.0.0-windows；仅 T11.7（按决策 D4 待用户在已解锁本地桌面交互终端实录并肉眼复核“单光标 + 无尾帧冻结 + 同步闪帧”）保持待确认。
 
+## Wave G 进展日志
+| 任务 | 状态 | 核心交付与验证结果 |
+| :--- | :--- | :--- |
+| T18.1 | DONE | 新增 `AiSecrets.ts`（Windows DPAPI 无 Bypass 加解密 + 本机 AI CLI 发现）、`AgentBridge.ts`（32-hex Bearer 鉴权 + 确定性规则/OpenAI/Gemini 工具执行 + ProjectValidator + 单轮快照回撤）、`StudioServer` AI 路由及 Studio 左栏 `AI 助手`（`libraryShell.ts` + `aiPanel.ts`，`Ctrl+K` / `Ctrl+Alt+L`）；边界检查与 359 测试通过（`354 pass / 0 fail / 5 skip`）。 |
+
 
 
 

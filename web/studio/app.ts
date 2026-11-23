@@ -303,6 +303,115 @@ export class StudioApp {
     }
   }
 
+  private libraryShellInstance: {
+    render(host: any): void;
+    focusAiComposer(host?: any): void;
+    toggleOpen(host?: any): void;
+    setActiveTab(tab: any, host?: any): void;
+    registerPanelRenderer(tab: any, fn: any): void;
+  } | null = null;
+  private libraryShellLoading: Promise<void> | null = null;
+
+  private buildLibraryHost() {
+    return {
+      getSessionId: () => this.detail?.id ?? null,
+      getProject: () => this.detail?.project ?? null,
+      getRawDuration: () => Math.max(Number(this.detail?.meta?.durationSeconds) || 1, 0.05),
+      getCurrentTime: () => this.player.getCurrentTime(),
+      getOutputDuration: () => this.player.getDuration(),
+      seekTo: (sec: number) => {
+        this.player.pause();
+        this.player.seek(sec);
+      },
+      persistProject: () => this.persistCurrentProject(),
+      applyExternalProject: (rawProject: unknown, pushUndo = true) => {
+        this.applyExternalProject(rawProject, pushUndo);
+      },
+      mutateProject: (next: RecorderProject, opts?: { immediate?: boolean }) => {
+        this.getContext().applyProjectMutation(next, opts);
+      },
+      reloadRecording: async () => {
+        if (this.detail?.id) {
+          await this.loadSession(this.detail.id);
+        }
+      },
+      refreshViews: () => this.renderSubViews(),
+    };
+  }
+
+  private syncLibraryView(): void {
+    const host = this.buildLibraryHost();
+    if (this.libraryShellInstance) {
+      this.libraryShellInstance.render(host);
+      return;
+    }
+    if (!this.libraryShellLoading) {
+      this.libraryShellLoading = import('./libraryShell.ts')
+        .then(({ StudioLibraryShell }) => {
+          this.libraryShellInstance = new StudioLibraryShell();
+          this.libraryShellInstance.render(this.buildLibraryHost());
+        })
+        .catch(() => {
+          // Ignore optional module load failure in headless contexts
+        });
+    }
+  }
+
+  private applyExternalProject(rawProjectPayload: unknown, pushUndo: boolean = true): void {
+    if (!this.detail) return;
+    const project = decodeRecorderProject(rawProjectPayload);
+    if (pushUndo) {
+      this.history.push(this.detail.project);
+    }
+    this.detail = { ...this.detail, project };
+    const fps = Number(this.detail.meta?.fps) || 60;
+    const srcW = Number(this.detail.meta?.width) || 1920;
+    const srcH = Number(this.detail.meta?.height) || 1080;
+    const srcDur = Math.max(Number(this.detail.meta?.durationSeconds) || 1, 0.05);
+    const outDur = computeTimelineOutputDuration(project, srcDur);
+
+    this.player.setSession(
+      {
+        project,
+        pointerEvents: this.detail.pointerEvents,
+        fps,
+        sourceFps: fps,
+        sourceWidth: srcW,
+        sourceHeight: srcH,
+        durationSeconds: outDur,
+        sourceFrameCount: this.detail.sourceFrameCount,
+        framesBaseUrl: `/recordings/${encodeURIComponent(this.detail.id)}/frames`,
+        cameraFramesBaseUrl:
+          this.detail.cameraFrameCount > 0
+            ? `/recordings/${encodeURIComponent(this.detail.id)}/camera_frames`
+            : null,
+      },
+      true
+    );
+    this.setSaveState('saved');
+    this.syncHeaderAndTransport();
+    this.renderSubViews();
+  }
+
+  private focusAiAssistant(): void {
+    const host = this.buildLibraryHost();
+    if (this.libraryShellInstance) {
+      this.libraryShellInstance.focusAiComposer(host);
+    } else {
+      this.syncLibraryView();
+      void this.libraryShellLoading?.then(() => this.libraryShellInstance?.focusAiComposer(this.buildLibraryHost()));
+    }
+  }
+
+  private toggleLibraryDrawer(): void {
+    const host = this.buildLibraryHost();
+    if (this.libraryShellInstance) {
+      this.libraryShellInstance.toggleOpen(host);
+    } else {
+      this.syncLibraryView();
+    }
+  }
+
   async loadRecordingsList(preferredId?: string): Promise<void> {
     const res = await fetch('/api/recordings', { cache: 'no-store' });
     const data = await res.json();
@@ -517,6 +626,7 @@ export class StudioApp {
     this.syncRailTabs();
     this.renderTimelineView();
     this.renderInspectorView();
+    this.syncLibraryView();
     this.updatePlayheadUI(this.player.getCurrentTime());
   }
 
@@ -682,6 +792,18 @@ export class StudioApp {
         target?.tagName === 'INPUT' ||
         target?.tagName === 'TEXTAREA' ||
         target?.tagName === 'SELECT';
+
+      if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'k') {
+        ev.preventDefault();
+        this.focusAiAssistant();
+        return;
+      }
+
+      if ((ev.ctrlKey || ev.metaKey) && ev.altKey && ev.key.toLowerCase() === 'l') {
+        ev.preventDefault();
+        this.toggleLibraryDrawer();
+        return;
+      }
 
       if ((ev.ctrlKey || ev.metaKey) && !isEditingText) {
         if (ev.key.toLowerCase() === 'z' && !ev.shiftKey) {

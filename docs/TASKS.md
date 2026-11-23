@@ -187,4 +187,13 @@
 - [x] T17.3 运行 Win10/11、NVENC/libx264、多屏/混合 DPI、4K/60fps、音视频外设矩阵验证并输出 `docs/DEVICE_MATRIX_REPORT.md`。
 - [x] T17.4 全量门禁 G1–G6 归档与发布 `v1.0.0-windows`（注：`T11.7` 仍按决策 D4 留待用户交互桌面肉眼终审）。
 
+## Wave G: v0.2.0 桌面应用层全量对齐（T18.1–T18.7）
+- [x] T18.1 AI 智能编辑助手、Windows DPAPI 安全存储、本地 Agent Bridge（Bearer 鉴权 + 单轮快照撤销 + Studio UI 可折叠左抽屉）。
+- [ ] T18.2 WebGL2 双语字幕渲染（5 种入场动效）、HTML/SVG 动效贴纸（`.dmhtml`）与图片壁纸纹理加载。
+- [ ] T18.3 内置合成音效（`SoundSynth`）、人声闪避混音（BGM Ducking）、音轨波形与左栏素材库面板。
+- [ ] T18.4 双语字幕、停顿静音剪辑与智能剪辑右侧/左栏交互面板。
+- [ ] T18.5 HTML 动效模板编辑器与画布交互式裁剪（Crop Overlay）手柄。
+- [ ] T18.6 7 轨时间线波形可视化、快捷键速查面板（Cheatsheet）与全局视觉打磨。
+- [ ] T18.7 Chrome 真机多轮 E2E 验收、Wave G 全景架构图、桌面应用构建与 `v1.1.0-windows` 发布。
+
 

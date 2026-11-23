@@ -61,6 +61,7 @@ import {
   buildSessionAudioTracks,
   extractAudioSourceSlices,
 } from '../render/AudioMixPlan.ts';
+import { AgentBridgeManager } from './AgentBridge.ts';
 
 const EDGE_EXE = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
 const SAFE_RECORDING_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
@@ -84,6 +85,7 @@ export interface StudioServerOptions {
   recordingsDir?: string;
   port?: number;
   allowShellOpen?: boolean;
+  aiSettingsFilePath?: string;
 }
 
 export interface StudioServerHandle {
@@ -282,6 +284,22 @@ export async function startStudioServer(o: StudioServerOptions): Promise<StudioS
   const recordingsDir = resolve(o.recordingsDir ?? join(rootDir, 'recordings'));
   const exportJobs = new Map<string, InternalExportJob>();
   const saveLocks = new Map<string, Promise<void>>();
+  const agentBridge = new AgentBridgeManager(
+    o.aiSettingsFilePath ? { settingsFilePath: resolve(o.aiSettingsFilePath) } : {}
+  );
+
+  async function persistProjectAtomic(recId: string, sessionDir: string, project: any): Promise<void> {
+    const encoded = encodeRecorderProject(project);
+    const projectPath = join(sessionDir, 'project.json');
+    const prevLock = saveLocks.get(recId) ?? Promise.resolve();
+    const nextSave = prevLock.then(() => {
+      const tmpPath = join(sessionDir, `.project.json.tmp.${process.pid}.${Date.now()}`);
+      writeFileSync(tmpPath, encoded, 'utf8');
+      renameSync(tmpPath, projectPath);
+    });
+    saveLocks.set(recId, nextSave.catch(() => {}));
+    await nextSave;
+  }
   let recordState: StudioRecordJobState = {
     status: 'idle',
     sessionId: null,
@@ -562,7 +580,26 @@ export async function startStudioServer(o: StudioServerOptions): Promise<StudioS
 
       // 2. Health & device discovery
       if (req.method === 'GET' && decodedPath === '/api/health') {
-        sendJson(res, 200, { ok: true, version: '1.0.0' });
+        sendJson(res, 200, { ok: true, version: '1.1.0-dev' });
+        return;
+      }
+
+      if (req.method === 'GET' && decodedPath === '/api/ai/status') {
+        const addr = server.address();
+        const activePort = typeof addr === 'object' && addr ? addr.port : (o.port ?? 0);
+        sendJson(res, 200, agentBridge.getStatus(activePort));
+        return;
+      }
+
+      if (req.method === 'GET' && decodedPath === '/api/ai/settings') {
+        sendJson(res, 200, agentBridge.getSettingsPayload());
+        return;
+      }
+
+      if (req.method === 'PUT' && decodedPath === '/api/ai/settings') {
+        const rawBody = await readJsonBody(req);
+        const body = rawBody && typeof rawBody === 'object' ? (rawBody as Record<string, any>) : {};
+        sendJson(res, 200, agentBridge.updateSettingsPayload(body));
         return;
       }
 
@@ -778,16 +815,7 @@ export async function startStudioServer(o: StudioServerOptions): Promise<StudioS
             sendJson(res, 400, { error: `工程校验失败: ${err?.message ?? err}` });
             return;
           }
-          const encoded = encodeRecorderProject(project);
-          const projectPath = join(sessionDir, 'project.json');
-          const prevLock = saveLocks.get(recId) ?? Promise.resolve();
-          const nextSave = prevLock.then(() => {
-            const tmpPath = join(sessionDir, `.project.json.tmp.${process.pid}.${Date.now()}`);
-            writeFileSync(tmpPath, encoded, 'utf8');
-            renameSync(tmpPath, projectPath);
-          });
-          saveLocks.set(recId, nextSave.catch(() => {}));
-          await nextSave;
+          await persistProjectAtomic(recId, sessionDir, project);
           sendJson(res, 200, { ok: true, savedAt: new Date().toISOString() });
           return;
         }
@@ -881,6 +909,66 @@ export async function startStudioServer(o: StudioServerOptions): Promise<StudioS
             child.unref();
           }
           sendJson(res, 200, { ok: true, dir: sessionDir });
+          return;
+        }
+
+        if (req.method === 'GET' && subRoute === 'ai/history') {
+          sendJson(res, 200, { ok: true, history: agentBridge.loadHistory(sessionDir) });
+          return;
+        }
+
+        if (req.method === 'POST' && subRoute === 'ai/chat') {
+          const rawBody = await readJsonBody(req);
+          const body = rawBody && typeof rawBody === 'object' ? (rawBody as Record<string, any>) : {};
+          try {
+            const out = await agentBridge.executeChatTurn(sessionDir, recId, {
+              prompt: typeof body.prompt === 'string' ? body.prompt : '',
+              currentTime: typeof body.currentTime === 'number' ? body.currentTime : 0,
+            });
+            await persistProjectAtomic(recId, sessionDir, out.nextProject);
+            sendJson(res, 200, out.payload);
+          } catch (err: any) {
+            sendJson(res, 400, { error: err?.message ?? String(err) });
+          }
+          return;
+        }
+
+        if (req.method === 'POST' && subRoute === 'ai/command') {
+          if (!agentBridge.verifyBearerToken(req.headers.authorization)) {
+            sendJson(res, 401, { error: 'Unauthorized: Bearer token missing or invalid' });
+            return;
+          }
+          const rawBody = await readJsonBody(req);
+          const body = rawBody && typeof rawBody === 'object' ? (rawBody as Record<string, any>) : {};
+          try {
+            const out = await agentBridge.executeCommandTurn(sessionDir, recId, {
+              prompt: typeof body.prompt === 'string' ? body.prompt : '',
+              commands: Array.isArray(body.commands) ? body.commands : undefined,
+              currentTime: typeof body.currentTime === 'number' ? body.currentTime : 0,
+            });
+            await persistProjectAtomic(recId, sessionDir, out.nextProject);
+            sendJson(res, 200, out.payload);
+          } catch (err: any) {
+            sendJson(res, 400, { error: err?.message ?? String(err) });
+          }
+          return;
+        }
+
+        if (req.method === 'POST' && subRoute === 'ai/revert') {
+          const rawBody = await readJsonBody(req);
+          const body = rawBody && typeof rawBody === 'object' ? (rawBody as Record<string, any>) : {};
+          const turnId = typeof body.turnId === 'string' ? body.turnId.trim() : '';
+          if (!turnId) {
+            sendJson(res, 400, { error: '缺少 turnId' });
+            return;
+          }
+          const out = agentBridge.revertChatTurn(sessionDir, recId, turnId);
+          if (!out) {
+            sendJson(res, 404, { error: '该轮快照不存在或已撤销' });
+            return;
+          }
+          await persistProjectAtomic(recId, sessionDir, out.nextProject);
+          sendJson(res, 200, out.payload);
           return;
         }
       }

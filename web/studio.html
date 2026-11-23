@@ -20,6 +20,9 @@
         <button id="btn-new-record" class="chrome-btn subtle-well" title="新建屏幕/窗口/音视频录制">
           + 新建录制
         </button>
+        <button id="btn-toggle-library" class="chrome-btn active" title="展开/收起左侧 AI 与素材库 (Ctrl+Alt+L)">
+          AI · 素材库
+        </button>
         <input id="project-title-input" class="chrome-title-input" type="text" placeholder="工程标题" aria-label="工程标题" />
         <span id="save-status-pill" class="save-pill">就绪</span>
       </div>
@@ -32,8 +35,20 @@
       </div>
     </header>
 
-    <!-- 2. Middle Workspace: Central WebGL2 Monitor + Right Inspector -->
-    <main class="workspace-mid">
+    <!-- 2. Middle Workspace: Collapsible Left Library + Central WebGL2 Monitor + Right Inspector -->
+    <main id="workspace-mid" class="workspace-mid">
+      <aside id="studio-library-shell" class="library-shell" aria-label="AI 助手与素材库">
+        <div class="library-header">
+          <div id="studio-library-tabs" class="library-tabs" role="tablist">
+            <button class="lib-tab-btn active" data-lib-tab="ai" role="tab" aria-selected="true">AI 助手</button>
+            <button class="lib-tab-btn" data-lib-tab="assets" role="tab" aria-selected="false">素材库</button>
+            <button class="lib-tab-btn" data-lib-tab="subtitles" role="tab" aria-selected="false">字幕</button>
+            <button class="lib-tab-btn" data-lib-tab="motion" role="tab" aria-selected="false">动效</button>
+          </div>
+          <button id="btn-collapse-library" class="tbtn lib-collapse-btn" title="收起左侧面板 (Ctrl+Alt+L)">‹</button>
+        </div>
+        <div id="studio-library-body" class="library-body"></div>
+      </aside>
       <section class="stage-column">
         <div class="stage-viewport">
           <div class="stage-canvas-wrap" id="stage-canvas-wrap">
