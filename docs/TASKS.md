@@ -171,7 +171,7 @@
 - [x] T15.3 DirectShow 音视频设备枚举 `src/capture/MediaDevices.ts` 与麦克风录制 `src/capture/MicRecorder.ts`。
 - [x] T15.4 DirectShow 摄像头同步录制 `src/capture/CameraRecorder.ts` + 同步锚点 + `camera_frames/` 预解码。
 - [x] T15.5 导出多音轨按时间线与音量/静音过滤混音进 MP4，并支持 `--format m4a` 纯音频导出。
-- [ ] T15.6 录制中分段暂停/恢复无损拼接与热键实时打点 `RecordingMarker`。
+- [x] T15.6 录制中分段暂停/恢复无损拼接与热键实时打点 `RecordingMarker`。
 
 ### Wave E：交互式 Web 编辑器与多规格产品级导出（P2-04, P2-08, P2-09）
 - [ ] T16.1 新增 `src/server/StudioServer.ts` 与 `scripts/studio.ts`（Edge `--app` 无地址栏窗口模式）。
