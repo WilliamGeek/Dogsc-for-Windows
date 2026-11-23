@@ -6,8 +6,10 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import {
   buildIExpressSed,
+  buildPortableRuntimeNotice,
   listPackagedRelativePaths,
   resolveIExpressPath,
+  resolvePortableNodeBinary,
 } from '../../src/desktop/DesktopBuilder.ts';
 
 const ROOT_DIR = path.resolve(import.meta.dirname, '..', '..');
@@ -67,3 +69,14 @@ test('T17.2: THIRD_PARTY_NOTICES.md discloses non-bundled FFmpeg/Node/Edge and u
   assert.ok(text.includes('未附加 Authenticode'));
   assert.ok(text.includes('SHA256SUMS.txt'));
 });
+
+test('T19.3: portable runtime helpers resolve active node binary and emit disclosure notice', () => {
+  const resolved = resolvePortableNodeBinary();
+  assert.equal(resolved, path.resolve(process.execPath));
+  const notice = buildPortableRuntimeNotice('v24.0.0');
+  assert.ok(notice.includes('v24.0.0'));
+  assert.ok(notice.includes('runtime\\node.exe'));
+  assert.ok(notice.includes('MIT'));
+});
+
+

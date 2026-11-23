@@ -8,6 +8,8 @@
  */
 
 import type { StudioRuntimeContext } from './app.ts';
+import { svgIcon } from './icons.ts';
+import { renderSwitchRow } from './controls.ts';
 
 interface DeviceCatalogPayload {
   displays: Array<{ index: number; deviceName: string; isPrimary: boolean; width: number; height: number }>;
@@ -33,7 +35,7 @@ export async function openRecordingIslandModal(ctx: StudioRuntimeContext): Promi
   card.innerHTML = `
     <div class="modal-header">
       <h3 class="modal-title">新建录制（Windows 多源采集）</h3>
-      <button id="rec-modal-close" class="chrome-btn">✕</button>
+      <button id="rec-modal-close" class="chrome-btn" title="关闭">${svgIcon('close', 14)}</button>
     </div>
     <div class="modal-body" id="rec-modal-body">
       <div style="color:var(--ink-secondary);padding:12px 0;">正在探测本机显示器、可见窗口与音视频设备…</div>
@@ -113,10 +115,7 @@ export async function openRecordingIslandModal(ctx: StudioRuntimeContext): Promi
     </div>
 
     <div class="insp-card">
-      <div class="insp-row">
-        <span class="insp-label">录制系统音频 (WASAPI 零依赖)</span>
-        <input id="rec-sys-audio" type="checkbox" checked />
-      </div>
+      ${renderSwitchRow({ id: 'rec-sys-audio', label: '录制系统音频 (WASAPI 零依赖)', checked: true })}
       <div class="insp-row">
         <span class="insp-label">麦克风输入</span>
         <select id="rec-mic" class="chrome-select">${micOpts}</select>

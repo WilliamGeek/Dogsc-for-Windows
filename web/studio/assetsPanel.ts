@@ -12,6 +12,7 @@
 import type { LibraryPanelHost } from './aiPanel.ts';
 import { makeAudioClip, type MediaAssetKind } from '../../src/core/PostProductionModel.ts';
 import { makeOverlayTiming } from '../../src/core/OverlayTimeline.ts';
+import { svgIcon } from './icons.ts';
 
 interface RecordingSummaryItem {
   id: string;
@@ -140,12 +141,15 @@ export class AssetsLibraryPanel {
                   </div>
                   <div class="audio-clip-controls">
                     <label class="assets-check-label">
-                      <input type="checkbox" class="audio-duck-toggle" data-clip-id="${escapeHtml(c.id)}" ${
-                        c.ducksUnderSpeech ? 'checked' : ''
-                      } />
+                      <span class="studio-switch">
+                        <input type="checkbox" class="audio-duck-toggle" data-clip-id="${escapeHtml(c.id)}" ${
+                          c.ducksUnderSpeech ? 'checked' : ''
+                        } />
+                        <span class="studio-switch-track"><span class="studio-switch-thumb"></span></span>
+                      </span>
                       <span>人声压低</span>
                     </label>
-                    <button class="chrome-btn asset-act-btn" data-delete-audio="${escapeHtml(c.id)}">移除</button>
+                    <button class="chrome-btn asset-act-btn" data-delete-audio="${escapeHtml(c.id)}">${svgIcon('trash', 11)}<span>移除</span></button>
                   </div>
                 </div>`;
             })
@@ -155,7 +159,7 @@ export class AssetsLibraryPanel {
       (s) =>
         `<button class="chrome-btn sfx-preset-btn" data-sfx-preset="${s.id}" ${
           this.busy ? 'disabled' : ''
-        }>+ ${escapeHtml(s.label)}</button>`
+        }>${svgIcon('plus', 11)}<span>${escapeHtml(s.label)}</span></button>`
     ).join('');
 
     const mergeOptionsHtml = this.otherRecordings
@@ -177,7 +181,7 @@ export class AssetsLibraryPanel {
             <input id="assets-file-input" type="file" accept="image/*,audio/*,video/*,.dmhtml" hidden ${
               this.busy ? 'disabled' : ''
             } />
-            ${this.busy ? '处理中…' : '+ 上传图片 / 音频 / .dmhtml'}
+            ${svgIcon('upload', 12)}<span>${this.busy ? '处理中…' : '上传图片 / 音频 / .dmhtml'}</span>
           </label>
         </div>
 
@@ -433,3 +437,4 @@ export class AssetsLibraryPanel {
     }
   }
 }
+

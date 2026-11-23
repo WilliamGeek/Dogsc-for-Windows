@@ -86,8 +86,71 @@ test('T17.1: DogSC.cs compiles via csc.exe and passes --version, --check, --inst
     const chkObj = JSON.parse(chk.stdout.trim());
     assert.equal(chkObj.ok, true);
     assert.equal(chkObj.hasStudioEntry, true);
+    assert.equal(chkObj.captureProtectedMemo, true);
+    assert.equal(chkObj.updateChecker, true);
+    assert.equal(chkObj.portableNodeBundled, false);
+
+    // T19.2: Capture-protected teleprompter memo window check
+    const memoChk = spawnSync(exePath, ['--memo-check'], { encoding: 'utf8' });
+    assert.equal(memoChk.status, 0, `--memo-check failed:\n${memoChk.stdout}\n${memoChk.stderr}`);
+    const memoObj = JSON.parse(memoChk.stdout.trim());
+    assert.equal(memoObj.ok, true);
+    assert.equal(memoObj.affinityApplied, true);
+
+    // T19.2: In-app update manifest check & SHA-256 verification
+    const manifestPath = path.join(tmpDir, 'update-manifest.json');
+    await fs.writeFile(
+      manifestPath,
+      JSON.stringify({
+        version: '9.9.9',
+        downloadUrl: 'https://github.com/laogou717/dogsc/releases',
+        sha256: '0123456789abcdef',
+      }),
+      'utf8'
+    );
+    const upd = spawnSync(exePath, ['--check-update', '--manifest', manifestPath], {
+      encoding: 'utf8',
+    });
+    assert.equal(upd.status, 0, `${upd.stdout}\n${upd.stderr}`);
+    const updObj = JSON.parse(upd.stdout.trim());
+    assert.equal(updObj.ok, true);
+    assert.equal(updObj.updateAvailable, true);
+    assert.equal(updObj.latestVersion, '9.9.9');
+
+    const { createHash } = await import('node:crypto');
+    const payloadFile = path.join(tmpDir, 'sample-artifact.txt');
+    const payloadBuf = Buffer.from('dogsc-sha256-test-payload', 'utf8');
+    await fs.writeFile(payloadFile, payloadBuf);
+    const expectedHash = createHash('sha256').update(payloadBuf).digest('hex');
+
+    const vOk = spawnSync(
+      exePath,
+      ['--check-update', '--verify-file', payloadFile, '--expected-sha256', expectedHash],
+      { encoding: 'utf8' }
+    );
+    assert.equal(vOk.status, 0, `${vOk.stdout}\n${vOk.stderr}`);
+    assert.equal(JSON.parse(vOk.stdout.trim()).ok, true);
+
+    const vBad = spawnSync(
+      exePath,
+      ['--check-update', '--verify-file', payloadFile, '--expected-sha256', 'deadbeef'],
+      { encoding: 'utf8' }
+    );
+    assert.notEqual(vBad.status, 0);
+    assert.equal(JSON.parse(vBad.stdout.trim()).ok, false);
+
+    // T19.3: Bundled portable runtime\node.exe priority discovery
+    const runtimeDir = path.join(sourceStageDir, 'runtime');
+    await fs.mkdir(runtimeDir, { recursive: true });
+    const fakeBundledNode = path.join(runtimeDir, 'node.exe');
+    await fs.writeFile(fakeBundledNode, 'MZ-stub', 'utf8');
+    const portableChk = spawnSync(exePath, ['--check', '--root', sourceStageDir], { encoding: 'utf8' });
+    const portableObj = JSON.parse(portableChk.stdout.trim());
+    assert.equal(portableObj.portableNodeBundled, true);
+    assert.equal(path.resolve(portableObj.node).toLowerCase(), path.resolve(fakeBundledNode).toLowerCase());
 
     // Prepare tiny isolated stage source to verify --install & --uninstall end-to-end
+    await fs.rm(runtimeDir, { recursive: true, force: true });
     await fs.mkdir(path.join(sourceStageDir, 'scripts'), { recursive: true });
     await fs.writeFile(path.join(sourceStageDir, 'scripts', 'studio.ts'), '// stub\n');
     await fs.writeFile(path.join(sourceStageDir, 'package.json'), '{"name":"dogsc-win"}\n');
@@ -113,3 +176,4 @@ test('T17.1: DogSC.cs compiles via csc.exe and passes --version, --check, --inst
     await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
   }
 });
+

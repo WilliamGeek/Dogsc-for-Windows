@@ -19,7 +19,12 @@ const execFileAsync = promisify(execFile);
 const STDERR_TAIL_LIMIT = 16 * 1024;
 const STOP_TIMEOUT_MS = 5000;
 
-export type VideoEncoderKind = 'h264_nvenc' | 'libx264';
+export type VideoEncoderKind = 'h264_nvenc' | 'h264_amf' | 'h264_qsv' | 'libx264';
+export const HARDWARE_ENCODER_PROBE_ORDER: readonly Exclude<VideoEncoderKind, 'libx264'>[] = [
+  'h264_nvenc',
+  'h264_amf',
+  'h264_qsv',
+];
 export type CaptureMode = 'display' | 'region' | 'window';
 
 export interface CaptureRegion {
@@ -86,6 +91,10 @@ export interface FfmpegArgsOptions {
   captureMode?: CaptureMode;
   region?: CaptureRegion;
   windowTitle?: string;
+  /** Enable crash-resilient fragmented MP4 output (0.5s fragments by default). */
+  fragmented?: boolean;
+  /** Fragment duration in microseconds (default 500000 = 0.5s). */
+  fragDurationUs?: number;
 }
 
 export interface ScreenRecorderOptions {
@@ -207,6 +216,18 @@ export function buildFfmpegArgs(o: FfmpegArgsOptions): string[] {
     );
   }
 
+  const tailArgs: string[] = [];
+  if (o.fragmented !== false) {
+    const fragUs = Math.max(100_000, Math.trunc(o.fragDurationUs ?? 500_000));
+    tailArgs.push(
+      '-movflags',
+      '+frag_keyframe+empty_moov+default_base_moof',
+      '-frag_duration',
+      String(fragUs)
+    );
+  }
+  tailArgs.push(o.outFile);
+
   if (o.encoder === 'h264_nvenc') {
     return [
       ...baseArgs,
@@ -230,7 +251,49 @@ export function buildFfmpegArgs(o: FfmpegArgsOptions): string[] {
       String(fps),
       '-fps_mode',
       'cfr',
-      o.outFile,
+      ...tailArgs,
+    ];
+  } else if (o.encoder === 'h264_amf') {
+    return [
+      ...baseArgs,
+      '-c:v',
+      'h264_amf',
+      '-quality',
+      'balanced',
+      '-rc',
+      'cqp',
+      '-qp_i',
+      '22',
+      '-qp_p',
+      '22',
+      '-bf',
+      '0',
+      '-pix_fmt',
+      'yuv420p',
+      '-r',
+      String(fps),
+      '-fps_mode',
+      'cfr',
+      ...tailArgs,
+    ];
+  } else if (o.encoder === 'h264_qsv') {
+    return [
+      ...baseArgs,
+      '-c:v',
+      'h264_qsv',
+      '-preset',
+      'veryfast',
+      '-global_quality',
+      '22',
+      '-bf',
+      '0',
+      '-pix_fmt',
+      'yuv420p',
+      '-r',
+      String(fps),
+      '-fps_mode',
+      'cfr',
+      ...tailArgs,
     ];
   } else {
     return [
@@ -247,17 +310,14 @@ export function buildFfmpegArgs(o: FfmpegArgsOptions): string[] {
       String(fps),
       '-fps_mode',
       'cfr',
-      o.outFile,
+      ...tailArgs,
     ];
   }
 }
 
 /**
- * Detects whether hardware-accelerated h264_nvenc is supported by the installed ffmpeg.
- *
- * Listing the encoder is not enough: a GPU/driver mismatch can make the
- * encoder visible but unusable. T12.3 performs a one-frame null-output
- * probe and falls back to libx264 on any failure.
+ * Probes tri-vendor GPU encoders (NVIDIA NVENC -> AMD AMF -> Intel QSV) with real
+ * one-frame null-output execution, falling back to software libx264 when unavailable.
  */
 export async function detectEncoder(
   options: { ffmpegBin?: string; ffmpegArgsPrefix?: string[] } = {}
@@ -269,34 +329,41 @@ export async function detectEncoder(
     const { stdout } = await execFileAsync(bin, [...prefix, '-hide_banner', '-encoders'], {
       timeout: 5000,
     });
-    if (!stdout.includes('h264_nvenc')) {
-      return 'libx264';
-    }
 
-    await execFileAsync(
-      bin,
-      [
-        ...prefix,
-        '-hide_banner',
-        '-loglevel',
-        'error',
-        '-f',
-        'lavfi',
-        '-i',
-        'color=c=black:s=256x256:d=0.04',
-        '-frames:v',
-        '1',
-        '-c:v',
-        'h264_nvenc',
-        '-f',
-        'null',
-        '-',
-      ],
-      { timeout: 3000 }
-    );
-    return 'h264_nvenc';
+    for (const candidate of HARDWARE_ENCODER_PROBE_ORDER) {
+      if (!stdout.includes(candidate)) {
+        continue;
+      }
+      try {
+        await execFileAsync(
+          bin,
+          [
+            ...prefix,
+            '-hide_banner',
+            '-loglevel',
+            'error',
+            '-f',
+            'lavfi',
+            '-i',
+            'color=c=black:s=256x256:d=0.04',
+            '-frames:v',
+            '1',
+            '-c:v',
+            candidate,
+            '-f',
+            'null',
+            '-',
+          ],
+          { timeout: 3000 }
+        );
+        return candidate;
+      } catch {
+        // Probe failed for this vendor; continue to next hardware encoder
+      }
+    }
+    return 'libx264';
   } catch {
-    // Missing ffmpeg, missing NVENC, or a real GPU probe failure all fall back.
+    // Missing ffmpeg or -encoders failure falls back cleanly
     return 'libx264';
   }
 }

@@ -3,9 +3,11 @@
 // Supports:
 //   --version
 //   --check [--root <dir>]
+//   --memo-check
+//   --check-update [--manifest <pathOrUrl>] [--verify-file <path> --expected-sha256 <hex>]
 //   --install [--target <dir>] [--source <dir>] [--silent] [--no-shortcuts] [--no-registry]
 //   --uninstall [--target <dir>] [--silent] [--no-shortcuts] [--no-registry]
-//   Default interactive mode: single-instance WinForms tray + Win32 global hotkeys + StudioServer + Edge --app
+//   Default interactive mode: single-instance WinForms tray + Win32 global hotkeys + TeleprompterMemo + StudioServer + Edge --app
 
 using System;
 using System.Collections.Generic;
@@ -13,8 +15,10 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
+using System.Net;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -23,18 +27,19 @@ using Microsoft.Win32;
 
 [assembly: AssemblyTitle("DogSC Windows")]
 [assembly: AssemblyDescription("DogSC Screen Studio Windows Shell")]
-[assembly: AssemblyVersion("1.1.0.0")]
-[assembly: AssemblyFileVersion("1.1.0.0")]
+[assembly: AssemblyVersion("1.2.0.0")]
+[assembly: AssemblyFileVersion("1.2.0.0")]
 
 namespace DogSCDesktop
 {
     internal static class Program
     {
-        private const string AppVersion = "1.1.0";
+        internal const string AppVersion = "1.2.0";
         private const string SingleInstanceMutexName = "Local\\DogSC_Windows_Studio_SingleInstance";
         private const string UninstallRegPath = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\DogSC";
         private const string RunRegPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
         private const string RunValueName = "DogSC";
+        private const string DefaultUpdateManifestUrl = "https://api.github.com/repos/laogou717/dogsc/releases/latest";
 
         [STAThread]
         private static int Main(string[] args)
@@ -50,6 +55,8 @@ namespace DogSCDesktop
 
             bool flagVersion = false;
             bool flagCheck = false;
+            bool flagMemoCheck = false;
+            bool flagCheckUpdate = false;
             bool flagInstall = false;
             bool flagUninstall = false;
             bool flagTrayOnly = false;
@@ -61,6 +68,9 @@ namespace DogSCDesktop
             string optRecordings = null;
             string optTarget = null;
             string optSource = null;
+            string optManifest = null;
+            string optVerifyFile = null;
+            string optExpectedSha256 = null;
             int optPort = 0;
 
             for (int i = 0; i < args.Length; i++)
@@ -68,6 +78,8 @@ namespace DogSCDesktop
                 string a = args[i];
                 if (a == "--version") flagVersion = true;
                 else if (a == "--check") flagCheck = true;
+                else if (a == "--memo-check") flagMemoCheck = true;
+                else if (a == "--check-update") flagCheckUpdate = true;
                 else if (a == "--install") flagInstall = true;
                 else if (a == "--uninstall") flagUninstall = true;
                 else if (a == "--tray-only") flagTrayOnly = true;
@@ -78,6 +90,9 @@ namespace DogSCDesktop
                 else if (a == "--recordings" && i + 1 < args.Length) optRecordings = args[++i];
                 else if (a == "--target" && i + 1 < args.Length) optTarget = args[++i];
                 else if (a == "--source" && i + 1 < args.Length) optSource = args[++i];
+                else if (a == "--manifest" && i + 1 < args.Length) optManifest = args[++i];
+                else if (a == "--verify-file" && i + 1 < args.Length) optVerifyFile = args[++i];
+                else if (a == "--expected-sha256" && i + 1 < args.Length) optExpectedSha256 = args[++i];
                 else if (a == "--port" && i + 1 < args.Length)
                 {
                     int parsedPort;
@@ -99,6 +114,16 @@ namespace DogSCDesktop
                 return RunEnvironmentCheck(optRoot);
             }
 
+            if (flagMemoCheck)
+            {
+                return RunMemoCheck();
+            }
+
+            if (flagCheckUpdate)
+            {
+                return RunCheckUpdateCli(optManifest, optVerifyFile, optExpectedSha256);
+            }
+
             if (flagInstall)
             {
                 return RunInstall(optSource, optTarget, flagSilent, flagNoShortcuts, flagNoRegistry);
@@ -112,7 +137,7 @@ namespace DogSCDesktop
             return RunInteractiveShell(optRoot, optRecordings, optPort, flagTrayOnly);
         }
 
-        private static string EscapeJson(string value)
+        internal static string EscapeJson(string value)
         {
             if (value == null) return "null";
             StringBuilder sb = new StringBuilder();
@@ -162,6 +187,20 @@ namespace DogSCDesktop
 
         internal static string FindBinary(string exeName, string[] extraPaths)
         {
+            return FindBinary(exeName, null, extraPaths);
+        }
+
+        internal static string FindBinary(string exeName, string[] priorityPaths, string[] extraPaths)
+        {
+            if (priorityPaths != null)
+            {
+                for (int i = 0; i < priorityPaths.Length; i++)
+                {
+                    string p = priorityPaths[i];
+                    if (!string.IsNullOrEmpty(p) && File.Exists(p)) return Path.GetFullPath(p);
+                }
+            }
+
             string pathEnv = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
             string[] segments = pathEnv.Split(new char[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
             for (int i = 0; i < segments.Length; i++)
@@ -191,36 +230,82 @@ namespace DogSCDesktop
             return null;
         }
 
+        private static string[] BuildBundledRuntimeCandidates(string appRoot, string exeName)
+        {
+            string exeDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? AppDomain.CurrentDomain.BaseDirectory;
+            List<string> list = new List<string>();
+            if (!string.IsNullOrEmpty(appRoot))
+            {
+                list.Add(Path.Combine(appRoot, "runtime", exeName));
+            }
+            if (!string.IsNullOrEmpty(exeDir))
+            {
+                list.Add(Path.Combine(exeDir, "runtime", exeName));
+            }
+            return list.ToArray();
+        }
+
         internal static string FindNodeExe()
+        {
+            return FindNodeExe(null);
+        }
+
+        internal static string FindNodeExe(string appRoot)
         {
             string pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
             string pf86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
             string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            return FindBinary("node.exe", new string[] {
-                Path.Combine(pf, "nodejs", "node.exe"),
-                Path.Combine(pf86, "nodejs", "node.exe"),
-                Path.Combine(local, "Programs", "nodejs", "node.exe")
-            });
+            return FindBinary(
+                "node.exe",
+                BuildBundledRuntimeCandidates(appRoot, "node.exe"),
+                new string[] {
+                    Path.Combine(pf, "nodejs", "node.exe"),
+                    Path.Combine(pf86, "nodejs", "node.exe"),
+                    Path.Combine(local, "Programs", "nodejs", "node.exe")
+                }
+            );
         }
 
         internal static string FindFfmpegExe()
         {
+            return FindFfmpegExe(null);
+        }
+
+        internal static string FindFfmpegExe(string appRoot)
+        {
             string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            return FindBinary("ffmpeg.exe", new string[] {
-                Path.Combine(local, "Microsoft", "WinGet", "Links", "ffmpeg.exe"),
-                @"C:\ffmpeg\bin\ffmpeg.exe"
-            });
+            return FindBinary(
+                "ffmpeg.exe",
+                BuildBundledRuntimeCandidates(appRoot, "ffmpeg.exe"),
+                new string[] {
+                    Path.Combine(local, "Microsoft", "WinGet", "Links", "ffmpeg.exe"),
+                    @"C:\ffmpeg\bin\ffmpeg.exe"
+                }
+            );
         }
 
         internal static string FindFfprobeExe(string ffmpegPath)
         {
+            return FindFfprobeExe(null, ffmpegPath);
+        }
+
+        internal static string FindFfprobeExe(string appRoot, string ffmpegPath)
+        {
+            string[] bundled = BuildBundledRuntimeCandidates(appRoot, "ffprobe.exe");
+            for (int i = 0; i < bundled.Length; i++)
+            {
+                if (!string.IsNullOrEmpty(bundled[i]) && File.Exists(bundled[i]))
+                {
+                    return Path.GetFullPath(bundled[i]);
+                }
+            }
             if (!string.IsNullOrEmpty(ffmpegPath))
             {
                 string sibling = Path.Combine(Path.GetDirectoryName(ffmpegPath), "ffprobe.exe");
                 if (File.Exists(sibling)) return sibling;
             }
             string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            return FindBinary("ffprobe.exe", new string[] {
+            return FindBinary("ffprobe.exe", null, new string[] {
                 Path.Combine(local, "Microsoft", "WinGet", "Links", "ffprobe.exe"),
                 @"C:\ffmpeg\bin\ffprobe.exe"
             });
@@ -231,21 +316,40 @@ namespace DogSCDesktop
             string pf86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
             string pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
             string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            return FindBinary("msedge.exe", new string[] {
+            return FindBinary("msedge.exe", null, new string[] {
                 Path.Combine(pf86, "Microsoft", "Edge", "Application", "msedge.exe"),
                 Path.Combine(pf, "Microsoft", "Edge", "Application", "msedge.exe"),
                 Path.Combine(local, "Microsoft", "Edge", "Application", "msedge.exe")
             });
         }
 
+        private static bool IsPortableNodeBundled(string appRoot, string resolvedNode)
+        {
+            if (string.IsNullOrEmpty(resolvedNode)) return false;
+            string[] candidates = BuildBundledRuntimeCandidates(appRoot, "node.exe");
+            string fullResolved = Path.GetFullPath(resolvedNode);
+            for (int i = 0; i < candidates.Length; i++)
+            {
+                if (!string.IsNullOrEmpty(candidates[i]) && File.Exists(candidates[i]))
+                {
+                    if (string.Equals(fullResolved, Path.GetFullPath(candidates[i]), StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
         private static int RunEnvironmentCheck(string explicitRoot)
         {
             string appRoot = ResolveAppRoot(explicitRoot);
             bool hasStudioEntry = File.Exists(Path.Combine(appRoot, "scripts", "studio.ts"));
-            string node = FindNodeExe();
-            string ffmpeg = FindFfmpegExe();
-            string ffprobe = FindFfprobeExe(ffmpeg);
+            string node = FindNodeExe(appRoot);
+            string ffmpeg = FindFfmpegExe(appRoot);
+            string ffprobe = FindFfprobeExe(appRoot, ffmpeg);
             string edge = FindEdgeExe();
+            bool portableNodeBundled = IsPortableNodeBundled(appRoot, node);
             bool ok = hasStudioEntry && node != null && ffmpeg != null && ffprobe != null && edge != null;
 
             string json = "{"
@@ -256,9 +360,84 @@ namespace DogSCDesktop
                 + ",\"ffmpeg\":" + EscapeJson(ffmpeg)
                 + ",\"ffprobe\":" + EscapeJson(ffprobe)
                 + ",\"msedge\":" + EscapeJson(edge)
+                + ",\"portableNodeBundled\":" + (portableNodeBundled ? "true" : "false")
+                + ",\"captureProtectedMemo\":true"
+                + ",\"updateChecker\":true"
                 + "}";
             Console.WriteLine(json);
             return ok ? 0 : 1;
+        }
+
+        private static int RunMemoCheck()
+        {
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+            bool applied = false;
+            bool excluded = false;
+            using (TeleprompterMemoForm form = new TeleprompterMemoForm(true))
+            {
+                form.CreateControl();
+                IntPtr h = form.Handle;
+                applied = h != IntPtr.Zero && form.AffinityApplied;
+                excluded = form.ExcludeFromCaptureSupported;
+            }
+            string json = "{"
+                + "\"ok\":" + (applied ? "true" : "false")
+                + ",\"affinityApplied\":" + (applied ? "true" : "false")
+                + ",\"captureProtected\":" + (excluded ? "true" : "false")
+                + "}";
+            Console.WriteLine(json);
+            return applied ? 0 : 1;
+        }
+
+        private static int RunCheckUpdateCli(string manifestPathOrUrl, string verifyFile, string expectedSha256)
+        {
+            if (!string.IsNullOrEmpty(verifyFile))
+            {
+                if (!File.Exists(verifyFile))
+                {
+                    Console.WriteLine("{\"ok\":false,\"error\":\"File not found\"}");
+                    return 1;
+                }
+                string actualSha = UpdateChecker.ComputeSha256Hex(verifyFile);
+                if (string.IsNullOrEmpty(expectedSha256))
+                {
+                    Console.WriteLine("{\"ok\":true,\"file\":" + EscapeJson(verifyFile) + ",\"sha256\":" + EscapeJson(actualSha) + "}");
+                    return 0;
+                }
+                string normalizedExpected = expectedSha256.Trim().ToLowerInvariant();
+                bool match = string.Equals(actualSha, normalizedExpected, StringComparison.OrdinalIgnoreCase);
+                Console.WriteLine(
+                    "{\"ok\":" + (match ? "true" : "false")
+                    + ",\"file\":" + EscapeJson(verifyFile)
+                    + ",\"sha256\":" + EscapeJson(actualSha)
+                    + ",\"expected\":" + EscapeJson(normalizedExpected)
+                    + "}"
+                );
+                return match ? 0 : 1;
+            }
+
+            string source = string.IsNullOrEmpty(manifestPathOrUrl)
+                ? (Environment.GetEnvironmentVariable("DOGSC_UPDATE_MANIFEST") ?? DefaultUpdateManifestUrl)
+                : manifestPathOrUrl;
+            try
+            {
+                UpdateManifestInfo info = UpdateChecker.FetchAndInspect(source, AppVersion);
+                Console.WriteLine(
+                    "{\"ok\":true,\"currentVersion\":" + EscapeJson(AppVersion)
+                    + ",\"latestVersion\":" + EscapeJson(info.LatestVersion)
+                    + ",\"updateAvailable\":" + (info.UpdateAvailable ? "true" : "false")
+                    + ",\"sha256\":" + EscapeJson(info.Sha256)
+                    + ",\"downloadUrl\":" + EscapeJson(info.DownloadUrl)
+                    + "}"
+                );
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("{\"ok\":false,\"error\":" + EscapeJson(ex.Message) + "}");
+                return 1;
+            }
         }
 
         private static string GetDefaultInstallDir()
@@ -492,10 +671,10 @@ namespace DogSCDesktop
                     return 1;
                 }
 
-                string nodeExe = FindNodeExe();
+                string nodeExe = FindNodeExe(appRoot);
                 if (nodeExe == null)
                 {
-                    MessageBox.Show("未在系统 PATH 或标准安装目录检测到 Node.js (>= 22.18.0)。", "DogSC Studio 启动失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show("未在系统 PATH、标准安装目录或随包 runtime\\ 检测到 Node.js (>= 22.18.0)。", "DogSC Studio 启动失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return 1;
                 }
 
@@ -514,6 +693,125 @@ namespace DogSCDesktop
         }
     }
 
+    internal sealed class UpdateManifestInfo
+    {
+        public string CurrentVersion;
+        public string LatestVersion;
+        public bool UpdateAvailable;
+        public string Sha256;
+        public string DownloadUrl;
+        public string Notes;
+    }
+
+    internal static class UpdateChecker
+    {
+        public static int[] ParseSemVer(string raw)
+        {
+            int[] parts = new int[3];
+            if (string.IsNullOrEmpty(raw)) return parts;
+            string s = raw.Trim();
+            if (s.StartsWith("v", StringComparison.OrdinalIgnoreCase))
+            {
+                s = s.Substring(1);
+            }
+            int dash = s.IndexOf('-');
+            if (dash >= 0) s = s.Substring(0, dash);
+            string[] segs = s.Split('.');
+            for (int i = 0; i < 3 && i < segs.Length; i++)
+            {
+                int val;
+                if (int.TryParse(segs[i], out val))
+                {
+                    parts[i] = val;
+                }
+            }
+            return parts;
+        }
+
+        public static int CompareSemVer(string a, string b)
+        {
+            int[] pa = ParseSemVer(a);
+            int[] pb = ParseSemVer(b);
+            for (int i = 0; i < 3; i++)
+            {
+                if (pa[i] < pb[i]) return -1;
+                if (pa[i] > pb[i]) return 1;
+            }
+            return 0;
+        }
+
+        public static string ComputeSha256Hex(string filePath)
+        {
+            using (SHA256 sha = SHA256.Create())
+            using (FileStream fs = File.OpenRead(filePath))
+            {
+                byte[] hash = sha.ComputeHash(fs);
+                StringBuilder sb = new StringBuilder(hash.Length * 2);
+                for (int i = 0; i < hash.Length; i++)
+                {
+                    sb.Append(hash[i].ToString("x2"));
+                }
+                return sb.ToString();
+            }
+        }
+
+        private static string ExtractJsonString(string json, string key)
+        {
+            if (string.IsNullOrEmpty(json) || string.IsNullOrEmpty(key)) return null;
+            string pattern = "\"" + Regex.Escape(key) + "\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"";
+            Match m = Regex.Match(json, pattern, RegexOptions.IgnoreCase);
+            if (!m.Success) return null;
+            string raw = m.Groups[1].Value;
+            return raw.Replace("\\\"", "\"").Replace("\\\\", "\\").Replace("\\n", "\n").Replace("\\r", "").Replace("\\/", "/");
+        }
+
+        public static UpdateManifestInfo FetchAndInspect(string manifestPathOrUrl, string currentVersion)
+        {
+            string rawJson;
+            if (File.Exists(manifestPathOrUrl))
+            {
+                rawJson = File.ReadAllText(manifestPathOrUrl, Encoding.UTF8);
+            }
+            else
+            {
+                ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072 | SecurityProtocolType.Tls;
+                using (WebClient wc = new WebClient())
+                {
+                    wc.Encoding = Encoding.UTF8;
+                    wc.Headers.Add("User-Agent", "DogSC-Windows/" + currentVersion);
+                    rawJson = wc.DownloadString(manifestPathOrUrl);
+                }
+            }
+
+            string latest = ExtractJsonString(rawJson, "version");
+            if (string.IsNullOrEmpty(latest))
+            {
+                latest = ExtractJsonString(rawJson, "tag_name");
+            }
+            if (string.IsNullOrEmpty(latest))
+            {
+                latest = currentVersion;
+            }
+
+            string url = ExtractJsonString(rawJson, "downloadUrl");
+            if (string.IsNullOrEmpty(url)) url = ExtractJsonString(rawJson, "browser_download_url");
+            if (string.IsNullOrEmpty(url)) url = ExtractJsonString(rawJson, "html_url");
+
+            string sha256 = ExtractJsonString(rawJson, "sha256");
+            string notes = ExtractJsonString(rawJson, "notes");
+            if (string.IsNullOrEmpty(notes)) notes = ExtractJsonString(rawJson, "body");
+
+            UpdateManifestInfo info = new UpdateManifestInfo();
+            info.CurrentVersion = currentVersion;
+            info.LatestVersion = latest.Trim().TrimStart('v', 'V');
+            info.UpdateAvailable = CompareSemVer(currentVersion, info.LatestVersion) < 0;
+            info.Sha256 = sha256;
+            info.DownloadUrl = url;
+            info.Notes = notes;
+            return info;
+        }
+    }
+
     internal static class NativeWin32
     {
         public const int WM_HOTKEY = 0x0312;
@@ -521,12 +819,17 @@ namespace DogSCDesktop
         public const uint MOD_CONTROL = 0x0002;
         public const uint MOD_SHIFT = 0x0004;
         public const uint MOD_NOREPEAT = 0x4000;
+        public const uint WDA_MONITOR = 0x00000001;
+        public const uint WDA_EXCLUDEFROMCAPTURE = 0x00000011;
 
         [DllImport("user32.dll", SetLastError = true)]
         public static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
 
         [DllImport("user32.dll", SetLastError = true)]
         public static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        public static extern bool SetWindowDisplayAffinity(IntPtr hWnd, uint dwAffinity);
 
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
         public static extern uint RegisterWindowMessage(string lpString);
@@ -535,15 +838,217 @@ namespace DogSCDesktop
         public static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
     }
 
+    internal sealed class TeleprompterMemoForm : Form
+    {
+        private readonly bool headlessCheck;
+        private readonly string storagePath;
+        private readonly Label statusBadge;
+        private readonly TextBox editor;
+        private readonly System.Windows.Forms.Timer saveTimer;
+        private readonly double[] opacityLevels = new double[] { 0.96, 0.78, 0.58 };
+        private int opacityIndex;
+        private float currentFontSize = 11.5f;
+        private bool allowDispose;
+
+        public bool AffinityApplied { get; private set; }
+        public bool ExcludeFromCaptureSupported { get; private set; }
+
+        public TeleprompterMemoForm(bool headlessCheck)
+        {
+            this.headlessCheck = headlessCheck;
+            string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DogSC");
+            this.storagePath = Path.Combine(dir, "teleprompter-memo.txt");
+
+            this.Text = "DogSC 提词备忘录（防录屏隐身）";
+            this.Size = new Size(340, 260);
+            this.MinimumSize = new Size(250, 170);
+            this.StartPosition = FormStartPosition.Manual;
+            Rectangle wa = Screen.PrimaryScreen != null ? Screen.PrimaryScreen.WorkingArea : new Rectangle(0, 0, 1280, 720);
+            this.Location = new Point(Math.Max(16, wa.Right - 368), Math.Max(16, wa.Top + 64));
+            this.TopMost = true;
+            this.ShowInTaskbar = false;
+            this.FormBorderStyle = FormBorderStyle.SizableToolWindow;
+            this.BackColor = Color.FromArgb(27, 27, 26);
+            this.ForeColor = Color.FromArgb(236, 236, 233);
+            this.Opacity = this.opacityLevels[0];
+
+            Panel header = new Panel();
+            header.Dock = DockStyle.Top;
+            header.Height = 32;
+            header.BackColor = Color.FromArgb(35, 35, 34);
+            header.Padding = new Padding(8, 4, 8, 4);
+
+            this.statusBadge = new Label();
+            this.statusBadge.Text = "防录屏隐身初始化…";
+            this.statusBadge.AutoSize = true;
+            this.statusBadge.ForeColor = Color.FromArgb(218, 122, 82);
+            this.statusBadge.Font = new Font("Microsoft YaHei UI", 8.5f, FontStyle.Bold);
+            this.statusBadge.Location = new Point(8, 8);
+
+            FlowLayoutPanel tools = new FlowLayoutPanel();
+            tools.Dock = DockStyle.Right;
+            tools.AutoSize = true;
+            tools.FlowDirection = FlowDirection.LeftToRight;
+            tools.WrapContents = false;
+
+            Button fontDown = MakeToolBtn("A-", "缩小字号");
+            fontDown.Click += delegate { AdjustFontSize(-1.0f); };
+            Button fontUp = MakeToolBtn("A+", "放大字号");
+            fontUp.Click += delegate { AdjustFontSize(1.0f); };
+            Button opacityBtn = MakeToolBtn("透明", "切换透明度");
+            opacityBtn.Width = 42;
+            opacityBtn.Click += delegate { CycleOpacity(); };
+
+            tools.Controls.Add(fontDown);
+            tools.Controls.Add(fontUp);
+            tools.Controls.Add(opacityBtn);
+
+            header.Controls.Add(this.statusBadge);
+            header.Controls.Add(tools);
+
+            this.editor = new TextBox();
+            this.editor.Multiline = true;
+            this.editor.ScrollBars = ScrollBars.Vertical;
+            this.editor.BorderStyle = BorderStyle.None;
+            this.editor.Dock = DockStyle.Fill;
+            this.editor.BackColor = Color.FromArgb(27, 27, 26);
+            this.editor.ForeColor = Color.FromArgb(236, 236, 233);
+            this.editor.Font = new Font("Microsoft YaHei UI", this.currentFontSize, FontStyle.Regular);
+            this.editor.Text = LoadSavedMemo();
+
+            this.saveTimer = new System.Windows.Forms.Timer();
+            this.saveTimer.Interval = 350;
+            this.saveTimer.Tick += delegate {
+                this.saveTimer.Stop();
+                SaveMemoNow();
+            };
+
+            this.editor.TextChanged += delegate {
+                if (!this.headlessCheck)
+                {
+                    this.saveTimer.Stop();
+                    this.saveTimer.Start();
+                }
+            };
+
+            this.Controls.Add(this.editor);
+            this.Controls.Add(header);
+        }
+
+        private static Button MakeToolBtn(string label, string tip)
+        {
+            Button btn = new Button();
+            btn.Text = label;
+            btn.FlatStyle = FlatStyle.Flat;
+            btn.FlatAppearance.BorderSize = 1;
+            btn.FlatAppearance.BorderColor = Color.FromArgb(62, 61, 58);
+            btn.BackColor = Color.FromArgb(45, 45, 43);
+            btn.ForeColor = Color.FromArgb(236, 236, 233);
+            btn.Font = new Font("Microsoft YaHei UI", 8.0f, FontStyle.Regular);
+            btn.Size = new Size(32, 22);
+            btn.Margin = new Padding(3, 1, 0, 1);
+            ToolTip tt = new ToolTip();
+            tt.SetToolTip(btn, tip);
+            return btn;
+        }
+
+        private void AdjustFontSize(float delta)
+        {
+            float next = Math.Max(9.0f, Math.Min(22.0f, this.currentFontSize + delta));
+            this.currentFontSize = next;
+            this.editor.Font = new Font("Microsoft YaHei UI", next, FontStyle.Regular);
+        }
+
+        private void CycleOpacity()
+        {
+            this.opacityIndex = (this.opacityIndex + 1) % this.opacityLevels.Length;
+            this.Opacity = this.opacityLevels[this.opacityIndex];
+        }
+
+        private string LoadSavedMemo()
+        {
+            if (!this.headlessCheck && File.Exists(this.storagePath))
+            {
+                try
+                {
+                    return File.ReadAllText(this.storagePath, Encoding.UTF8);
+                }
+                catch { }
+            }
+            return "【提词备忘录 · 录屏中自动隐身】\r\n• 开场问候与核心演示目标\r\n• 功能亮点 1：自动运镜 + 鼠标跟随\r\n• 功能亮点 2：AI 一键配字幕与人声压低\r\n\r\n按 Ctrl+Alt+Shift+N 可随时显隐本窗口。";
+        }
+
+        private void SaveMemoNow()
+        {
+            if (this.headlessCheck) return;
+            try
+            {
+                string dir = Path.GetDirectoryName(this.storagePath);
+                if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+                File.WriteAllText(this.storagePath, this.editor.Text, Encoding.UTF8);
+            }
+            catch { }
+        }
+
+        public void ForceCloseForExit()
+        {
+            this.allowDispose = true;
+            SaveMemoNow();
+            if (!this.IsDisposed) this.Close();
+        }
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            bool ex = NativeWin32.SetWindowDisplayAffinity(this.Handle, NativeWin32.WDA_EXCLUDEFROMCAPTURE);
+            if (ex)
+            {
+                this.ExcludeFromCaptureSupported = true;
+                this.AffinityApplied = true;
+                this.statusBadge.Text = "● 防录屏隐身中";
+                this.statusBadge.ForeColor = Color.FromArgb(126, 189, 140);
+                return;
+            }
+            bool mon = NativeWin32.SetWindowDisplayAffinity(this.Handle, NativeWin32.WDA_MONITOR);
+            this.ExcludeFromCaptureSupported = false;
+            this.AffinityApplied = mon;
+            this.statusBadge.Text = mon ? "● 兼容黑框保护中" : "○ 未启用防捕获";
+            this.statusBadge.ForeColor = mon ? Color.FromArgb(218, 122, 82) : Color.FromArgb(163, 162, 158);
+        }
+
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            SaveMemoNow();
+            if (!this.allowDispose && !this.headlessCheck && e.CloseReason == CloseReason.UserClosing)
+            {
+                e.Cancel = true;
+                this.Hide();
+                return;
+            }
+            base.OnFormClosing(e);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && this.saveTimer != null)
+            {
+                this.saveTimer.Dispose();
+            }
+            base.Dispose(disposing);
+        }
+    }
+
     internal sealed class HotkeyHiddenForm : Form
     {
         public const int HK_OPEN_STUDIO = 1;
         public const int HK_QUICK_RECORD = 2;
         public const int HK_MARKER_TIP = 3;
+        public const int HK_MEMO_TOGGLE = 4;
 
         private readonly uint showWindowMsg;
         public event Action<string> OpenStudioRequested;
         public event Action MarkerTipRequested;
+        public event Action MemoToggleRequested;
 
         public HotkeyHiddenForm(uint showMsg)
         {
@@ -574,6 +1079,7 @@ namespace DogSCDesktop
             NativeWin32.RegisterHotKey(this.Handle, HK_OPEN_STUDIO, mods, (uint)Keys.S);
             NativeWin32.RegisterHotKey(this.Handle, HK_QUICK_RECORD, mods, (uint)Keys.R);
             NativeWin32.RegisterHotKey(this.Handle, HK_MARKER_TIP, mods, (uint)Keys.M);
+            NativeWin32.RegisterHotKey(this.Handle, HK_MEMO_TOGGLE, mods, (uint)Keys.N);
         }
 
         protected override void WndProc(ref Message m)
@@ -596,6 +1102,11 @@ namespace DogSCDesktop
                     if (this.MarkerTipRequested != null) this.MarkerTipRequested();
                     return;
                 }
+                if (id == HK_MEMO_TOGGLE)
+                {
+                    if (this.MemoToggleRequested != null) this.MemoToggleRequested();
+                    return;
+                }
             }
             else if (this.showWindowMsg != 0 && (uint)m.Msg == this.showWindowMsg)
             {
@@ -612,6 +1123,7 @@ namespace DogSCDesktop
                 NativeWin32.UnregisterHotKey(this.Handle, HK_OPEN_STUDIO);
                 NativeWin32.UnregisterHotKey(this.Handle, HK_QUICK_RECORD);
                 NativeWin32.UnregisterHotKey(this.Handle, HK_MARKER_TIP);
+                NativeWin32.UnregisterHotKey(this.Handle, HK_MEMO_TOGGLE);
             }
             base.Dispose(disposing);
         }
@@ -634,6 +1146,7 @@ namespace DogSCDesktop
         private readonly NotifyIcon trayIcon;
         private readonly ToolStripMenuItem autoStartItem;
         private readonly Icon ownedIcon;
+        private TeleprompterMemoForm memoForm;
 
         private Process serverProcess;
         private Process edgeProcess;
@@ -655,6 +1168,7 @@ namespace DogSCDesktop
             this.hotkeyForm.MarkerTipRequested += delegate {
                 this.trayIcon.ShowBalloonTip(2500, "DogSC Studio", "快捷键打点已触发：分段录制与时间线节点请从录制岛管理。", ToolTipIcon.Info);
             };
+            this.hotkeyForm.MemoToggleRequested += delegate { ToggleMemoWindow(); };
 
             this.ownedIcon = BuildTrayBrandIcon();
 
@@ -663,6 +1177,8 @@ namespace DogSCDesktop
             openItem.Click += delegate { OpenStudioWindow(null); };
             ToolStripMenuItem recItem = new ToolStripMenuItem("快速录屏 / 录制岛 (Ctrl+Alt+Shift+R)");
             recItem.Click += delegate { OpenStudioWindow("action=record"); };
+            ToolStripMenuItem memoItem = new ToolStripMenuItem("防录屏提词备忘录 (Ctrl+Alt+Shift+N)");
+            memoItem.Click += delegate { ToggleMemoWindow(); };
             ToolStripMenuItem markerItem = new ToolStripMenuItem("录制打点提示 (Ctrl+Alt+Shift+M)");
             markerItem.Click += delegate {
                 this.trayIcon.ShowBalloonTip(2500, "DogSC Studio", "分段打点热键已就绪，请在 Studio 录制岛开启多源分段录制。", ToolTipIcon.Info);
@@ -677,27 +1193,89 @@ namespace DogSCDesktop
             this.autoStartItem.Click += delegate { ToggleAutoStart(); };
             ToolStripMenuItem diagItem = new ToolStripMenuItem("环境诊断");
             diagItem.Click += delegate { ShowDiagnostics(); };
+            ToolStripMenuItem updateItem = new ToolStripMenuItem("检查更新...");
+            updateItem.Click += delegate { CheckForUpdatesInteractive(); };
             ToolStripMenuItem exitItem = new ToolStripMenuItem("退出 DogSC");
             exitItem.Click += delegate { ExitApp(); };
 
             menu.Items.Add(openItem);
             menu.Items.Add(recItem);
+            menu.Items.Add(memoItem);
             menu.Items.Add(markerItem);
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(folderItem);
             menu.Items.Add(this.autoStartItem);
             menu.Items.Add(diagItem);
+            menu.Items.Add(updateItem);
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add(exitItem);
 
             this.trayIcon = new NotifyIcon();
             this.trayIcon.Icon = this.ownedIcon ?? SystemIcons.Application;
-            this.trayIcon.Text = "DogSC Studio Windows";
+            this.trayIcon.Text = "DogSC Studio Windows v" + Program.AppVersion;
             this.trayIcon.ContextMenuStrip = menu;
             this.trayIcon.Visible = true;
             this.trayIcon.DoubleClick += delegate { OpenStudioWindow(null); };
 
             StartStudioBackend();
+        }
+
+        private void ToggleMemoWindow()
+        {
+            if (this.memoForm == null || this.memoForm.IsDisposed)
+            {
+                this.memoForm = new TeleprompterMemoForm(false);
+            }
+            if (this.memoForm.Visible)
+            {
+                this.memoForm.Hide();
+            }
+            else
+            {
+                this.memoForm.Show();
+                this.memoForm.Activate();
+            }
+        }
+
+        private void CheckForUpdatesInteractive()
+        {
+            string source = Environment.GetEnvironmentVariable("DOGSC_UPDATE_MANIFEST") ?? "https://api.github.com/repos/laogou717/dogsc/releases/latest";
+            Thread t = new Thread(delegate() {
+                try
+                {
+                    UpdateManifestInfo info = UpdateChecker.FetchAndInspect(source, Program.AppVersion);
+                    if (this.exiting || !this.hotkeyForm.IsHandleCreated) return;
+                    this.hotkeyForm.BeginInvoke(new MethodInvoker(delegate {
+                        if (info.UpdateAvailable)
+                        {
+                            string details = "发现新版本: v" + info.LatestVersion + "\n当前版本: v" + info.CurrentVersion;
+                            if (!string.IsNullOrEmpty(info.Sha256))
+                            {
+                                details += "\nSHA-256: " + info.Sha256;
+                            }
+                            details += "\n\n为确保安全，DogSC 不会自动执行未验证的二进制文件。是否前往下载页获取更新并核对 SHA256SUMS.txt？";
+                            DialogResult r = MessageBox.Show(details, "DogSC 更新检查", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+                            if (r == DialogResult.Yes && !string.IsNullOrEmpty(info.DownloadUrl))
+                            {
+                                try { Process.Start(info.DownloadUrl); } catch { }
+                            }
+                        }
+                        else
+                        {
+                            MessageBox.Show("当前已是最新版本 v" + info.CurrentVersion + "（参考版本: v" + info.LatestVersion + "）。", "DogSC 更新检查", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        }
+                    }));
+                }
+                catch (Exception ex)
+                {
+                    if (this.exiting || !this.hotkeyForm.IsHandleCreated) return;
+                    this.hotkeyForm.BeginInvoke(new MethodInvoker(delegate {
+                        MessageBox.Show("检查更新失败: " + ex.Message, "DogSC 更新检查", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    }));
+                }
+            });
+            t.IsBackground = true;
+            t.Start();
         }
 
         private Icon BuildTrayBrandIcon()
@@ -867,11 +1445,12 @@ namespace DogSCDesktop
 
         private void ShowDiagnostics()
         {
-            string ffmpeg = Program.FindFfmpegExe() ?? "未检测到";
-            string ffprobe = Program.FindFfprobeExe(ffmpeg == "未检测到" ? null : ffmpeg) ?? "未检测到";
+            string ffmpeg = Program.FindFfmpegExe(this.appRoot) ?? "未检测到";
+            string ffprobe = Program.FindFfprobeExe(this.appRoot, ffmpeg == "未检测到" ? null : ffmpeg) ?? "未检测到";
             string edge = Program.FindEdgeExe() ?? "未检测到";
             string urlDisplay = this.studioUrl ?? "正在启动...";
-            string msg = "工作目录: " + this.appRoot + "\n"
+            string msg = "版本: DogSC Studio v" + Program.AppVersion + "\n"
+                + "工作目录: " + this.appRoot + "\n"
                 + "Studio 服务: " + urlDisplay + "\n"
                 + "Node.js: " + this.nodeExe + "\n"
                 + "FFmpeg: " + ffmpeg + "\n"
@@ -880,6 +1459,7 @@ namespace DogSCDesktop
                 + "全局热键:\n"
                 + "  Ctrl+Alt+Shift+S  打开 DogSC Studio\n"
                 + "  Ctrl+Alt+Shift+R  打开快速录制岛\n"
+                + "  Ctrl+Alt+Shift+N  防录屏提词备忘录\n"
                 + "  Ctrl+Alt+Shift+M  打点提示";
             MessageBox.Show(msg, "DogSC Windows 环境诊断", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
@@ -911,6 +1491,11 @@ namespace DogSCDesktop
             if (this.exiting) return;
             this.exiting = true;
             this.trayIcon.Visible = false;
+            if (this.memoForm != null && !this.memoForm.IsDisposed)
+            {
+                this.memoForm.ForceCloseForExit();
+                this.memoForm.Dispose();
+            }
             KillTree(this.edgeProcess);
             KillTree(this.serverProcess);
             ExitThread();
@@ -920,6 +1505,11 @@ namespace DogSCDesktop
         {
             if (disposing)
             {
+                if (this.memoForm != null && !this.memoForm.IsDisposed)
+                {
+                    this.memoForm.ForceCloseForExit();
+                    this.memoForm.Dispose();
+                }
                 KillTree(this.edgeProcess);
                 KillTree(this.serverProcess);
                 if (this.trayIcon != null)
@@ -940,4 +1530,3 @@ namespace DogSCDesktop
         }
     }
 }
-

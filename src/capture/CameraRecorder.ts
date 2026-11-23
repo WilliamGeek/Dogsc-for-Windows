@@ -21,6 +21,8 @@ export interface CameraFfmpegArgsOptions {
   width?: number;
   height?: number;
   encoder?: VideoEncoderKind;
+  fragmented?: boolean;
+  fragDurationUs?: number;
 }
 
 export interface CameraRecorderOptions extends CameraFfmpegArgsOptions {
@@ -113,11 +115,22 @@ export function buildCameraFfmpegArgs(o: CameraFfmpegArgsOptions): string[] {
       '-rc-lookahead',
       '0'
     );
+  } else if (encoder === 'h264_amf') {
+    args.push('-c:v', 'h264_amf', '-quality', 'balanced', '-rc', 'cqp', '-qp_i', '22', '-qp_p', '22', '-bf', '0');
+  } else if (encoder === 'h264_qsv') {
+    args.push('-c:v', 'h264_qsv', '-preset', 'veryfast', '-global_quality', '22', '-bf', '0');
   } else {
     args.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20');
   }
 
-  args.push('-pix_fmt', 'yuv420p', '-movflags', '+faststart', o.outFile);
+  args.push('-pix_fmt', 'yuv420p');
+  if (o.fragmented !== false) {
+    const fragUs = Math.max(100_000, Math.trunc(o.fragDurationUs ?? 500_000));
+    args.push('-movflags', '+frag_keyframe+empty_moov+default_base_moof', '-frag_duration', String(fragUs));
+  } else {
+    args.push('-movflags', '+faststart');
+  }
+  args.push(o.outFile);
   return args;
 }
 

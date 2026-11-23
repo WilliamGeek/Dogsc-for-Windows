@@ -1,10 +1,10 @@
 {
-  "title": "DogSC Windows · 全栈架构与 Wave G 桌面版看板",
-  "subtitle": "高亮绿流 = Wave A-G 全栈采集/核心算法/WebGL2字幕动效壁纸/AI剪辑助手/7轨波形Studio与Windows外壳已落地 | 虚化 = T11.7 待用户终审",
+  "title": "DogSC Windows · 全栈架构与 Wave H v1.2.0 桌面版看板",
+  "subtitle": "高亮绿流 = Wave A-H 全栈采集(三家GPU/0.5s分段MP4)/54核心/WebGL2/DPAPI AI/7轨胶片Studio/防录屏提词与商业级UI | 虚化 = T11.7 待用户终审",
   "mode": "instance",
   "run_meta": {
-    "run_id": "dogsc-win-v1.1.0-windows",
-    "duration": "Wave A-G 已全量落地 / 仅 T11.7 待交互桌面终审",
+    "run_id": "dogsc-win-v1.2.0-windows",
+    "duration": "Wave A-H 已全量落地 / 仅 T11.7 待交互桌面终审",
     "status": "in_progress"
   },
   "spine_y": 500,
@@ -27,7 +27,7 @@
       "col": 0,
       "y": 500,
       "executed": true,
-      "execution_badge": "✓ 54核心/26前端 / 373单测",
+      "execution_badge": "✓ 54核心/31前端 / 377单测",
       "details": {
         "inputs": "桌面托盘热键 / CLI 参数 / recordings/<id>",
         "outputs": "多源会话产物与 MP4/M4A/SRT/.dmhtml 交付物",
@@ -71,18 +71,18 @@
     {
       "id": "C_Screen",
       "type": "action",
-      "badge_id": "T10.3 / T12.3",
-      "label": "整屏 GPU 采集 (ddagrab)",
-      "subtitle": "ScreenRecorder.ts: draw_mouse=0 + NVENC 探活",
+      "badge_id": "T10.3 / T12.3 / T19.1",
+      "label": "整屏 GPU 采集与分段 MP4",
+      "subtitle": "ddagrab + NVENC/AMF/QSV 三家探活 + 0.5s 抗崩溃碎片 MP4",
       "stage": "阶段 0-2: 多源采集与时钟对齐",
       "col": 1,
       "y": 500,
       "executed": true,
-      "execution_badge": "✓ draw_mouse=0",
+      "execution_badge": "✓ 三家GPU+抗崩溃",
       "details": {
         "inputs": "DXGI outputIdx + fps (默认 60fps CFR)",
-        "outputs": "screen.mp4 (H.264 / 无系统光标重影)",
-        "code_anchor": "src/capture/ScreenRecorder.ts:79"
+        "outputs": "screen.mp4 (H.264 / +frag_keyframe+empty_moov / 无系统光标重影)",
+        "code_anchor": "src/capture/ScreenRecorder.ts"
       }
     },
     {
@@ -153,17 +153,17 @@
     {
       "id": "F_X264",
       "type": "fallback",
-      "badge_id": "FALLBACK · T12.3",
-      "label": "软件编码兜底 (libx264)",
-      "subtitle": "NVENC 1帧空输出探活失败 → libx264 CRF 20",
+      "badge_id": "FALLBACK · T19.1",
+      "label": "三家硬编回退 (libx264)",
+      "subtitle": "NVENC → AMD AMF → Intel QSV → libx264 CRF 20",
       "stage": "阶段 0-2: 多源采集与时钟对齐",
       "col": 2,
       "y": 660,
       "executed": true,
-      "execution_badge": "✓ 自动回退",
+      "execution_badge": "✓ 四级自动回退",
       "details": {
-        "fallback_desc": "detectEncoder() 执行 1 帧空输出探活，无 NVENC 时自动回退 libx264",
-        "code_anchor": "src/capture/ScreenRecorder.ts:146"
+        "fallback_desc": "detectEncoder() 沿 NVENC/AMF/QSV 执行 1 帧空输出探活，全失败回退 libx264",
+        "code_anchor": "src/capture/ScreenRecorder.ts"
       }
     },
     {
@@ -337,14 +337,14 @@
       "type": "gate",
       "badge_id": "GATE · G1-G6",
       "label": "全量边界与自动化门禁",
-      "subtitle": "stripTypeScriptTypes + verify-export + 373 单测",
+      "subtitle": "stripTypeScriptTypes + verify-export + 377 单测",
       "stage": "Wave E: 质检门禁与 Studio 基础底座",
       "col": 7,
       "y": 500,
       "executed": true,
-      "execution_badge": "✓ 373测试全绿",
+      "execution_badge": "✓ 377测试全绿",
       "details": {
-        "gate_rule": "零 node:* 边界检验 + DPAPI/FFmpeg Ducking/Renderer 双端 + Chrome 7步实测全过",
+        "gate_rule": "零 node:* 边界检验 + 三家GPU/防录屏/UI精修/DPAPI + Chrome双主题实测全过",
         "code_anchor": "scripts/verify-export.ts"
       }
     },
@@ -402,33 +402,33 @@
     {
       "id": "M_StudioV2",
       "type": "action",
-      "badge_id": "WAVE G · T18.4-6",
-      "label": "全功能工作台 UI 补齐",
-      "subtitle": "字幕停顿剪 + 动效编辑 + 8手柄裁剪 + 7轨波形线 + ?速查",
+      "badge_id": "WAVE G-H · T18/19.4-7",
+      "label": "商业级工作台与胶片时间线",
+      "subtitle": "统一SVG / 可视化图卡 / HSV调色 / 主轨胶片 / Scrub滑杆",
       "stage": "Wave F-G: AI剪辑、字幕动效与桌面发布",
       "col": 8,
       "y": 660,
       "executed": true,
-      "execution_badge": "✓ 4面板+7轨线",
+      "execution_badge": "✓ 商业质感P0-P3",
       "details": {
-        "inputs": "4合一可折叠左抽屉 / SRT 导入导出 / 静音删减 / 拖拽裁剪与时间线移动",
-        "outputs": "Mac v0.2.0 全应用层功能与 Warm Graphite 视觉完全对齐",
-        "code_anchor": "web/studio/{libraryShell,subtitlesPanel,motionPanel,cropOverlay,timeline}.ts"
+        "inputs": "icons.ts / previews.ts / colorPicker.ts / controls.ts / 7轨胶片波形线",
+        "outputs": "双主题零溢出桌面级剪辑工作台 + 连续拖拽零重建",
+        "code_anchor": "web/studio/{icons,previews,colorPicker,controls,timeline,inspector}.ts"
       }
     },
     {
       "id": "M_ShellPkg",
       "type": "action",
-      "badge_id": "WAVE F-G · T17/18.7",
+      "badge_id": "WAVE F-H · T17-T19.3",
       "label": "Windows 原生桌面外壳与打包",
-      "subtitle": "DogSC.exe 托盘热键 + 桌面快捷方式 + Setup v1.1.0",
+      "subtitle": "DogSC.exe v1.2 防录屏提词/SHA256更新/便携Node与Setup",
       "stage": "Wave F-G: AI剪辑、字幕动效与桌面发布",
       "col": 9,
       "y": 350,
       "executed": true,
-      "execution_badge": "✓ DogSC.exe v1.1",
+      "execution_badge": "✓ DogSC.exe v1.2",
       "details": {
-        "outputs": "dist/DogSC.exe + DogSC Studio.lnk + DogSC-Setup-x64-v1.1.0.exe",
+        "outputs": "dist/DogSC.exe + --memo-check(WDA) + --check-update + DogSC-Setup-x64-v1.2.0.exe",
         "code_anchor": "desktop/DogSC.cs / scripts/build-desktop.ts / package-windows.ts"
       }
     },
@@ -452,14 +452,14 @@
       "type": "endpoint",
       "badge_id": "DELIVER",
       "label": "最终交付产物",
-      "subtitle": "Wave A-G 全量对齐 macOS v0.2.0 · v1.1.0-windows",
+      "subtitle": "Wave A-H 全量交付 · v1.2.0-windows",
       "stage": "Wave F-G: AI剪辑、字幕动效与桌面发布",
       "col": 10,
       "y": 500,
       "executed": true,
-      "execution_badge": "✓ v1.1.0-windows",
+      "execution_badge": "✓ v1.2.0-windows",
       "details": {
-        "outputs": "完成 Wave A-G 全源采集/DPAPI AI助手与AgentBridge/WebGL2字幕动效壁纸/SoundSynth闪避/7轨波形Studio/交互裁剪与Windows桌面分发 v1.1.0-windows"
+        "outputs": "完成 Wave A-H 三家GPU探活+0.5s分段MP4/防录屏提词备忘录/SHA256更新检测/便携Node/商业质感P0-P3前端与Windows分发 v1.2.0-windows"
       }
     },
     {
@@ -517,8 +517,8 @@
     { "id": "e_sfx_pkg", "source": "M_AudioSfx", "target": "M_ShellPkg", "label": "音效与波形缓存", "className": "edge-main", "executed": true },
     { "id": "e_v2_pkg", "source": "M_StudioV2", "target": "M_ShellPkg", "label": "完整产品工作台", "className": "edge-main", "executed": true },
     { "id": "e_sfx_review", "source": "M_AudioSfx", "target": "H_Review", "label": "全自动绿灯→待肉眼", "className": "edge-main", "executed": false },
-    { "id": "e_pkg_deliver", "source": "M_ShellPkg", "target": "Deliver", "label": "v1.1.0桌面安装包", "className": "edge-main", "executed": true },
+    { "id": "e_pkg_deliver", "source": "M_ShellPkg", "target": "Deliver", "label": "v1.2.0桌面安装包", "className": "edge-main", "executed": true },
     { "id": "e_review_deliver", "source": "H_Review", "target": "Deliver", "label": "用户确认T11.7", "className": "edge-main", "executed": false },
-    { "id": "e_verify_deliver", "source": "G_Verify", "target": "Deliver", "label": "373测试闭环发布", "className": "edge-main", "executed": true, "route": { "busY": 815 } }
+    { "id": "e_verify_deliver", "source": "G_Verify", "target": "Deliver", "label": "377测试闭环发布", "className": "edge-main", "executed": true, "route": { "busY": 815 } }
   ]
 }

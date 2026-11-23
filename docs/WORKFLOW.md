@@ -1,6 +1,6 @@
-# DogSC Windows · 全栈架构与 Wave G 桌面版看板
+# DogSC Windows · 全栈架构与 Wave H v1.2.0 桌面版看板
 
-> **拓扑概览**：高亮绿流 = Wave A-G 全栈采集/核心算法/WebGL2字幕动效壁纸/AI剪辑助手/7轨波形Studio与Windows外壳已落地 | 虚化 = T11.7 待用户终审 | **渲染模式**：`instance` | **规模**：28 节点 · 41 路径
+> **拓扑概览**：高亮绿流 = Wave A-H 全栈采集(三家GPU/0.5s分段MP4)/54核心/WebGL2/DPAPI AI/7轨胶片Studio/防录屏提词与商业级UI | 虚化 = T11.7 待用户终审 | **渲染模式**：`instance` | **规模**：28 节点 · 41 路径
 
 ## 一、 全景拓扑图 (Mermaid 同步版)
 
@@ -15,15 +15,15 @@ flowchart LR
   classDef block fill:#450a0a,stroke:#ef4444,stroke-width:2px,color:#fca5a5;
 
   subgraph S0 ["阶段 0-2: 多源采集与时钟对齐"]
-    Start["录制与桌面应用入口 (✓ 54核心/26前端 / 373单测)"]:::endpoint
+    Start["录制与桌面应用入口 (✓ 54核心/31前端 / 377单测)"]:::endpoint
     C_MultiSrc["窗口/区域/摄像头与分段 (✓ 区域/窗口/摄像头/分段)"]:::action
     C_Audio["系统音频与麦克风采集 (✓ WASAPI+Mic)"]:::action
-    C_Screen["整屏 GPU 采集 (ddagrab) (✓ draw_mouse=0)"]:::action
+    C_Screen["整屏 GPU 采集与分段 MP4 (✓ 三家GPU+抗崩溃)"]:::action
     C_Mouse["低级鼠标钩子与多屏映射 (✓ DPI V2)"]:::action
     X_CapFail["采集异常熔断与原子清理 (✓ exit=1 清理)"]:::block
     A_Session["会话录制四件套产物 (✓ 四件套)"]:::artifact
     G_MediaProbe["媒体探针与首帧时钟门禁 (✓ 0.000s)"]:::gate
-    F_X264["软件编码兜底 (libx264) (✓ 自动回退)"]:::fallback
+    F_X264["三家硬编回退 (libx264) (✓ 四级自动回退)"]:::fallback
   end
   subgraph S1 ["阶段 1 / Wave B: 核心算法与上游对齐"]
     M_CoreV20["上游 v0.2.0 核心对齐 (✓ 54模块 v28)"]:::action
@@ -40,16 +40,16 @@ flowchart LR
   end
   subgraph S3 ["Wave E: 质检门禁与 Studio 基础底座"]
     M_EditorUI["Studio 编辑器核心底座 (✓ Studio 底座)"]:::action
-    G_Verify["全量边界与自动化门禁 (✓ 373测试全绿)"]:::gate
+    G_Verify["全量边界与自动化门禁 (✓ 377测试全绿)"]:::gate
   end
   subgraph S4 ["Wave F-G: AI剪辑、字幕动效与桌面发布"]
     M_AiBridge["AI 剪辑助手与 AgentBridge (✓ DPAPI+Bridge)"]:::action
     M_SubMotion["WebGL2 字幕、动效与壁纸 (✓ 双端渲染对齐)"]:::action
     M_AudioSfx["SoundSynth 与人声闪避混音 (✓ 音效+Ducking)"]:::action
-    M_StudioV2["全功能工作台 UI 补齐 (✓ 4面板+7轨线)"]:::action
-    M_ShellPkg["Windows 原生桌面外壳与打包 (✓ DogSC.exe v1.1)"]:::action
+    M_StudioV2["商业级工作台与胶片时间线 (✓ 商业质感P0-P3)"]:::action
+    M_ShellPkg["Windows 原生桌面外壳与打包 (✓ DogSC.exe v1.2)"]:::action
     H_Review["人工交互桌面实录终审 (⏳ 待用户终审 T11.7)"]:::human
-    Deliver["最终交付产物 (✓ v1.1.0-windows)"]:::endpoint
+    Deliver["最终交付产物 (✓ v1.2.0-windows)"]:::endpoint
     X_Term["统一异常收口终端 (✓ 异常收口)"]:::block
   end
 
@@ -91,24 +91,24 @@ flowchart LR
   M_AudioSfx -- "音效与波形缓存" --> M_ShellPkg
   M_StudioV2 -- "完整产品工作台" --> M_ShellPkg
   M_AudioSfx -- "全自动绿灯→待肉眼" --> H_Review
-  M_ShellPkg -- "v1.1.0桌面安装包" --> Deliver
+  M_ShellPkg -- "v1.2.0桌面安装包" --> Deliver
   H_Review -- "用户确认T11.7" --> Deliver
-  G_Verify -- "373测试闭环发布" --> Deliver
+  G_Verify -- "377测试闭环发布" --> Deliver
 ```
 
 ## 二、 节点与门禁明细表
 
 | 节点 ID | 类型 | 阶段 | 名称 | 核心规则 / 代码锚点 / 状态 |
 | :--- | :--- | :--- | :--- | :--- |
-| `Start` | `endpoint` | 阶段 0-2: 多源采集与时钟对齐 | 录制与桌面应用入口 | **[✓ 54核心/26前端 / 373单测]** desktop/DogSC.cs / scripts/studio.ts |
+| `Start` | `endpoint` | 阶段 0-2: 多源采集与时钟对齐 | 录制与桌面应用入口 | **[✓ 54核心/31前端 / 377单测]** desktop/DogSC.cs / scripts/studio.ts |
 | `C_MultiSrc` | `action` | 阶段 0-2: 多源采集与时钟对齐 | 窗口/区域/摄像头与分段 | **[✓ 区域/窗口/摄像头/分段]** src/capture/WindowEnumeration.ts / CameraRecorder.ts / SegmentedSession.ts |
 | `C_Audio` | `action` | 阶段 0-2: 多源采集与时钟对齐 | 系统音频与麦克风采集 | **[✓ WASAPI+Mic]** src/capture/SystemAudioRecorder.ts / MicRecorder.ts / MediaDevices.ts |
-| `C_Screen` | `action` | 阶段 0-2: 多源采集与时钟对齐 | 整屏 GPU 采集 (ddagrab) | **[✓ draw_mouse=0]** src/capture/ScreenRecorder.ts:79 |
+| `C_Screen` | `action` | 阶段 0-2: 多源采集与时钟对齐 | 整屏 GPU 采集与分段 MP4 | **[✓ 三家GPU+抗崩溃]** src/capture/ScreenRecorder.ts |
 | `C_Mouse` | `action` | 阶段 0-2: 多源采集与时钟对齐 | 低级鼠标钩子与多屏映射 | **[✓ DPI V2]** tools/mousehook.ps1 |
 | `X_CapFail` | `block` | 阶段 0-2: 多源采集与时钟对齐 | 采集异常熔断与原子清理 | **[✓ exit=1 清理]** src/capture/RecordingSession.ts:371 |
 | `A_Session` | `artifact` | 阶段 0-2: 多源采集与时钟对齐 | 会话录制四件套产物 | **[✓ 四件套]** src/capture/RecordingSession.ts |
 | `G_MediaProbe` | `gate` | 阶段 0-2: 多源采集与时钟对齐 | 媒体探针与首帧时钟门禁 | **[✓ 0.000s]** src/capture/MediaProbe.ts |
-| `F_X264` | `fallback` | 阶段 0-2: 多源采集与时钟对齐 | 软件编码兜底 (libx264) | **[✓ 自动回退]** src/capture/ScreenRecorder.ts:146 |
+| `F_X264` | `fallback` | 阶段 0-2: 多源采集与时钟对齐 | 三家硬编回退 (libx264) | **[✓ 四级自动回退]** src/capture/ScreenRecorder.ts |
 | `M_CoreV20` | `action` | 阶段 1 / Wave B: 核心算法与上游对齐 | 上游 v0.2.0 核心对齐 | **[✓ 54模块 v28]** docs/V020_DIFF_MAP.md |
 | `M_CoreV18` | `action` | 阶段 1 / Wave B: 核心算法与上游对齐 | RecorderCore 核心算法 | **[✓ 44模块 v27]** src/core/FrameScene.ts |
 | `A_Frames` | `artifact` | 阶段 1 / Wave B: 核心算法与上游对齐 | 源视频预解码帧序列 | **[✓ %06d.jpg]** src/capture/FrameExtractor.ts |
@@ -119,12 +119,12 @@ flowchart LR
 | `M_AudioMux` | `action` | 阶段 3 / Wave C-D: WebGL2 渲染与导出 | 多音轨混音与多规格导出 | **[✓ 混音+多规格导出]** src/render/AudioMixPlan.ts |
 | `X_ExpFail` | `block` | 阶段 3 / Wave C-D: WebGL2 渲染与导出 | 导出看门狗阻断 | **[✓ 30s/409 熔断]** src/server/ExportServer.ts:265 |
 | `M_EditorUI` | `action` | Wave E: 质检门禁与 Studio 基础底座 | Studio 编辑器核心底座 | **[✓ Studio 底座]** src/server/StudioServer.ts / web/studio/app.ts |
-| `G_Verify` | `gate` | Wave E: 质检门禁与 Studio 基础底座 | 全量边界与自动化门禁 | **[✓ 373测试全绿]** scripts/verify-export.ts |
+| `G_Verify` | `gate` | Wave E: 质检门禁与 Studio 基础底座 | 全量边界与自动化门禁 | **[✓ 377测试全绿]** scripts/verify-export.ts |
 | `M_AiBridge` | `action` | Wave F-G: AI剪辑、字幕动效与桌面发布 | AI 剪辑助手与 AgentBridge | **[✓ DPAPI+Bridge]** src/server/AiSecrets.ts / AgentBridge.ts / web/studio/aiPanel.ts |
 | `M_SubMotion` | `action` | Wave F-G: AI剪辑、字幕动效与桌面发布 | WebGL2 字幕、动效与壁纸 | **[✓ 双端渲染对齐]** web/passes/subtitles.ts / htmlMotion.ts / background.ts |
 | `M_AudioSfx` | `action` | Wave F-G: AI剪辑、字幕动效与桌面发布 | SoundSynth 与人声闪避混音 | **[✓ 音效+Ducking]** src/render/SoundSynth.ts / AudioMixPlan.ts / MediaAssetsService.ts |
-| `M_StudioV2` | `action` | Wave F-G: AI剪辑、字幕动效与桌面发布 | 全功能工作台 UI 补齐 | **[✓ 4面板+7轨线]** web/studio/{libraryShell,subtitlesPanel,motionPanel,cropOverlay,timeline}.ts |
-| `M_ShellPkg` | `action` | Wave F-G: AI剪辑、字幕动效与桌面发布 | Windows 原生桌面外壳与打包 | **[✓ DogSC.exe v1.1]** desktop/DogSC.cs / scripts/build-desktop.ts / package-windows.ts |
+| `M_StudioV2` | `action` | Wave F-G: AI剪辑、字幕动效与桌面发布 | 商业级工作台与胶片时间线 | **[✓ 商业质感P0-P3]** web/studio/{icons,previews,colorPicker,controls,timeline,inspector}.ts |
+| `M_ShellPkg` | `action` | Wave F-G: AI剪辑、字幕动效与桌面发布 | Windows 原生桌面外壳与打包 | **[✓ DogSC.exe v1.2]** desktop/DogSC.cs / scripts/build-desktop.ts / package-windows.ts |
 | `H_Review` | `human` | Wave F-G: AI剪辑、字幕动效与桌面发布 | 人工交互桌面实录终审 | T12.9 showinfo 时钟修复已落地，待用户在交互桌面实录并肉眼终审成片后勾选 T11.7 (D4) |
-| `Deliver` | `endpoint` | Wave F-G: AI剪辑、字幕动效与桌面发布 | 最终交付产物 | **[✓ v1.1.0-windows]** Wave A-G 全量对齐 macOS v0.2.0 · v1.1.0-windows |
+| `Deliver` | `endpoint` | Wave F-G: AI剪辑、字幕动效与桌面发布 | 最终交付产物 | **[✓ v1.2.0-windows]** Wave A-H 全量交付 · v1.2.0-windows |
 | `X_Term` | `block` | Wave F-G: AI剪辑、字幕动效与桌面发布 | 统一异常收口终端 | **[✓ 异常收口]** scripts/export.ts:186 |

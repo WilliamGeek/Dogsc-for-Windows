@@ -18,21 +18,38 @@
         </div>
         <select id="recording-picker" class="chrome-select" aria-label="选择录制"></select>
         <button id="btn-new-record" class="chrome-btn subtle-well" title="新建屏幕/窗口/音视频录制">
-          + 新建录制
+          <svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5" fill="var(--recording-red)" stroke="none"/></svg>
+          <span>新建录制</span>
         </button>
         <button id="btn-toggle-library" class="chrome-btn active" title="展开/收起左侧 AI 与素材库 (Ctrl+Alt+L)">
-          AI · 素材库
+          <svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M9 4v16"/></svg>
+          <span>AI · 素材库</span>
         </button>
         <input id="project-title-input" class="chrome-title-input" type="text" placeholder="工程标题" aria-label="工程标题" />
         <span id="save-status-pill" class="save-pill">就绪</span>
       </div>
 
       <div class="chrome-group">
-        <button id="btn-undo" class="chrome-btn" disabled title="撤销 (Ctrl+Z)">撤销</button>
-        <button id="btn-redo" class="chrome-btn" disabled title="重做 (Ctrl+Y)">重做</button>
-        <button id="btn-shortcuts-help" class="chrome-btn" title="键盘快捷键速查 (?)">? 快捷键</button>
-        <button id="btn-theme-toggle" class="chrome-btn" title="切换深色/浅色主题">浅色</button>
-        <button id="btn-open-export" class="primary-export-btn">导出</button>
+        <button id="btn-undo" class="chrome-btn" disabled title="撤销 (Ctrl+Z)">
+          <svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
+          <span>撤销</span>
+        </button>
+        <button id="btn-redo" class="chrome-btn" disabled title="重做 (Ctrl+Y)">
+          <svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>
+          <span>重做</span>
+        </button>
+        <button id="btn-shortcuts-help" class="chrome-btn" title="键盘快捷键速查 (?)">
+          <svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2.5"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg>
+          <span>快捷键</span>
+        </button>
+        <button id="btn-theme-toggle" class="chrome-btn" title="切换深色/浅色主题">
+          <svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+          <span>浅色</span>
+        </button>
+        <button id="btn-open-export" class="primary-export-btn">
+          <svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg>
+          <span>导出</span>
+        </button>
       </div>
     </header>
 
@@ -46,7 +63,9 @@
             <button class="lib-tab-btn" data-lib-tab="subtitles" role="tab" aria-selected="false">字幕</button>
             <button class="lib-tab-btn" data-lib-tab="motion" role="tab" aria-selected="false">动效</button>
           </div>
-          <button id="btn-collapse-library" class="tbtn lib-collapse-btn" title="收起左侧面板 (Ctrl+Alt+L)">‹</button>
+          <button id="btn-collapse-library" class="tbtn lib-collapse-btn" title="收起左侧面板 (Ctrl+Alt+L)">
+            <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+          </button>
         </div>
         <div id="studio-library-body" class="library-body"></div>
       </aside>
@@ -76,13 +95,22 @@
                 <button class="seg-opt" data-ratio="9:16">9:16</button>
                 <button class="seg-opt" data-ratio="1:1">1:1</button>
               </div>
-              <button id="btn-toggle-crop" class="chrome-btn" title="拖拽画布交互式裁剪源画面区域">裁剪</button>
+              <button id="btn-toggle-crop" class="chrome-btn" title="拖拽画布交互式裁剪源画面区域">
+                <svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></svg>
+                <span>裁剪</span>
+              </button>
             </div>
 
             <div class="transport-cluster">
-              <button id="btn-step-back" class="tbtn" title="上一帧 (←)">◀</button>
-              <button id="btn-play-toggle" class="play-disc-btn" title="播放 / 暂停 (Space)">▶</button>
-              <button id="btn-step-fwd" class="tbtn" title="下一帧 (→)">▶</button>
+              <button id="btn-step-back" class="tbtn" title="上一帧 (←)">
+                <svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6v12"/><path d="M17 6 9 12l8 6V6Z" fill="currentColor" stroke="none"/></svg>
+              </button>
+              <button id="btn-play-toggle" class="play-disc-btn" title="播放 / 暂停 (Space)">
+                <svg class="ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m7 5 12 7-12 7V5Z" fill="currentColor" stroke="none"/></svg>
+              </button>
+              <button id="btn-step-fwd" class="tbtn" title="下一帧 (→)">
+                <svg class="ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6v12"/><path d="M7 6l8 6-8 6V6Z" fill="currentColor" stroke="none"/></svg>
+              </button>
               <span class="timecode-readout">
                 <strong id="tc-current">00:00.00</strong> / <span id="tc-total">00:00.00</span>
               </span>
@@ -109,22 +137,28 @@
         <div id="studio-inspector-body" class="inspector-body"></div>
         <nav class="inspector-rail" id="studio-inspector-rail" aria-label="检查器分类">
           <button class="rail-tab-btn active" data-tab="frame" title="画面与外框">
-            <span>▣</span><span>画面</span>
+            <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M3 9h18"/><circle cx="6.5" cy="6.5" r="0.7" fill="currentColor" stroke="none"/></svg>
+            <span>画面</span>
           </button>
           <button class="rail-tab-btn" data-tab="zoom" title="自动运镜与缩放">
-            <span>⊕</span><span>运镜</span>
+            <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/><path d="M11 8v6M8 11h6"/></svg>
+            <span>运镜</span>
           </button>
           <button class="rail-tab-btn" data-tab="opening" title="3D 开场序列">
-            <span>✦</span><span>开场</span>
+            <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3Z"/><path d="M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8L19 16Z"/></svg>
+            <span>开场</span>
           </button>
           <button class="rail-tab-btn" data-tab="cursor" title="矢量光标与点击动效">
-            <span>⌖</span><span>光标</span>
+            <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 3 13 7-5.5 2-2 5.5L5 3Z"/><path d="m12.5 12 4.5 4.5"/></svg>
+            <span>光标</span>
           </button>
           <button class="rail-tab-btn" data-tab="camera" title="摄像头画中画">
-            <span>◉</span><span>摄像头</span>
+            <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 8a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-1.5l5 3v-7l-5 3V8Z"/></svg>
+            <span>摄像头</span>
           </button>
           <button class="rail-tab-btn" data-tab="audio" title="系统声与麦克风">
-            <span>♫</span><span>声音</span>
+            <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 6a8.5 8.5 0 0 1 0 12"/></svg>
+            <span>声音</span>
           </button>
         </nav>
       </aside>

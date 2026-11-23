@@ -85,63 +85,119 @@ export function buildExportFfmpegArgs(o: ExportFfmpegArgsOptions): string[] {
 
   let videoCodecArgs: string[];
   if (videoCodec === 'hevc') {
-    videoCodecArgs =
-      o.encoder === 'h264_nvenc'
-        ? [
-            '-c:v',
-            'hevc_nvenc',
-            '-preset',
-            'p4',
-            '-rc',
-            'vbr',
-            '-cq',
-            nvencCq,
-            '-b:v',
-            '0',
-            '-pix_fmt',
-            'yuv420p',
-            '-tag:v',
-            'hvc1',
-          ]
-        : [
-            '-c:v',
-            'libx265',
-            '-preset',
-            'veryfast',
-            '-crf',
-            x26xCrf,
-            '-pix_fmt',
-            'yuv420p',
-            '-tag:v',
-            'hvc1',
-          ];
+    if (o.encoder === 'h264_nvenc') {
+      videoCodecArgs = [
+        '-c:v',
+        'hevc_nvenc',
+        '-preset',
+        'p4',
+        '-rc',
+        'vbr',
+        '-cq',
+        nvencCq,
+        '-b:v',
+        '0',
+        '-pix_fmt',
+        'yuv420p',
+        '-tag:v',
+        'hvc1',
+      ];
+    } else if (o.encoder === 'h264_amf') {
+      videoCodecArgs = [
+        '-c:v',
+        'hevc_amf',
+        '-quality',
+        'balanced',
+        '-rc',
+        'cqp',
+        '-qp_i',
+        nvencCq,
+        '-qp_p',
+        nvencCq,
+        '-pix_fmt',
+        'yuv420p',
+        '-tag:v',
+        'hvc1',
+      ];
+    } else if (o.encoder === 'h264_qsv') {
+      videoCodecArgs = [
+        '-c:v',
+        'hevc_qsv',
+        '-preset',
+        'veryfast',
+        '-global_quality',
+        nvencCq,
+        '-pix_fmt',
+        'yuv420p',
+        '-tag:v',
+        'hvc1',
+      ];
+    } else {
+      videoCodecArgs = [
+        '-c:v',
+        'libx265',
+        '-preset',
+        'veryfast',
+        '-crf',
+        x26xCrf,
+        '-pix_fmt',
+        'yuv420p',
+        '-tag:v',
+        'hvc1',
+      ];
+    }
+  } else if (o.encoder === 'h264_nvenc') {
+    videoCodecArgs = [
+      '-c:v',
+      'h264_nvenc',
+      '-preset',
+      'p4',
+      '-rc',
+      'vbr',
+      '-cq',
+      nvencCq,
+      '-b:v',
+      '0',
+      '-pix_fmt',
+      'yuv420p',
+    ];
+  } else if (o.encoder === 'h264_amf') {
+    videoCodecArgs = [
+      '-c:v',
+      'h264_amf',
+      '-quality',
+      'balanced',
+      '-rc',
+      'cqp',
+      '-qp_i',
+      nvencCq,
+      '-qp_p',
+      nvencCq,
+      '-pix_fmt',
+      'yuv420p',
+    ];
+  } else if (o.encoder === 'h264_qsv') {
+    videoCodecArgs = [
+      '-c:v',
+      'h264_qsv',
+      '-preset',
+      'veryfast',
+      '-global_quality',
+      nvencCq,
+      '-pix_fmt',
+      'yuv420p',
+    ];
   } else {
-    videoCodecArgs =
-      o.encoder === 'h264_nvenc'
-        ? [
-            '-c:v',
-            'h264_nvenc',
-            '-preset',
-            'p4',
-            '-rc',
-            'vbr',
-            '-cq',
-            nvencCq,
-            '-b:v',
-            '0',
-            '-pix_fmt',
-            'yuv420p',
-          ]
-        : [
-            '-c:v',
-            'libx264',
-            '-preset',
-            'veryfast',
-            '-crf',
-            x26xCrf,
-            '-pix_fmt',
-            'yuv420p',
-          ];
+    videoCodecArgs = [
+      '-c:v',
+      'libx264',
+      '-preset',
+      'veryfast',
+      '-crf',
+      x26xCrf,
+      '-pix_fmt',
+      'yuv420p',
+    ];
   }
 
   if (hasAudioMux) {

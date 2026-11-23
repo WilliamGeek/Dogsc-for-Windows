@@ -27,6 +27,7 @@ import {
 import { ExportEncodingPolicy } from '../../src/core/ExportPolicy.ts';
 import type { OutputFrameRate } from '../../src/core/CaptureConfiguration.ts';
 import type { StudioRuntimeContext } from './app.ts';
+import { svgIcon } from './icons.ts';
 
 function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 MB';
@@ -200,7 +201,7 @@ export function openExportSheetModal(ctx: StudioRuntimeContext): void {
       rightColumn = `
         <div style="width:316px;display:flex;flex-direction:column;gap:12px;justify-content:center;flex-shrink:0;">
           <div class="insp-card" style="border-color:var(--success-green);">
-            <div class="insp-card-title" style="color:#7ebd8c;">✓ 导出完成</div>
+            <div class="insp-card-title" style="color:#7ebd8c;display:flex;align-items:center;gap:6px;">${svgIcon('check', 13)}<span>导出完成</span></div>
             <div style="font-size:11px;color:var(--ink-secondary);word-break:break-all;">${escapeHtml(jobProgress.outFile)}</div>
           </div>
         </div>`;
@@ -239,7 +240,7 @@ export function openExportSheetModal(ctx: StudioRuntimeContext): void {
     card.innerHTML = `
       <div class="modal-header">
         <h3 class="modal-title">导出成片</h3>
-        <button id="exp-modal-x" class="chrome-btn">✕</button>
+        <button id="exp-modal-x" class="chrome-btn" title="关闭">${svgIcon('close', 14)}</button>
       </div>
       <div class="modal-body" style="flex-direction:row;align-items:stretch;gap:20px;">
         ${leftPreview}

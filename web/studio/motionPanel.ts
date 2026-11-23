@@ -2,9 +2,9 @@
  * web/studio/motionPanel.ts
  *
  * Left Library `动效` (`motion`) tab:
- * - 5 built-in macOS-aligned HTML/SVG motion templates (`lower-third`, `keycap`, `callout`, `chapter`, `pill`)
+ * - 5 built-in macOS-aligned HTML/SVG motion templates rendered as visual preview cards (`previews.ts`)
  * - Click-to-insert at current playhead with live WebGL2 preview
- * - Property inspector (title, subtitle, accent color, X/Y position, width, opacity, duration)
+ * - Property inspector (title, subtitle, HSV popover accent color, scrubbable sliders)
  * - `.dmhtml` export download + delete clip
  * Strictly ZERO node:* imports and stripTypeScriptTypes compatible.
  */
@@ -23,6 +23,10 @@ import {
 import { projectTimelineNextVisualLayer } from '../../src/core/ProjectTimeline.ts';
 import { makeNormalizedPoint } from '../../src/core/ZoomAnimation.ts';
 import { clamp } from '../../src/core/swift.ts';
+import { svgIcon } from './icons.ts';
+import { renderMotionTemplateCard } from './previews.ts';
+import { mountStudioColorPicker, renderColorChipButton } from './colorPicker.ts';
+import { bindProRange, renderSliderRow } from './controls.ts';
 
 function escapeHtml(text: string): string {
   return String(text)
@@ -84,8 +88,7 @@ export class MotionLibraryPanel {
       activeEl &&
       container.contains(activeEl) &&
       activeEl.tagName === 'INPUT' &&
-      ((activeEl as HTMLInputElement).type === 'text' ||
-        (activeEl as HTMLInputElement).type === 'color')
+      (activeEl as HTMLInputElement).type === 'text'
     ) {
       return;
     }
@@ -108,13 +111,7 @@ export class MotionLibraryPanel {
       .sort((a, b) => a.timing.startTime - b.timing.startTime);
     const active = clips.find((c) => c.id === this.selectedClipId) ?? null;
 
-    const templatesHtml = HTML_MOTION_TEMPLATES.map(
-      (t) => `
-      <button class="motion-tpl-btn" data-insert-tpl="${t.id}" title="在当前播放头插入「${escapeHtml(t.label)}」">
-        <span class="motion-tpl-dot" style="background:${escapeHtml(t.defaultAccent)}"></span>
-        <span class="motion-tpl-name">+ ${escapeHtml(t.label)}</span>
-      </button>`
-    ).join('');
+    const templatesHtml = HTML_MOTION_TEMPLATES.map((t) => renderMotionTemplateCard(t)).join('');
 
     const clipsHtml =
       clips.length === 0
@@ -143,7 +140,7 @@ export class MotionLibraryPanel {
             <div class="insp-card">
               <div class="insp-row">
                 <span class="insp-card-title">编辑动效 · ${escapeHtml(tplInfo.label)}</span>
-                <button id="motion-btn-delete" class="insp-btn danger">删除</button>
+                <button id="motion-btn-delete" class="insp-btn danger">${svgIcon('trash', 12)}<span>删除</span></button>
               </div>
               <div class="ai-field-col">
                 <label class="ai-field-label" for="motion-input-title">主标题</label>
@@ -155,34 +152,14 @@ export class MotionLibraryPanel {
               </div>
               <div class="insp-row">
                 <span class="insp-label">强调色</span>
-                <input id="motion-input-accent" type="color" value="${escapeHtml(curAccent)}" />
+                ${renderColorChipButton('motion-input-accent', curAccent)}
               </div>
-              <div class="insp-row">
-                <span class="insp-label">水平 X</span>
-                <input id="motion-pos-x" class="insp-slider" type="range" min="0.08" max="0.92" step="0.01" value="${active.position.x}" />
-                <span class="insp-val">${Math.round(active.position.x * 100)}%</span>
-              </div>
-              <div class="insp-row">
-                <span class="insp-label">垂直 Y</span>
-                <input id="motion-pos-y" class="insp-slider" type="range" min="0.08" max="0.92" step="0.01" value="${active.position.y}" />
-                <span class="insp-val">${Math.round(active.position.y * 100)}%</span>
-              </div>
-              <div class="insp-row">
-                <span class="insp-label">卡片宽度</span>
-                <input id="motion-width" class="insp-slider" type="range" min="0.16" max="0.85" step="0.02" value="${active.width}" />
-                <span class="insp-val">${Math.round(active.width * 100)}%</span>
-              </div>
-              <div class="insp-row">
-                <span class="insp-label">不透明度</span>
-                <input id="motion-opacity" class="insp-slider" type="range" min="0.1" max="1" step="0.05" value="${active.opacity}" />
-                <span class="insp-val">${Math.round(active.opacity * 100)}%</span>
-              </div>
-              <div class="insp-row">
-                <span class="insp-label">持续时长</span>
-                <input id="motion-duration" class="insp-slider" type="range" min="0.5" max="15" step="0.1" value="${active.timing.duration}" />
-                <span class="insp-val">${active.timing.duration.toFixed(1)}s</span>
-              </div>
-              <button id="motion-export-dmhtml" class="chrome-btn subtle-well">导出 .dmhtml 模板源码</button>
+              ${renderSliderRow({ id: 'motion-pos-x', label: '水平 X', min: 0.08, max: 0.92, step: 0.01, value: active.position.x, defaultValue: tplInfo.defaultX, display: `${Math.round(active.position.x * 100)}%`, labelWidth: 58 })}
+              ${renderSliderRow({ id: 'motion-pos-y', label: '垂直 Y', min: 0.08, max: 0.92, step: 0.01, value: active.position.y, defaultValue: tplInfo.defaultY, display: `${Math.round(active.position.y * 100)}%`, labelWidth: 58 })}
+              ${renderSliderRow({ id: 'motion-width', label: '卡片宽度', min: 0.16, max: 0.85, step: 0.02, value: active.width, defaultValue: tplInfo.defaultWidth, display: `${Math.round(active.width * 100)}%`, labelWidth: 58 })}
+              ${renderSliderRow({ id: 'motion-opacity', label: '不透明度', min: 0.1, max: 1, step: 0.05, value: active.opacity, defaultValue: 1, display: `${Math.round(active.opacity * 100)}%`, labelWidth: 58 })}
+              ${renderSliderRow({ id: 'motion-duration', label: '持续时长', min: 0.5, max: 15, step: 0.1, value: active.timing.duration, defaultValue: 3.0, display: `${active.timing.duration.toFixed(1)}s`, labelWidth: 58 })}
+              <button id="motion-export-dmhtml" class="chrome-btn subtle-well">${svgIcon('download', 12)}<span>导出 .dmhtml 模板源码</span></button>
             </div>`;
         })()
       : '';
@@ -246,7 +223,6 @@ export class MotionLibraryPanel {
           },
           { immediate: true }
         );
-        // Seek slightly inside entrance so preview displays the active card crisp
         host.seekTo(Math.min(outDur, start + Math.min(0.4, dur * 0.5)));
         this.noticeText = `已添加「${info.label}」动效贴纸。`;
         this.render();
@@ -268,20 +244,29 @@ export class MotionLibraryPanel {
     });
 
     if (!active) return;
+    const tpl = templateIdOf(active);
+    const tplInfo = HTML_MOTION_TEMPLATES.find((t) => t.id === tpl) ?? HTML_MOTION_TEMPLATES[2];
+    const curAccent = propText(active, 'accent', tplInfo.defaultAccent);
 
-    const patchClip = (updater: (clip: AnimationClip, outDur: number) => AnimationClip) => {
+    const patchClip = (
+      updater: (clip: AnimationClip, outDur: number) => AnimationClip,
+      skipRerender = true
+    ) => {
       const cur = host.getProject();
       if (!cur) return;
       const outDur = Math.max(0.6, host.getOutputDuration());
-      host.mutateProject({
-        ...cur,
-        timeline: {
-          ...cur.timeline,
-          animationClips: cur.timeline.animationClips.map((c) =>
-            c.id === active.id ? updater(c, outDur) : c
-          ),
+      host.mutateProject(
+        {
+          ...cur,
+          timeline: {
+            ...cur.timeline,
+            animationClips: cur.timeline.animationClips.map((c) =>
+              c.id === active.id ? updater(c, outDur) : c
+            ),
+          },
         },
-      });
+        { skipPanelRerender: skipRerender }
+      );
     };
 
     this.container.querySelector('#motion-btn-delete')?.addEventListener('click', () => {
@@ -313,43 +298,52 @@ export class MotionLibraryPanel {
       }));
     });
 
-    this.container.querySelector('#motion-input-accent')?.addEventListener('change', (ev) => {
-      const val = (ev.target as HTMLInputElement).value;
+    mountStudioColorPicker('motion-input-accent', curAccent, (hex) => {
       patchClip((c) => ({
         ...c,
-        properties: { ...c.properties, accent: { kind: 'string', value: val } },
+        properties: { ...c.properties, accent: { kind: 'string', value: hex } },
       }));
     });
 
-    const bindNum = (id: string, fn: (v: number) => void) => {
-      const el = this.container?.querySelector(`#${id}`) as HTMLInputElement | null;
-      el?.addEventListener('change', () => fn(Number(el.value)));
-    };
-
-    bindNum('motion-pos-x', (v) =>
-      patchClip((c) => ({ ...c, position: makeNormalizedPoint(clamp(v, 0.08, 0.92), c.position.y) }))
+    bindProRange(
+      'motion-pos-x',
+      (v) => patchClip((c) => ({ ...c, position: makeNormalizedPoint(clamp(v, 0.08, 0.92), c.position.y) })),
+      (v) => `${Math.round(v * 100)}%`,
+      tplInfo.defaultX
     );
-    bindNum('motion-pos-y', (v) =>
-      patchClip((c) => ({ ...c, position: makeNormalizedPoint(c.position.x, clamp(v, 0.08, 0.92)) }))
+    bindProRange(
+      'motion-pos-y',
+      (v) => patchClip((c) => ({ ...c, position: makeNormalizedPoint(c.position.x, clamp(v, 0.08, 0.92)) })),
+      (v) => `${Math.round(v * 100)}%`,
+      tplInfo.defaultY
     );
-    bindNum('motion-width', (v) =>
-      patchClip((c) => ({ ...c, width: clamp(v, 0.16, 0.85) }))
+    bindProRange(
+      'motion-width',
+      (v) => patchClip((c) => ({ ...c, width: clamp(v, 0.16, 0.85) })),
+      (v) => `${Math.round(v * 100)}%`,
+      tplInfo.defaultWidth
     );
-    bindNum('motion-opacity', (v) =>
-      patchClip((c) => ({ ...c, opacity: clamp(v, 0.1, 1) }))
+    bindProRange(
+      'motion-opacity',
+      (v) => patchClip((c) => ({ ...c, opacity: clamp(v, 0.1, 1) })),
+      (v) => `${Math.round(v * 100)}%`,
+      1
     );
-    bindNum('motion-duration', (v) =>
-      patchClip((c, outDur) => ({
-        ...c,
-        timing: makeOverlayTiming(
-          c.timing.startTime,
-          clamp(v, 0.5, Math.max(0.5, outDur - c.timing.startTime))
-        ),
-      }))
+    bindProRange(
+      'motion-duration',
+      (v) =>
+        patchClip((c, outDur) => ({
+          ...c,
+          timing: makeOverlayTiming(
+            c.timing.startTime,
+            clamp(v, 0.5, Math.max(0.5, outDur - c.timing.startTime))
+          ),
+        })),
+      (v) => `${v.toFixed(1)}s`,
+      3.0
     );
 
     this.container.querySelector('#motion-export-dmhtml')?.addEventListener('click', () => {
-      const tpl = templateIdOf(active);
       const doc = buildDmhtmlDocument(tpl, {
         title: propText(active, 'title', '动效卡片'),
         subtitle: propText(active, 'subtitle', ''),

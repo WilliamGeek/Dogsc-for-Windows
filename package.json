@@ -1,6 +1,6 @@
 {
   "name": "dogsc-win",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "description": "Windows/cross-platform reconstruction of DogSC. Phase 1 = pure TypeScript port of Sources/RecorderCore (zero dependencies).",
   "type": "module",
@@ -12,7 +12,8 @@
     "test:one": "node --test",
     "studio": "node scripts/studio.ts",
     "build:desktop": "node scripts/build-desktop.ts",
-    "package:win": "node scripts/package-windows.ts"
+    "package:win": "node scripts/package-windows.ts",
+    "package:win:portable": "node scripts/package-windows.ts --bundle-node"
   },
   "license": "MIT"
 }

@@ -28,6 +28,8 @@ import {
 import { TimelineMap } from '../../src/core/TimelineMap.ts';
 import { ProjectValidator } from '../../src/core/ProjectValidator.ts';
 import { clamp, newUUID } from '../../src/core/swift.ts';
+import { svgIcon } from './icons.ts';
+import { bindProRange, renderSliderRow, renderSwitchRow } from './controls.ts';
 
 export interface SilentInterval {
   start: number;
@@ -297,7 +299,7 @@ export class SubtitlesLibraryPanel {
                 <button class="ai-step-time" data-seek-sec="${c.timing.startTime.toFixed(3)}" title="跳转到字幕起始位置">${formatClock(
                   c.timing.startTime
                 )} → ${formatClock(c.timing.endTime)}</button>
-                <button class="chrome-btn asset-act-btn" data-del-cue="${escapeHtml(c.id)}">删除</button>
+                <button class="chrome-btn asset-act-btn" data-del-cue="${escapeHtml(c.id)}">${svgIcon('trash', 11)}<span>删除</span></button>
               </div>
               <input type="text" class="ai-input sub-cue-primary" data-edit-primary="${escapeHtml(
                 c.id
@@ -316,13 +318,13 @@ export class SubtitlesLibraryPanel {
         <div class="insp-card">
           <div class="insp-card-title">字幕操作与 SRT</div>
           <div class="sub-actions-grid">
-            <button id="sub-btn-add" class="chrome-btn subtle-well">+ 加字幕</button>
+            <button id="sub-btn-add" class="chrome-btn subtle-well">${svgIcon('plus', 12)}<span>加字幕</span></button>
             <label class="chrome-btn subtle-well sub-import-lbl">
               <input id="sub-srt-input" type="file" accept=".srt,.txt" hidden />
-              导入 SRT
+              ${svgIcon('upload', 12)}<span>导入 SRT</span>
             </label>
-            <button id="sub-btn-export-srt" class="chrome-btn" ${cues.length === 0 ? 'disabled' : ''}>导出 SRT</button>
-            <button id="sub-btn-normalize" class="chrome-btn" ${cues.length === 0 ? 'disabled' : ''}>清洗规范</button>
+            <button id="sub-btn-export-srt" class="chrome-btn" ${cues.length === 0 ? 'disabled' : ''}>${svgIcon('download', 12)}<span>导出 SRT</span></button>
+            <button id="sub-btn-normalize" class="chrome-btn" ${cues.length === 0 ? 'disabled' : ''}>${svgIcon('wand', 12)}<span>清洗规范</span></button>
           </div>
         </div>
 
@@ -330,31 +332,11 @@ export class SubtitlesLibraryPanel {
           <div class="insp-card-title">入场动画与字体</div>
           <div class="pill-grid">${entrancePills}</div>
           <div class="pill-grid">${fontPills}</div>
-          <div class="insp-row">
-            <span class="insp-label">字号</span>
-            <input id="sub-font-scale" class="insp-slider" type="range" min="0.6" max="1.8" step="0.05" value="${style.fontScale}" />
-            <span class="insp-val">${Math.round(style.fontScale * 100)}%</span>
-          </div>
-          <div class="insp-row">
-            <span class="insp-label">边距</span>
-            <input id="sub-bottom-margin" class="insp-slider" type="range" min="0.04" max="0.24" step="0.01" value="${style.bottomMargin}" />
-            <span class="insp-val">${Math.round(style.bottomMargin * 100)}%</span>
-          </div>
-          <div class="insp-row">
-            <span class="insp-label">底色</span>
-            <input id="sub-bg-opacity" class="insp-slider" type="range" min="0" max="0.95" step="0.05" value="${style.backgroundOpacity}" />
-            <span class="insp-val">${Math.round(style.backgroundOpacity * 100)}%</span>
-          </div>
-          <div class="sub-checks-row">
-            <label class="assets-check-label">
-              <input id="sub-chk-secondary" type="checkbox" ${style.showsSecondary ? 'checked' : ''} />
-              <span>显示副字幕</span>
-            </label>
-            <label class="assets-check-label">
-              <input id="sub-chk-bold" type="checkbox" ${style.bold ? 'checked' : ''} />
-              <span>加粗</span>
-            </label>
-          </div>
+          ${renderSliderRow({ id: 'sub-font-scale', label: '字号', min: 0.6, max: 1.8, step: 0.05, value: style.fontScale, defaultValue: 1, display: `${Math.round(style.fontScale * 100)}%`, labelWidth: 46 })}
+          ${renderSliderRow({ id: 'sub-bottom-margin', label: '边距', min: 0.04, max: 0.24, step: 0.01, value: style.bottomMargin, defaultValue: 0.08, display: `${Math.round(style.bottomMargin * 100)}%`, labelWidth: 46 })}
+          ${renderSliderRow({ id: 'sub-bg-opacity', label: '底色', min: 0, max: 0.95, step: 0.05, value: style.backgroundOpacity, defaultValue: 0.65, display: `${Math.round(style.backgroundOpacity * 100)}%`, labelWidth: 46 })}
+          ${renderSwitchRow({ id: 'sub-chk-secondary', label: '显示副字幕', checked: style.showsSecondary })}
+          ${renderSwitchRow({ id: 'sub-chk-bold', label: '文字加粗', checked: style.bold })}
         </div>
 
         <div class="insp-card">
@@ -362,20 +344,12 @@ export class SubtitlesLibraryPanel {
             <span class="insp-card-title">智能静音停顿删剪</span>
             <span class="insp-val">${silentIntervals.length} 处</span>
           </div>
-          <div class="insp-row">
-            <span class="insp-label">静音阈值</span>
-            <input id="pause-thresh-slider" class="insp-slider" type="range" min="0.02" max="0.15" step="0.005" value="${this.pauseThreshold}" />
-            <span class="insp-val">${(this.pauseThreshold * 100).toFixed(1)}%</span>
-          </div>
-          <div class="insp-row">
-            <span class="insp-label">最小时长</span>
-            <input id="pause-min-slider" class="insp-slider" type="range" min="0.3" max="2.0" step="0.05" value="${this.minPauseSec}" />
-            <span class="insp-val">${this.minPauseSec.toFixed(2)}s</span>
-          </div>
+          ${renderSliderRow({ id: 'pause-thresh-slider', label: '静音阈值', min: 0.02, max: 0.15, step: 0.005, value: this.pauseThreshold, defaultValue: 0.045, display: `${(this.pauseThreshold * 100).toFixed(1)}%`, labelWidth: 58 })}
+          ${renderSliderRow({ id: 'pause-min-slider', label: '最小时长', min: 0.3, max: 2.0, step: 0.05, value: this.minPauseSec, defaultValue: 0.45, display: `${this.minPauseSec.toFixed(2)}s`, labelWidth: 58 })}
           ${pauseChipsHtml}
           <button id="pause-cut-all-btn" class="chrome-btn subtle-well" ${
             silentIntervals.length === 0 ? 'disabled' : ''
-          }>一键删除全部静音停顿 (${silentIntervals.length})</button>
+          }>${svgIcon('scissors', 12)}<span>一键删除全部静音停顿 (${silentIntervals.length})</span></button>
         </div>
 
         <div class="insp-card">
@@ -392,17 +366,23 @@ export class SubtitlesLibraryPanel {
     if (!this.container || !this.host) return;
     const host = this.host;
 
-    const mutateStyle = (patch: Partial<ReturnType<typeof makeSubtitleStyle>>) => {
+    const mutateStyle = (
+      patch: Partial<ReturnType<typeof makeSubtitleStyle>>,
+      skipPanelRerender = false
+    ) => {
       const cur = host.getProject();
       if (!cur) return;
       const prev = cur.timeline.subtitleStyle ?? makeSubtitleStyle();
-      host.mutateProject({
-        ...cur,
-        timeline: {
-          ...cur.timeline,
-          subtitleStyle: makeSubtitleStyle({ ...prev, ...patch }),
+      host.mutateProject(
+        {
+          ...cur,
+          timeline: {
+            ...cur.timeline,
+            subtitleStyle: makeSubtitleStyle({ ...prev, ...patch }),
+          },
         },
-      });
+        { skipPanelRerender }
+      );
     };
 
     const mutateCues = (updater: (cues: readonly SubtitleCue[]) => SubtitleCue[]) => {
@@ -484,13 +464,9 @@ export class SubtitlesLibraryPanel {
       });
     });
 
-    const bindSlider = (id: string, cb: (v: number) => void) => {
-      const el = this.container?.querySelector(`#${id}`) as HTMLInputElement | null;
-      el?.addEventListener('change', () => cb(Number(el.value)));
-    };
-    bindSlider('sub-font-scale', (v) => mutateStyle({ fontScale: v }));
-    bindSlider('sub-bottom-margin', (v) => mutateStyle({ bottomMargin: v }));
-    bindSlider('sub-bg-opacity', (v) => mutateStyle({ backgroundOpacity: v }));
+    bindProRange('sub-font-scale', (v) => mutateStyle({ fontScale: v }, true), (v) => `${Math.round(v * 100)}%`, 1);
+    bindProRange('sub-bottom-margin', (v) => mutateStyle({ bottomMargin: v }, true), (v) => `${Math.round(v * 100)}%`, 0.08);
+    bindProRange('sub-bg-opacity', (v) => mutateStyle({ backgroundOpacity: v }, true), (v) => `${Math.round(v * 100)}%`, 0.65);
 
     this.container.querySelector('#sub-chk-secondary')?.addEventListener('change', (ev) => {
       mutateStyle({ showsSecondary: (ev.target as HTMLInputElement).checked });
@@ -499,10 +475,28 @@ export class SubtitlesLibraryPanel {
       mutateStyle({ bold: (ev.target as HTMLInputElement).checked });
     });
 
+    bindProRange(
+      'pause-thresh-slider',
+      (v, rec) => {
+        this.pauseThreshold = v;
+        if (rec) this.render();
+      },
+      (v) => `${(v * 100).toFixed(1)}%`,
+      0.045
+    );
     this.container.querySelector('#pause-thresh-slider')?.addEventListener('change', (ev) => {
       this.pauseThreshold = Number((ev.target as HTMLInputElement).value) || 0.045;
       this.render();
     });
+    bindProRange(
+      'pause-min-slider',
+      (v, rec) => {
+        this.minPauseSec = v;
+        if (rec) this.render();
+      },
+      (v) => `${v.toFixed(2)}s`,
+      0.45
+    );
     this.container.querySelector('#pause-min-slider')?.addEventListener('change', (ev) => {
       this.minPauseSec = Number((ev.target as HTMLInputElement).value) || 0.45;
       this.render();
@@ -560,3 +554,4 @@ export class SubtitlesLibraryPanel {
     });
   }
 }
+

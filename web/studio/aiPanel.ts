@@ -9,6 +9,7 @@
  */
 
 import type { RecorderProject } from '../../src/core/ProjectMediaModel.ts';
+import { svgIcon } from './icons.ts';
 
 export type AiProviderKind = 'local' | 'openai' | 'gemini' | 'cli';
 export type AiCliToolId = 'codex' | 'claude' | 'gemini' | 'kimi';
@@ -70,7 +71,7 @@ export interface LibraryPanelHost {
   seekTo(timeSeconds: number): void;
   persistProject(): Promise<boolean>;
   applyExternalProject(rawProject: unknown, pushUndo?: boolean): void;
-  mutateProject(next: RecorderProject, opts?: { immediate?: boolean }): void;
+  mutateProject(next: RecorderProject, opts?: { immediate?: boolean; skipPanelRerender?: boolean }): void;
   reloadRecording(): Promise<void>;
   refreshViews(): void;
 }
@@ -295,7 +296,7 @@ export class AiAssistantPanel {
           </div>
           <div class="ai-bridge-meta">Token: <code>${escapeHtml(tokenHint)}</code></div>
           ${cliMarkup ? `<div class="ai-cli-row">${cliMarkup}</div>` : ''}
-          <button type="button" id="ai-copy-bridge-btn" class="chrome-btn subtle-well" style="width:100%">复制外部 Agent 接入指令</button>
+          <button type="button" id="ai-copy-bridge-btn" class="chrome-btn subtle-well" style="width:100%;justify-content:center;">${svgIcon('copy', 12)}<span>复制外部 Agent 接入指令</span></button>
         </div>
       </form>`
       : '';
@@ -304,7 +305,7 @@ export class AiAssistantPanel {
       this.history.length === 0
         ? `
       <div class="ai-welcome-card">
-        <div class="ai-welcome-title">AI 智能剪辑助手</div>
+        <div class="ai-welcome-title" style="display:flex;align-items:center;gap:6px;">${svgIcon('sparkles', 14)}<span>AI 智能剪辑助手</span></div>
         <p class="ai-welcome-desc">用自然语言调整画幅比例、圆角、外框、缩放关键帧、双语字幕、动效贴纸与导出规格。所有修改均经校验并支持单轮一键回撤。</p>
         <div class="ai-welcome-sec">密钥采用 Windows DPAPI 用户态加密保存于本机。</div>
       </div>`
@@ -349,7 +350,7 @@ export class AiAssistantPanel {
                 : entry.canRevert
                   ? `<div class="ai-turn-footer"><button class="chrome-btn ai-revert-btn" data-revert-turn="${escapeHtml(
                       entry.turnId
-                    )}" ${this.busy ? 'disabled' : ''}>撤销此轮</button></div>`
+                    )}" ${this.busy ? 'disabled' : ''}>${svgIcon('undo', 11)}<span>撤销此轮</span></button></div>`
                   : '';
 
               return `
@@ -378,7 +379,7 @@ export class AiAssistantPanel {
           </div>
           <button id="ai-toggle-setup" class="chrome-btn ${this.setupOpen ? 'active' : ''}" aria-expanded="${
             this.setupOpen ? 'true' : 'false'
-          }">配置</button>
+          }">${svgIcon('sliders', 12)}<span>配置</span></button>
         </div>
 
         ${

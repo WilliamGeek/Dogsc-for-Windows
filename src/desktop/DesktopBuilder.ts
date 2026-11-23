@@ -312,3 +312,35 @@ export function buildIExpressSed(opts: {
     '',
   ].join('\r\n');
 }
+
+/**
+ * Resolves the active Node.js binary eligible for bundling into `runtime/node.exe`
+ * for zero-prerequisite portable Windows distributions.
+ */
+export function resolvePortableNodeBinary(explicitPath?: string): string {
+  const candidate = path.resolve(explicitPath || process.execPath);
+  if (!existsSync(candidate)) {
+    throw new Error(`找不到可用于便携打包的 Node.js 运行时: ${candidate}`);
+  }
+  return candidate;
+}
+
+/**
+ * Emits attribution and license disclosure for bundled portable Node.js runtimes.
+ */
+export function buildPortableRuntimeNotice(nodeVersion: string): string {
+  return [
+    'DogSC Windows Portable Node.js Runtime Notice',
+    '==========================================',
+    '',
+    `Bundled Node.js version: ${nodeVersion}`,
+    'License: MIT / OpenJS Foundation & Node.js contributors',
+    'Upstream source: https://nodejs.org/',
+    '',
+    'This portable bundle places node.exe under runtime\\node.exe so DogSC.exe',
+    'runs without a system-wide Node.js installation.',
+    '',
+  ].join('\r\n');
+}
+
+

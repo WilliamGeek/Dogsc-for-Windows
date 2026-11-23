@@ -14,6 +14,7 @@ import {
 import type { PointerEventRecord } from '../../src/core/ZoomAnimation.ts';
 import type { CanvasAspectRatio } from '../../src/core/ProjectModel.ts';
 import { StudioWebGLPlayer, type PreviewQualityMode } from './player.ts';
+import { svgIcon } from './icons.ts';
 import {
   StudioHistory,
   computeTimelineOutputDuration,
@@ -76,6 +77,8 @@ export interface StudioRuntimeContext {
       recordHistory?: boolean;
       selection?: StudioSelection;
       immediateSave?: boolean;
+      skipInspectorRerender?: boolean;
+      skipTimelineRerender?: boolean;
     }
   ): void;
   reloadRecordings(selectId?: string): Promise<void>;
@@ -114,7 +117,7 @@ export class StudioApp {
       },
       onPlayStateChange: (playing) => {
         const btn = document.getElementById('btn-play-toggle');
-        if (btn) btn.textContent = playing ? '⏸' : '▶';
+        if (btn) btn.innerHTML = svgIcon(playing ? 'pause' : 'play', 14);
       },
     });
   }
@@ -181,7 +184,18 @@ export class StudioApp {
         }
         this.player.updateProject(nextProject);
         this.syncHeaderAndTransport();
-        this.renderSubViews();
+        if (options?.skipInspectorRerender || options?.skipTimelineRerender) {
+          this.syncRailTabs();
+          if (!options.skipTimelineRerender) this.renderTimelineView();
+          if (!options.skipInspectorRerender) {
+            this.renderInspectorView();
+            this.syncLibraryView();
+          }
+          this.syncCropOverlayView();
+          this.updatePlayheadUI(this.player.getCurrentTime());
+        } else {
+          this.renderSubViews();
+        }
         this.syncStageFocusOverlay();
         this.scheduleSave(Boolean(options?.immediateSave));
       },
@@ -327,8 +341,14 @@ export class StudioApp {
       applyExternalProject: (rawProject: unknown, pushUndo = true) => {
         this.applyExternalProject(rawProject, pushUndo);
       },
-      mutateProject: (next: RecorderProject, opts?: { immediate?: boolean }) => {
-        this.getContext().applyProjectMutation(next, opts);
+      mutateProject: (
+        next: RecorderProject,
+        opts?: { immediate?: boolean; skipPanelRerender?: boolean }
+      ) => {
+        this.getContext().applyProjectMutation(next, {
+          immediateSave: opts?.immediate,
+          skipInspectorRerender: opts?.skipPanelRerender,
+        });
       },
       reloadRecording: async () => {
         if (this.detail?.id) {
@@ -723,7 +743,11 @@ export class StudioApp {
       const root = document.documentElement;
       const isLight = root.getAttribute('data-theme') === 'light';
       root.setAttribute('data-theme', isLight ? 'dark' : 'light');
-      if (themeBtn) themeBtn.textContent = isLight ? '浅色' : '深色';
+      if (themeBtn) {
+        themeBtn.innerHTML = isLight
+          ? `${svgIcon('sun', 13)}<span>浅色</span>`
+          : `${svgIcon('moon', 13)}<span>深色</span>`;
+      }
     });
 
     document.getElementById('btn-new-record')?.addEventListener('click', () => {
@@ -770,7 +794,7 @@ export class StudioApp {
     if (!bd || !card) return;
     card.className = 'modal-card';
     card.innerHTML = `
-      <div class="modal-header"><h3 class="modal-title">${title}</h3><button id="modal-close-x" class="chrome-btn">✕</button></div>
+      <div class="modal-header"><h3 class="modal-title">${title}</h3><button id="modal-close-x" class="chrome-btn" title="关闭">${svgIcon('close', 14)}</button></div>
       <div class="modal-body">${bodyHtml}</div>
       <div class="modal-footer"><span></span><button id="modal-close-ok" class="primary-export-btn">知道了</button></div>`;
     bd.classList.add('open');

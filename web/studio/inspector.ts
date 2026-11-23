@@ -4,8 +4,12 @@
  * Real-time 6-tab inspector aligned with macOS EditorInspectorView:
  *   1. frame (画面)  2. zoom (运镜)  3. opening (开场)
  *   4. cursor (光标) 5. camera (摄像头) 6. audio (声音)
- * Strict zero-fake-switch invariant: every control directly mutates RecorderProject
- * and re-renders live WebGL2 preview immediately.
+ * Upgraded with Frontend P0-P3 craft:
+ *   - Unified SVG iconography (`icons.ts`)
+ *   - Visual swatches & vector wireframe cards (`previews.ts`)
+ *   - Custom HSV/HEX popover color picker (`colorPicker.ts`)
+ *   - Scrubbable sliders + double-click default reset (`controls.ts`)
+ *   - Zero full-DOM teardown during continuous slider/color dragging
  * Strictly ZERO node:* imports.
  */
 
@@ -54,14 +58,28 @@ import {
   updateMosaicClipById,
   deleteMosaicClipById,
 } from './state.ts';
+import { svgIcon } from './icons.ts';
+import { bindProRange, renderSliderRow, renderSwitchRow } from './controls.ts';
+import {
+  closeActiveColorPicker,
+  mountStudioColorPicker,
+  renderColorChipButton,
+} from './colorPicker.ts';
+import {
+  renderBackgroundSwatchCard,
+  renderCameraShapeCard,
+  renderChromePreviewCard,
+  renderCursorAppearanceCard,
+  renderOpeningPresetCard,
+} from './previews.ts';
 
 const ASPECT_OPTIONS: readonly CanvasAspectRatio[] = ['适应', '16:9', '9:16', '1:1', '4:3'];
 const CHROME_OPTIONS: ReadonlyArray<{ id: ScreenFrameStyle; label: string }> = [
   { id: 'none', label: '无外框' },
   { id: 'windowLight', label: '浅色窗口' },
   { id: 'windowDark', label: '深色窗口' },
-  { id: 'browserLight', label: '浅色浏览器' },
-  { id: 'browserDark', label: '深色浏览器' },
+  { id: 'browserLight', label: '浅色浏览' },
+  { id: 'browserDark', label: '深色浏览' },
   { id: 'devicePhone', label: '手机壳' },
   { id: 'deviceTablet', label: '平板壳' },
 ];
@@ -74,23 +92,6 @@ function escapeHtml(text: string): string {
     .replace(/"/g, '&quot;');
 }
 
-function sliderRow(
-  id: string,
-  label: string,
-  min: number,
-  max: number,
-  step: number,
-  value: number,
-  display: string
-): string {
-  return `
-    <div class="insp-row">
-      <span class="insp-label" style="min-width:74px;">${label}</span>
-      <input id="${id}" class="insp-slider" type="range" min="${min}" max="${max}" step="${step}" value="${value}" />
-      <span id="${id}-val" class="insp-val">${display}</span>
-    </div>`;
-}
-
 function backgroundOptionId(bg: BackgroundSource): string {
   if (bg.kind === 'pattern') return `pattern:${bg.preset}`;
   if (bg.kind === 'dynamicFlow') return `dynamicFlow:${bg.preset}`;
@@ -100,6 +101,7 @@ function backgroundOptionId(bg: BackgroundSource): string {
 export function renderStudioInspector(ctx: StudioRuntimeContext): void {
   const container = document.getElementById('studio-inspector-body');
   if (!container) return;
+  closeActiveColorPicker();
 
   const detail = ctx.getDetail();
   const project = ctx.getProject();
@@ -147,20 +149,27 @@ function renderFrameTab(el: HTMLElement, ctx: StudioRuntimeContext): void {
       `<button class="pill-choice ${c.aspectRatio === r ? 'active' : ''}" data-aspect="${r}">${r}</button>`
   ).join('');
 
-  const bgPills = [
-    ...BackgroundPatternPresetAllCases.map(
-      (p) =>
-        `<button class="pill-choice ${activeBgId === `pattern:${p}` ? 'active' : ''}" data-bg-kind="pattern" data-bg-preset="${p}">${backgroundPatternPresetDisplayName(p)}</button>`
+  const bgSwatches = [
+    ...BackgroundPatternPresetAllCases.map((p) =>
+      renderBackgroundSwatchCard(
+        'pattern',
+        p,
+        backgroundPatternPresetDisplayName(p),
+        activeBgId === `pattern:${p}`
+      )
     ),
-    ...DynamicBackgroundPresetAllCases.map(
-      (d) =>
-        `<button class="pill-choice ${activeBgId === `dynamicFlow:${d}` ? 'active' : ''}" data-bg-kind="dynamicFlow" data-bg-preset="${d}">${dynamicBackgroundPresetDisplayName(d)}</button>`
+    ...DynamicBackgroundPresetAllCases.map((d) =>
+      renderBackgroundSwatchCard(
+        'dynamicFlow',
+        d,
+        dynamicBackgroundPresetDisplayName(d),
+        activeBgId === `dynamicFlow:${d}`
+      )
     ),
   ].join('');
 
-  const chromePills = CHROME_OPTIONS.map(
-    (opt) =>
-      `<button class="pill-choice ${c.screenFrame === opt.id ? 'active' : ''}" data-chrome="${opt.id}">${opt.label}</button>`
+  const chromeCards = CHROME_OPTIONS.map((opt) =>
+    renderChromePreviewCard(opt.id, opt.label, c.screenFrame === opt.id)
   ).join('');
 
   const mosaicCard = selectedMosaic
@@ -168,16 +177,16 @@ function renderFrameTab(el: HTMLElement, ctx: StudioRuntimeContext): void {
       <div class="insp-card" style="border-color:var(--t-region);">
         <div class="insp-row">
           <span class="insp-card-title" style="color:var(--t-region);">选中区域效果</span>
-          <button id="insp-del-mosaic" class="insp-btn danger">删除</button>
+          <button id="insp-del-mosaic" class="insp-btn danger">${svgIcon('trash', 12)}<span>删除</span></button>
         </div>
         <div class="pill-grid">
-          <button class="pill-choice ${selectedMosaic.style === 'blur' ? 'active' : ''}" data-mos-style="blur">马赛克模糊</button>
-          <button class="pill-choice ${selectedMosaic.style === 'spotlight' ? 'active' : ''}" data-mos-style="spotlight">聚光灯聚焦</button>
+          <button class="pill-choice ${selectedMosaic.style === 'blur' ? 'active' : ''}" data-mos-style="blur">${svgIcon('mosaic', 12)}<span>马赛克模糊</span></button>
+          <button class="pill-choice ${selectedMosaic.style === 'spotlight' ? 'active' : ''}" data-mos-style="spotlight">${svgIcon('spotlight', 12)}<span>聚光灯聚焦</span></button>
         </div>
-        ${sliderRow('mos-intensity', '效果强度', 0.1, 1, 0.05, selectedMosaic.intensity, `${Math.round(selectedMosaic.intensity * 100)}%`)}
+        ${renderSliderRow({ id: 'mos-intensity', label: '效果强度', min: 0.1, max: 1, step: 0.05, value: selectedMosaic.intensity, defaultValue: 0.85, display: `${Math.round(selectedMosaic.intensity * 100)}%` })}
         ${
           selectedMosaic.style === 'spotlight'
-            ? sliderRow('mos-dimming', '外部压暗', 0.05, 0.85, 0.05, selectedMosaic.spotlightDimming, `${Math.round(selectedMosaic.spotlightDimming * 100)}%`)
+            ? renderSliderRow({ id: 'mos-dimming', label: '外部压暗', min: 0.05, max: 0.85, step: 0.05, value: selectedMosaic.spotlightDimming, defaultValue: 0.55, display: `${Math.round(selectedMosaic.spotlightDimming * 100)}%` })
             : ''
         }
       </div>`
@@ -189,41 +198,45 @@ function renderFrameTab(el: HTMLElement, ctx: StudioRuntimeContext): void {
     <div class="insp-card">
       <div class="insp-card-title">画布比例与布局</div>
       <div class="pill-grid">${ratioPills}</div>
-      ${sliderRow('frame-padding', '四周留白', 0, 240, 2, c.padding, `${Math.round(c.padding)}px`)}
-      ${sliderRow('frame-scale', '画面缩放', 0.5, 1.5, 0.02, c.contentScale, `${Math.round(c.contentScale * 100)}%`)}
-      ${sliderRow('frame-radius', '画面圆角', 0, 64, 1, c.cornerRadius, `${Math.round(c.cornerRadius)}px`)}
-      ${sliderRow('frame-shadow', '立体阴影', 0, 1, 0.02, c.shadowStrength, `${Math.round(c.shadowStrength * 100)}%`)}
-      ${sliderRow('frame-border-w', '描边宽度', 0, 16, 0.5, c.borderWidth, `${c.borderWidth.toFixed(1)}px`)}
+      ${renderSliderRow({ id: 'frame-padding', label: '四周留白', min: 0, max: 240, step: 2, value: c.padding, defaultValue: 64, display: `${Math.round(c.padding)}px` })}
+      ${renderSliderRow({ id: 'frame-scale', label: '画面缩放', min: 0.5, max: 1.5, step: 0.02, value: c.contentScale, defaultValue: 1, display: `${Math.round(c.contentScale * 100)}%` })}
+      ${renderSliderRow({ id: 'frame-radius', label: '画面圆角', min: 0, max: 64, step: 1, value: c.cornerRadius, defaultValue: 16, display: `${Math.round(c.cornerRadius)}px` })}
+      ${renderSliderRow({ id: 'frame-shadow', label: '立体阴影', min: 0, max: 1, step: 0.02, value: c.shadowStrength, defaultValue: 0.45, display: `${Math.round(c.shadowStrength * 100)}%` })}
+      ${renderSliderRow({ id: 'frame-border-w', label: '描边宽度', min: 0, max: 16, step: 0.5, value: c.borderWidth, defaultValue: 0, display: `${c.borderWidth.toFixed(1)}px` })}
       <div class="insp-row">
         <span class="insp-label">描边颜色</span>
-        <input id="frame-border-col" type="color" value="${hexColorString(c.borderColor)}" />
+        ${renderColorChipButton('frame-border-col', hexColorString(c.borderColor))}
       </div>
       <div class="insp-row">
         <span class="insp-label">画面裁剪 (${Math.round(c.crop.width * 100)}%×${Math.round(c.crop.height * 100)}%)</span>
-        <button id="frame-btn-toggle-crop" class="chrome-btn subtle-well">交互式裁剪…</button>
+        <button id="frame-btn-toggle-crop" class="chrome-btn subtle-well">${svgIcon('crop', 12)}<span>交互式裁剪</span></button>
       </div>
     </div>
 
     <div class="insp-card">
       <div class="insp-card-title">背景壁纸与流动纹理</div>
-      <div class="pill-grid">${bgPills}</div>
-      ${sliderRow('frame-bg-blur', '背景虚化', 0, 48, 1, c.backgroundBlur, `${Math.round(c.backgroundBlur)}px`)}
-      ${sliderRow('frame-pat-op', '纹理强度', 0, 1, 0.05, c.patternOpacity, `${Math.round(c.patternOpacity * 100)}%`)}
+      <div class="swatch-grid">${bgSwatches}</div>
+      ${renderSliderRow({ id: 'frame-bg-blur', label: '背景虚化', min: 0, max: 48, step: 1, value: c.backgroundBlur, defaultValue: 0, display: `${Math.round(c.backgroundBlur)}px` })}
+      ${renderSliderRow({ id: 'frame-pat-op', label: '纹理强度', min: 0, max: 1, step: 0.05, value: c.patternOpacity, defaultValue: 1, display: `${Math.round(c.patternOpacity * 100)}%` })}
     </div>
 
     <div class="insp-card">
       <div class="insp-card-title">设备与窗口外框 (Chrome)</div>
-      <div class="pill-grid">${chromePills}</div>
+      <div class="visual-opt-grid visual-grid-chrome">${chromeCards}</div>
       <input id="frame-chrome-title" class="insp-input" type="text" placeholder="窗口标题 (window 模式生效)" value="${escapeHtml(c.screenFrameTitle)}" />
       <input id="frame-chrome-url" class="insp-input" type="text" placeholder="浏览器地址栏 (browser 模式生效)" value="${escapeHtml(c.screenFrameBrowserAddress)}" />
     </div>
   `;
 
-  const applyCanvas = (patch: Partial<typeof c>, recordHistory = true) => {
+  const applyCanvas = (patch: Partial<typeof c>, recordHistory = true, keepDom = false) => {
     const cur = ctx.getProject()!;
     ctx.applyProjectMutation(
       { ...cur, canvas: makeCanvasStyle({ ...cur.canvas, ...patch }) },
-      { recordHistory }
+      {
+        recordHistory,
+        skipInspectorRerender: keepDom,
+        skipTimelineRerender: keepDom,
+      }
     );
   };
 
@@ -233,15 +246,15 @@ function renderFrameTab(el: HTMLElement, ctx: StudioRuntimeContext): void {
     });
   });
 
-  bindRange('frame-padding', (v, rec) => applyCanvas({ padding: v }, rec), (v) => `${Math.round(v)}px`);
-  bindRange('frame-scale', (v, rec) => applyCanvas({ contentScale: v }, rec), (v) => `${Math.round(v * 100)}%`);
-  bindRange('frame-radius', (v, rec) => applyCanvas({ cornerRadius: v }, rec), (v) => `${Math.round(v)}px`);
-  bindRange('frame-shadow', (v, rec) => applyCanvas({ shadowStrength: v }, rec), (v) => `${Math.round(v * 100)}%`);
-  bindRange('frame-border-w', (v, rec) => applyCanvas({ borderWidth: v }, rec), (v) => `${v.toFixed(1)}px`);
+  bindProRange('frame-padding', (v, rec) => applyCanvas({ padding: v }, rec, true), (v) => `${Math.round(v)}px`, 64);
+  bindProRange('frame-scale', (v, rec) => applyCanvas({ contentScale: v }, rec, true), (v) => `${Math.round(v * 100)}%`, 1);
+  bindProRange('frame-radius', (v, rec) => applyCanvas({ cornerRadius: v }, rec, true), (v) => `${Math.round(v)}px`, 16);
+  bindProRange('frame-shadow', (v, rec) => applyCanvas({ shadowStrength: v }, rec, true), (v) => `${Math.round(v * 100)}%`, 0.45);
+  bindProRange('frame-border-w', (v, rec) => applyCanvas({ borderWidth: v }, rec, true), (v) => `${v.toFixed(1)}px`, 0);
 
-  document.getElementById('frame-border-col')?.addEventListener('change', (ev) => {
-    const parsed = parseHexColor((ev.target as HTMLInputElement).value);
-    if (parsed) applyCanvas({ borderColor: parsed });
+  mountStudioColorPicker('frame-border-col', hexColorString(c.borderColor), (hex, rec) => {
+    const parsed = parseHexColor(hex);
+    if (parsed) applyCanvas({ borderColor: parsed }, rec, true);
   });
 
   document.getElementById('frame-btn-toggle-crop')?.addEventListener('click', () => {
@@ -261,8 +274,8 @@ function renderFrameTab(el: HTMLElement, ctx: StudioRuntimeContext): void {
     });
   });
 
-  bindRange('frame-bg-blur', (v, rec) => applyCanvas({ backgroundBlur: v }, rec), (v) => `${Math.round(v)}px`);
-  bindRange('frame-pat-op', (v, rec) => applyCanvas({ patternOpacity: v }, rec), (v) => `${Math.round(v * 100)}%`);
+  bindProRange('frame-bg-blur', (v, rec) => applyCanvas({ backgroundBlur: v }, rec, true), (v) => `${Math.round(v)}px`, 0);
+  bindProRange('frame-pat-op', (v, rec) => applyCanvas({ patternOpacity: v }, rec, true), (v) => `${Math.round(v * 100)}%`, 1);
 
   el.querySelectorAll('[data-chrome]').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -271,10 +284,10 @@ function renderFrameTab(el: HTMLElement, ctx: StudioRuntimeContext): void {
   });
 
   document.getElementById('frame-chrome-title')?.addEventListener('change', (ev) => {
-    applyCanvas({ screenFrameTitle: (ev.target as HTMLInputElement).value.slice(0, 120) });
+    applyCanvas({ screenFrameTitle: (ev.target as HTMLInputElement).value.slice(0, 120) }, true, true);
   });
   document.getElementById('frame-chrome-url')?.addEventListener('change', (ev) => {
-    applyCanvas({ screenFrameBrowserAddress: (ev.target as HTMLInputElement).value.slice(0, 240) });
+    applyCanvas({ screenFrameBrowserAddress: (ev.target as HTMLInputElement).value.slice(0, 240) }, true, true);
   });
 
   if (selectedMosaic) {
@@ -290,22 +303,32 @@ function renderFrameTab(el: HTMLElement, ctx: StudioRuntimeContext): void {
         ctx.applyProjectMutation(res.project);
       });
     });
-    bindRange(
+    bindProRange(
       'mos-intensity',
       (v, rec) => {
         const res = updateMosaicClipById(ctx.getProject()!, selectedMosaic.id, { intensity: v });
-        ctx.applyProjectMutation(res.project, { recordHistory: rec });
+        ctx.applyProjectMutation(res.project, {
+          recordHistory: rec,
+          skipInspectorRerender: true,
+          skipTimelineRerender: true,
+        });
       },
-      (v) => `${Math.round(v * 100)}%`
+      (v) => `${Math.round(v * 100)}%`,
+      0.85
     );
     if (selectedMosaic.style === 'spotlight') {
-      bindRange(
+      bindProRange(
         'mos-dimming',
         (v, rec) => {
           const res = updateMosaicClipById(ctx.getProject()!, selectedMosaic.id, { spotlightDimming: v });
-          ctx.applyProjectMutation(res.project, { recordHistory: rec });
+          ctx.applyProjectMutation(res.project, {
+            recordHistory: rec,
+            skipInspectorRerender: true,
+            skipTimelineRerender: true,
+          });
         },
-        (v) => `${Math.round(v * 100)}%`
+        (v) => `${Math.round(v * 100)}%`,
+        0.55
       );
     }
   }
@@ -338,11 +361,11 @@ function renderZoomTab(el: HTMLElement, ctx: StudioRuntimeContext): void {
       <div class="insp-card" style="border-color:var(--t-zoom);">
         <div class="insp-row">
           <span class="insp-card-title" style="color:var(--t-zoom);">当前选中缩放 (${clip.startTime.toFixed(1)}s–${clip.endTime.toFixed(1)}s)</span>
-          <button id="zoom-clip-del" class="insp-btn danger">删除</button>
+          <button id="zoom-clip-del" class="insp-btn danger">${svgIcon('trash', 12)}<span>删除</span></button>
         </div>
-        ${sliderRow('zoom-clip-scale', '放大倍数', 1.1, 3.5, 0.05, clip.scale, `${clip.scale.toFixed(2)}×`)}
-        ${sliderRow('zoom-clip-fx', '焦点横向 X', 0, 1, 0.01, clip.focus.x, `${Math.round(clip.focus.x * 100)}%`)}
-        ${sliderRow('zoom-clip-fy', '焦点纵向 Y', 0, 1, 0.01, clip.focus.y, `${Math.round(clip.focus.y * 100)}%`)}
+        ${renderSliderRow({ id: 'zoom-clip-scale', label: '放大倍数', min: 1.1, max: 3.5, step: 0.05, value: clip.scale, defaultValue: 1.8, display: `${clip.scale.toFixed(2)}×` })}
+        ${renderSliderRow({ id: 'zoom-clip-fx', label: '焦点横向 X', min: 0, max: 1, step: 0.01, value: clip.focus.x, defaultValue: 0.5, display: `${Math.round(clip.focus.x * 100)}%` })}
+        ${renderSliderRow({ id: 'zoom-clip-fy', label: '焦点纵向 Y', min: 0, max: 1, step: 0.01, value: clip.focus.y, defaultValue: 0.5, display: `${Math.round(clip.focus.y * 100)}%` })}
         <div class="insp-card-title">缓动曲线</div>
         <div class="pill-grid">${easingPills}</div>
         <div style="font-size:11px;color:var(--ink-secondary);">提示：也可直接在左侧预览画布点击重设焦点</div>
@@ -355,17 +378,17 @@ function renderZoomTab(el: HTMLElement, ctx: StudioRuntimeContext): void {
     <div class="insp-card">
       <div class="insp-card-title">全局运镜风格</div>
       <div class="pill-grid">${screenMotionPills}</div>
-      ${sliderRow('motion-def-scale', '默认放大', 1.2, 3.0, 0.05, m.defaultZoomScale ?? 1.8, `${(m.defaultZoomScale ?? 1.8).toFixed(2)}×`)}
-      ${sliderRow('motion-def-trans', '进出耗时', 0.2, 1.5, 0.05, m.defaultZoomTransitionDuration, `${m.defaultZoomTransitionDuration.toFixed(2)}s`)}
-      <button id="btn-recompute-zoom" class="insp-btn">按鼠标点击重新生成自动缩放</button>
+      ${renderSliderRow({ id: 'motion-def-scale', label: '默认放大', min: 1.2, max: 3.0, step: 0.05, value: m.defaultZoomScale ?? 1.8, defaultValue: 1.8, display: `${(m.defaultZoomScale ?? 1.8).toFixed(2)}×` })}
+      ${renderSliderRow({ id: 'motion-def-trans', label: '进出耗时', min: 0.2, max: 1.5, step: 0.05, value: m.defaultZoomTransitionDuration, defaultValue: 0.7, display: `${m.defaultZoomTransitionDuration.toFixed(2)}s` })}
+      <button id="btn-recompute-zoom" class="insp-btn">${svgIcon('wand', 13)}<span>按鼠标点击重新生成自动缩放</span></button>
     </div>
   `;
 
-  const applyMotion = (patch: Partial<typeof m>, rec = true) => {
+  const applyMotion = (patch: Partial<typeof m>, rec = true, keepDom = false) => {
     const cur = ctx.getProject()!;
     ctx.applyProjectMutation(
       { ...cur, motion: makeMotionStyle({ ...cur.motion, ...patch }) },
-      { recordHistory: rec }
+      { recordHistory: rec, skipInspectorRerender: keepDom, skipTimelineRerender: keepDom }
     );
   };
 
@@ -375,8 +398,8 @@ function renderZoomTab(el: HTMLElement, ctx: StudioRuntimeContext): void {
     });
   });
 
-  bindRange('motion-def-scale', (v, rec) => applyMotion({ defaultZoomScale: v }, rec), (v) => `${v.toFixed(2)}×`);
-  bindRange('motion-def-trans', (v, rec) => applyMotion({ defaultZoomTransitionDuration: v }, rec), (v) => `${v.toFixed(2)}s`);
+  bindProRange('motion-def-scale', (v, rec) => applyMotion({ defaultZoomScale: v }, rec, true), (v) => `${v.toFixed(2)}×`, 1.8);
+  bindProRange('motion-def-trans', (v, rec) => applyMotion({ defaultZoomTransitionDuration: v }, rec, true), (v) => `${v.toFixed(2)}s`, 0.7);
 
   document.getElementById('btn-recompute-zoom')?.addEventListener('click', () => {
     const res = recomputeAutoZoomClips(ctx.getProject()!, detail.pointerEvents);
@@ -388,33 +411,48 @@ function renderZoomTab(el: HTMLElement, ctx: StudioRuntimeContext): void {
       const res = deleteZoomClipById(ctx.getProject()!, clip.id);
       ctx.applyProjectMutation(res.project, { selection: null });
     });
-    bindRange(
+    bindProRange(
       'zoom-clip-scale',
       (v, rec) => {
         const res = updateZoomClipById(ctx.getProject()!, clip.id, { scale: v });
-        ctx.applyProjectMutation(res.project, { recordHistory: rec });
+        ctx.applyProjectMutation(res.project, {
+          recordHistory: rec,
+          skipInspectorRerender: true,
+          skipTimelineRerender: true,
+        });
       },
-      (v) => `${v.toFixed(2)}×`
+      (v) => `${v.toFixed(2)}×`,
+      1.8
     );
-    bindRange(
+    bindProRange(
       'zoom-clip-fx',
       (v, rec) => {
         const cur = ctx.getProject()!.timeline.zoomClips.find((z) => z.id === clip.id);
         if (!cur) return;
         const res = updateZoomClipById(ctx.getProject()!, clip.id, { focus: { ...cur.focus, x: v } });
-        ctx.applyProjectMutation(res.project, { recordHistory: rec });
+        ctx.applyProjectMutation(res.project, {
+          recordHistory: rec,
+          skipInspectorRerender: true,
+          skipTimelineRerender: true,
+        });
       },
-      (v) => `${Math.round(v * 100)}%`
+      (v) => `${Math.round(v * 100)}%`,
+      0.5
     );
-    bindRange(
+    bindProRange(
       'zoom-clip-fy',
       (v, rec) => {
         const cur = ctx.getProject()!.timeline.zoomClips.find((z) => z.id === clip.id);
         if (!cur) return;
         const res = updateZoomClipById(ctx.getProject()!, clip.id, { focus: { ...cur.focus, y: v } });
-        ctx.applyProjectMutation(res.project, { recordHistory: rec });
+        ctx.applyProjectMutation(res.project, {
+          recordHistory: rec,
+          skipInspectorRerender: true,
+          skipTimelineRerender: true,
+        });
       },
-      (v) => `${Math.round(v * 100)}%`
+      (v) => `${Math.round(v * 100)}%`,
+      0.5
     );
     el.querySelectorAll('[data-zoom-easing]').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -429,29 +467,26 @@ function renderZoomTab(el: HTMLElement, ctx: StudioRuntimeContext): void {
 
 function renderOpeningTab(el: HTMLElement, ctx: StudioRuntimeContext): void {
   const op = ctx.getProject()!.openingSequence;
-  const presetPills = OpeningSequencePresetAllCases.map(
-    (p) => `<button class="pill-choice ${op.preset === p ? 'active' : ''}" data-op-preset="${p}">${p}</button>`
+  const presetCards = OpeningSequencePresetAllCases.map((p) =>
+    renderOpeningPresetCard(p, op.preset === p)
   ).join('');
 
   el.innerHTML = `
     <div class="inspector-head"><h2 class="inspector-title">开场</h2><span class="inspector-scope">3D 透视序列</span></div>
     <div class="insp-card">
-      <div class="insp-row">
-        <span class="insp-label">启用开场透视动画</span>
-        <input id="op-enabled" type="checkbox" ${op.isEnabled ? 'checked' : ''} />
-      </div>
+      ${renderSwitchRow({ id: 'op-enabled', label: '启用开场透视动画', checked: op.isEnabled })}
       <div class="insp-card-title">动效预设</div>
-      <div class="pill-grid">${presetPills}</div>
-      ${sliderRow('op-duration', '开场时长', 0.4, 5.0, 0.1, op.duration, `${op.duration.toFixed(1)}s`)}
-      ${sliderRow('op-stagger', '图层错峰', 0, 0.8, 0.02, op.stagger, `${op.stagger.toFixed(2)}s`)}
+      <div class="visual-opt-grid visual-grid-3">${presetCards}</div>
+      ${renderSliderRow({ id: 'op-duration', label: '开场时长', min: 0.4, max: 5.0, step: 0.1, value: op.duration, defaultValue: 1.8, display: `${op.duration.toFixed(1)}s` })}
+      ${renderSliderRow({ id: 'op-stagger', label: '图层错峰', min: 0, max: 0.8, step: 0.02, value: op.stagger, defaultValue: 0.12, display: `${op.stagger.toFixed(2)}s` })}
     </div>
   `;
 
-  const applyOpening = (patch: Partial<typeof op>, rec = true) => {
+  const applyOpening = (patch: Partial<typeof op>, rec = true, keepDom = false) => {
     const cur = ctx.getProject()!;
     ctx.applyProjectMutation(
       { ...cur, openingSequence: makeOpeningSequence({ ...cur.openingSequence, ...patch }) },
-      { recordHistory: rec }
+      { recordHistory: rec, skipInspectorRerender: keepDom, skipTimelineRerender: keepDom }
     );
   };
 
@@ -463,8 +498,8 @@ function renderOpeningTab(el: HTMLElement, ctx: StudioRuntimeContext): void {
       applyOpening({ preset: btn.getAttribute('data-op-preset') as OpeningSequencePreset });
     });
   });
-  bindRange('op-duration', (v, rec) => applyOpening({ duration: v }, rec), (v) => `${v.toFixed(1)}s`);
-  bindRange('op-stagger', (v, rec) => applyOpening({ stagger: v }, rec), (v) => `${v.toFixed(2)}s`);
+  bindProRange('op-duration', (v, rec) => applyOpening({ duration: v }, rec, true), (v) => `${v.toFixed(1)}s`, 1.8);
+  bindProRange('op-stagger', (v, rec) => applyOpening({ stagger: v }, rec, true), (v) => `${v.toFixed(2)}s`, 0.12);
 }
 
 function renderCursorTab(el: HTMLElement, ctx: StudioRuntimeContext): void {
@@ -472,9 +507,8 @@ function renderCursorTab(el: HTMLElement, ctx: StudioRuntimeContext): void {
   const curStyle = project.cursorStyle;
   const activeAppearance = cursorStyleAppearance(curStyle);
 
-  const shapePills = CursorAppearanceAllCases.map(
-    (ap) =>
-      `<button class="pill-choice ${activeAppearance === ap ? 'active' : ''}" data-cur-shape="${ap}">${ap}</button>`
+  const shapeCards = CursorAppearanceAllCases.map((ap) =>
+    renderCursorAppearanceCard(ap, activeAppearance === ap)
   ).join('');
 
   const clickPills = CursorClickEffectStyleAllCases.map(
@@ -491,17 +525,11 @@ function renderCursorTab(el: HTMLElement, ctx: StudioRuntimeContext): void {
     <div class="inspector-head"><h2 class="inspector-title">光标</h2><span class="inspector-scope">矢量渲染与动效</span></div>
     <div class="insp-card">
       <div class="insp-card-title">光标形态</div>
-      <div class="pill-grid">${shapePills}</div>
-      ${sliderRow('cur-size', '光标倍率', 0.5, 3.0, 0.05, curStyle.size, `${curStyle.size.toFixed(2)}×`)}
-      ${sliderRow('cur-tilt', '速度倾斜', 2, 4, 0.1, curStyle.motionTiltStrength, `${curStyle.motionTiltStrength.toFixed(1)}`)}
-      <div class="insp-row">
-        <span class="insp-label">静止自动隐藏</span>
-        <input id="cur-idle-hide" type="checkbox" ${curStyle.hideWhenIdle ? 'checked' : ''} />
-      </div>
-      <div class="insp-row">
-        <span class="insp-label">点击按压缩放</span>
-        <input id="cur-press-scale" type="checkbox" ${curStyle.pressesOnClick ? 'checked' : ''} />
-      </div>
+      <div class="visual-opt-grid visual-grid-4">${shapeCards}</div>
+      ${renderSliderRow({ id: 'cur-size', label: '光标倍率', min: 0.5, max: 3.0, step: 0.05, value: curStyle.size, defaultValue: 1, display: `${curStyle.size.toFixed(2)}×` })}
+      ${renderSliderRow({ id: 'cur-tilt', label: '速度倾斜', min: 2, max: 4, step: 0.1, value: curStyle.motionTiltStrength, defaultValue: 3, display: `${curStyle.motionTiltStrength.toFixed(1)}` })}
+      ${renderSwitchRow({ id: 'cur-idle-hide', label: '静止自动隐藏', checked: curStyle.hideWhenIdle })}
+      ${renderSwitchRow({ id: 'cur-press-scale', label: '点击按压缩放', checked: curStyle.pressesOnClick })}
     </div>
 
     <div class="insp-card">
@@ -512,16 +540,16 @@ function renderCursorTab(el: HTMLElement, ctx: StudioRuntimeContext): void {
     <div class="insp-card">
       <div class="insp-card-title">点击波纹与反馈动效</div>
       <div class="pill-grid">${clickPills}</div>
-      ${sliderRow('cur-click-op', '波纹不透明', 0.1, 1.0, 0.05, curStyle.clickOpacity, `${Math.round(curStyle.clickOpacity * 100)}%`)}
-      ${sliderRow('cur-click-sc', '波纹尺度', 0.5, 2.5, 0.05, curStyle.clickScale, `${curStyle.clickScale.toFixed(2)}×`)}
+      ${renderSliderRow({ id: 'cur-click-op', label: '波纹不透明', min: 0.1, max: 1.0, step: 0.05, value: curStyle.clickOpacity, defaultValue: 0.85, display: `${Math.round(curStyle.clickOpacity * 100)}%` })}
+      ${renderSliderRow({ id: 'cur-click-sc', label: '波纹尺度', min: 0.5, max: 2.5, step: 0.05, value: curStyle.clickScale, defaultValue: 1, display: `${curStyle.clickScale.toFixed(2)}×` })}
     </div>
   `;
 
-  const applyCursor = (patch: Partial<typeof curStyle>, rec = true) => {
+  const applyCursor = (patch: Partial<typeof curStyle>, rec = true, keepDom = false) => {
     const cur = ctx.getProject()!;
     ctx.applyProjectMutation(
       { ...cur, cursorStyle: makeCursorStyle({ ...cur.cursorStyle, ...patch }) },
-      { recordHistory: rec }
+      { recordHistory: rec, skipInspectorRerender: keepDom, skipTimelineRerender: keepDom }
     );
   };
 
@@ -532,8 +560,8 @@ function renderCursorTab(el: HTMLElement, ctx: StudioRuntimeContext): void {
     });
   });
 
-  bindRange('cur-size', (v, rec) => applyCursor({ size: v }, rec), (v) => `${v.toFixed(2)}×`);
-  bindRange('cur-tilt', (v, rec) => applyCursor({ motionTiltStrength: v }, rec), (v) => `${v.toFixed(1)}`);
+  bindProRange('cur-size', (v, rec) => applyCursor({ size: v }, rec, true), (v) => `${v.toFixed(2)}×`, 1);
+  bindProRange('cur-tilt', (v, rec) => applyCursor({ motionTiltStrength: v }, rec, true), (v) => `${v.toFixed(1)}`, 3);
 
   document.getElementById('cur-idle-hide')?.addEventListener('change', (ev) => {
     applyCursor({ hideWhenIdle: (ev.target as HTMLInputElement).checked });
@@ -560,15 +588,15 @@ function renderCursorTab(el: HTMLElement, ctx: StudioRuntimeContext): void {
       applyCursor({ clickEffectStyle: btn.getAttribute('data-click-style') as CursorClickEffectStyle });
     });
   });
-  bindRange('cur-click-op', (v, rec) => applyCursor({ clickOpacity: v }, rec), (v) => `${Math.round(v * 100)}%`);
-  bindRange('cur-click-sc', (v, rec) => applyCursor({ clickScale: v }, rec), (v) => `${v.toFixed(2)}×`);
+  bindProRange('cur-click-op', (v, rec) => applyCursor({ clickOpacity: v }, rec, true), (v) => `${Math.round(v * 100)}%`, 0.85);
+  bindProRange('cur-click-sc', (v, rec) => applyCursor({ clickScale: v }, rec, true), (v) => `${v.toFixed(2)}×`, 1);
 }
 
 function renderCameraTab(el: HTMLElement, ctx: StudioRuntimeContext): void {
   const detail = ctx.getDetail()!;
   const cam = ctx.getProject()!.camera;
-  const shapePills = CameraShapeAllCases.map(
-    (s) => `<button class="pill-choice ${cam.shape === s ? 'active' : ''}" data-cam-shape="${s}">${s}</button>`
+  const shapeCards = CameraShapeAllCases.map((s) =>
+    renderCameraShapeCard(s, cam.shape === s)
   ).join('');
 
   el.innerHTML = `
@@ -577,35 +605,29 @@ function renderCameraTab(el: HTMLElement, ctx: StudioRuntimeContext): void {
       <span class="insp-badge ${detail.hasCamera ? 'ok' : ''}">${detail.hasCamera ? '已录制摄像头' : '无摄像头文件'}</span>
     </div>
     <div class="insp-card">
-      <div class="insp-row">
-        <span class="insp-label">隐藏摄像头画中画</span>
-        <input id="cam-hidden" type="checkbox" ${cam.isHidden ? 'checked' : ''} />
-      </div>
-      <div class="insp-row">
-        <span class="insp-label">水平镜像翻转</span>
-        <input id="cam-mirrored" type="checkbox" ${cam.isMirrored ? 'checked' : ''} />
-      </div>
+      ${renderSwitchRow({ id: 'cam-hidden', label: '隐藏摄像头画中画', checked: cam.isHidden })}
+      ${renderSwitchRow({ id: 'cam-mirrored', label: '水平镜像翻转', checked: cam.isMirrored })}
       <div class="insp-card-title">裁切形态</div>
-      <div class="pill-grid">${shapePills}</div>
-      ${sliderRow('cam-size', '窗口尺寸', 0.12, 0.55, 0.01, cam.size, `${Math.round(cam.size * 100)}%`)}
-      ${sliderRow('cam-round', '圆角平滑', 0, 1, 0.02, cam.roundness, `${Math.round(cam.roundness * 100)}%`)}
-      ${sliderRow('cam-px', '横向锚点 X', 0, 1, 0.01, cam.position.x, `${Math.round(cam.position.x * 100)}%`)}
-      ${sliderRow('cam-py', '纵向锚点 Y', 0, 1, 0.01, cam.position.y, `${Math.round(cam.position.y * 100)}%`)}
-      ${sliderRow('cam-dodge', '放大时避让', 0.3, 1.2, 0.02, cam.scaleDuringZoom, `${Math.round(cam.scaleDuringZoom * 100)}%`)}
+      <div class="visual-opt-grid visual-grid-5">${shapeCards}</div>
+      ${renderSliderRow({ id: 'cam-size', label: '窗口尺寸', min: 0.12, max: 0.55, step: 0.01, value: cam.size, defaultValue: 0.22, display: `${Math.round(cam.size * 100)}%` })}
+      ${renderSliderRow({ id: 'cam-round', label: '圆角平滑', min: 0, max: 1, step: 0.02, value: cam.roundness, defaultValue: 1, display: `${Math.round(cam.roundness * 100)}%` })}
+      ${renderSliderRow({ id: 'cam-px', label: '横向锚点 X', min: 0, max: 1, step: 0.01, value: cam.position.x, defaultValue: 0.86, display: `${Math.round(cam.position.x * 100)}%` })}
+      ${renderSliderRow({ id: 'cam-py', label: '纵向锚点 Y', min: 0, max: 1, step: 0.01, value: cam.position.y, defaultValue: 0.82, display: `${Math.round(cam.position.y * 100)}%` })}
+      ${renderSliderRow({ id: 'cam-dodge', label: '放大时避让', min: 0.3, max: 1.2, step: 0.02, value: cam.scaleDuringZoom, defaultValue: 0.72, display: `${Math.round(cam.scaleDuringZoom * 100)}%` })}
     </div>
 
     <div class="insp-card">
       <div class="insp-card-title">人像美颜增强 (Shader)</div>
-      ${sliderRow('cam-smooth', '肤质磨皮', 0, 1, 0.02, cam.beauty.smoothing, `${Math.round(cam.beauty.smoothing * 100)}%`)}
-      ${sliderRow('cam-whiten', '自然提亮', 0, 1, 0.02, cam.beauty.whitening, `${Math.round(cam.beauty.whitening * 100)}%`)}
+      ${renderSliderRow({ id: 'cam-smooth', label: '肤质磨皮', min: 0, max: 1, step: 0.02, value: cam.beauty.smoothing, defaultValue: 0, display: `${Math.round(cam.beauty.smoothing * 100)}%` })}
+      ${renderSliderRow({ id: 'cam-whiten', label: '自然提亮', min: 0, max: 1, step: 0.02, value: cam.beauty.whitening, defaultValue: 0, display: `${Math.round(cam.beauty.whitening * 100)}%` })}
     </div>
   `;
 
-  const applyCamera = (patch: Partial<typeof cam>, rec = true) => {
+  const applyCamera = (patch: Partial<typeof cam>, rec = true, keepDom = false) => {
     const cur = ctx.getProject()!;
     ctx.applyProjectMutation(
       { ...cur, camera: makeCameraStyle({ ...cur.camera, ...patch }) },
-      { recordHistory: rec }
+      { recordHistory: rec, skipInspectorRerender: keepDom, skipTimelineRerender: keepDom }
     );
   };
 
@@ -621,37 +643,43 @@ function renderCameraTab(el: HTMLElement, ctx: StudioRuntimeContext): void {
     });
   });
 
-  bindRange('cam-size', (v, rec) => applyCamera({ size: v }, rec), (v) => `${Math.round(v * 100)}%`);
-  bindRange('cam-round', (v, rec) => applyCamera({ roundness: v }, rec), (v) => `${Math.round(v * 100)}%`);
-  bindRange(
+  bindProRange('cam-size', (v, rec) => applyCamera({ size: v }, rec, true), (v) => `${Math.round(v * 100)}%`, 0.22);
+  bindProRange('cam-round', (v, rec) => applyCamera({ roundness: v }, rec, true), (v) => `${Math.round(v * 100)}%`, 1);
+  bindProRange(
     'cam-px',
-    (v, rec) => applyCamera({ position: { ...ctx.getProject()!.camera.position, x: v } }, rec),
-    (v) => `${Math.round(v * 100)}%`
+    (v, rec) => applyCamera({ position: { ...ctx.getProject()!.camera.position, x: v } }, rec, true),
+    (v) => `${Math.round(v * 100)}%`,
+    0.86
   );
-  bindRange(
+  bindProRange(
     'cam-py',
-    (v, rec) => applyCamera({ position: { ...ctx.getProject()!.camera.position, y: v } }, rec),
-    (v) => `${Math.round(v * 100)}%`
+    (v, rec) => applyCamera({ position: { ...ctx.getProject()!.camera.position, y: v } }, rec, true),
+    (v) => `${Math.round(v * 100)}%`,
+    0.82
   );
-  bindRange('cam-dodge', (v, rec) => applyCamera({ scaleDuringZoom: v }, rec), (v) => `${Math.round(v * 100)}%`);
+  bindProRange('cam-dodge', (v, rec) => applyCamera({ scaleDuringZoom: v }, rec, true), (v) => `${Math.round(v * 100)}%`, 0.72);
 
-  bindRange(
+  bindProRange(
     'cam-smooth',
     (v, rec) =>
       applyCamera(
         { beauty: makeCameraBeautySettings({ ...ctx.getProject()!.camera.beauty, smoothing: v }) },
-        rec
+        rec,
+        true
       ),
-    (v) => `${Math.round(v * 100)}%`
+    (v) => `${Math.round(v * 100)}%`,
+    0
   );
-  bindRange(
+  bindProRange(
     'cam-whiten',
     (v, rec) =>
       applyCamera(
         { beauty: makeCameraBeautySettings({ ...ctx.getProject()!.camera.beauty, whitening: v }) },
-        rec
+        rec,
+        true
       ),
-    (v) => `${Math.round(v * 100)}%`
+    (v) => `${Math.round(v * 100)}%`,
+    0
   );
 }
 
@@ -666,11 +694,8 @@ function renderAudioTab(el: HTMLElement, ctx: StudioRuntimeContext): void {
         <span class="insp-card-title">系统音频 (WASAPI)</span>
         <span class="insp-badge ${detail.hasSystemAudio ? 'ok' : ''}">${detail.hasSystemAudio ? 'system-audio.wav 就绪' : '未录制系统音'}</span>
       </div>
-      <div class="insp-row">
-        <span class="insp-label">静音系统声</span>
-        <input id="aud-sys-mute" type="checkbox" ${aud.isSystemMuted ? 'checked' : ''} />
-      </div>
-      ${sliderRow('aud-sys-vol', '系统音量', 0, 1, 0.02, aud.systemVolume, `${Math.round(aud.systemVolume * 100)}%`)}
+      ${renderSwitchRow({ id: 'aud-sys-mute', label: '静音系统声', checked: aud.isSystemMuted })}
+      ${renderSliderRow({ id: 'aud-sys-vol', label: '系统音量', min: 0, max: 1, step: 0.02, value: aud.systemVolume, defaultValue: 1, display: `${Math.round(aud.systemVolume * 100)}%` })}
     </div>
 
     <div class="insp-card">
@@ -678,49 +703,26 @@ function renderAudioTab(el: HTMLElement, ctx: StudioRuntimeContext): void {
         <span class="insp-card-title">麦克风音轨 (DirectShow)</span>
         <span class="insp-badge ${detail.hasMicAudio ? 'ok' : ''}">${detail.hasMicAudio ? 'mic-audio.wav 就绪' : '未录制麦克风'}</span>
       </div>
-      <div class="insp-row">
-        <span class="insp-label">静音麦克风</span>
-        <input id="aud-mic-mute" type="checkbox" ${aud.isMicrophoneMuted ? 'checked' : ''} />
-      </div>
-      ${sliderRow('aud-mic-vol', '人声音量', 0, 1, 0.02, aud.microphoneVolume, `${Math.round(aud.microphoneVolume * 100)}%`)}
+      ${renderSwitchRow({ id: 'aud-mic-mute', label: '静音麦克风', checked: aud.isMicrophoneMuted })}
+      ${renderSliderRow({ id: 'aud-mic-vol', label: '人声音量', min: 0, max: 1, step: 0.02, value: aud.microphoneVolume, defaultValue: 1, display: `${Math.round(aud.microphoneVolume * 100)}%` })}
     </div>
   `;
 
-  const applyAudio = (patch: Partial<typeof aud>, rec = true) => {
+  const applyAudio = (patch: Partial<typeof aud>, rec = true, keepDom = false) => {
     const cur = ctx.getProject()!;
     ctx.applyProjectMutation(
       { ...cur, audio: makeAudioStyle({ ...cur.audio, ...patch }) },
-      { recordHistory: rec }
+      { recordHistory: rec, skipInspectorRerender: keepDom, skipTimelineRerender: keepDom }
     );
   };
 
   document.getElementById('aud-sys-mute')?.addEventListener('change', (ev) => {
     applyAudio({ isSystemMuted: (ev.target as HTMLInputElement).checked });
   });
-  bindRange('aud-sys-vol', (v, rec) => applyAudio({ systemVolume: v }, rec), (v) => `${Math.round(v * 100)}%`);
+  bindProRange('aud-sys-vol', (v, rec) => applyAudio({ systemVolume: v }, rec, true), (v) => `${Math.round(v * 100)}%`, 1);
 
   document.getElementById('aud-mic-mute')?.addEventListener('change', (ev) => {
     applyAudio({ isMicrophoneMuted: (ev.target as HTMLInputElement).checked });
   });
-  bindRange('aud-mic-vol', (v, rec) => applyAudio({ microphoneVolume: v }, rec), (v) => `${Math.round(v * 100)}%`);
-}
-
-function bindRange(
-  id: string,
-  onApply: (value: number, recordHistory: boolean) => void,
-  formatVal: (v: number) => string
-): void {
-  const slider = document.getElementById(id) as HTMLInputElement | null;
-  const valEl = document.getElementById(`${id}-val`);
-  if (!slider) return;
-  let pushed = false;
-  slider.addEventListener('input', () => {
-    const num = Number(slider.value);
-    if (valEl) valEl.textContent = formatVal(num);
-    onApply(num, !pushed);
-    pushed = true;
-  });
-  slider.addEventListener('change', () => {
-    pushed = false;
-  });
+  bindProRange('aud-mic-vol', (v, rec) => applyAudio({ microphoneVolume: v }, rec, true), (v) => `${Math.round(v * 100)}%`, 1);
 }

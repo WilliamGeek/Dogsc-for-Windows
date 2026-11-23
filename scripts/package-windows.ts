@@ -3,22 +3,25 @@
  *
  * Builds Windows x64 distribution artifacts under `dist/`:
  *   1. `dist/DogSC.exe` (via `buildDesktopBinary`)
- *   2. `dist/DogSC-Windows-x64/` portable directory
- *   3. `dist/DogSC-Windows-x64-v1.1.0.zip` portable archive
- *   4. `dist/DogSC-Setup-x64-v1.1.0.exe` self-extracting setup installer (built with `iexpress.exe`)
+ *   2. `dist/DogSC-Windows-x64/` portable directory (plus optional `runtime/node.exe` when `--bundle-node`)
+ *   3. `dist/DogSC-Windows-x64-v<version>.zip` (or `-portable-v<version>.zip`) portable archive
+ *   4. `dist/DogSC-Setup-x64-v<version>.exe` self-extracting setup installer (built with `iexpress.exe`)
  *   5. `dist/SHA256SUMS.txt` cryptographic integrity manifest
  */
 
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { buildDesktopBinary } from './build-desktop.ts';
 import {
   buildIExpressSed,
+  buildPortableRuntimeNotice,
   listPackagedRelativePaths,
   resolveIExpressPath,
+  resolvePortableNodeBinary,
 } from '../src/desktop/DesktopBuilder.ts';
 
 async function sha256File(filePath: string): Promise<string> {
@@ -30,7 +33,25 @@ function escapePsSingleQuoted(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
 }
 
-async function copyPackagedPayload(rootDir: string, stageDir: string, exePath: string): Promise<number> {
+function readAppVersion(rootDir: string): string {
+  try {
+    const pkg = JSON.parse(readFileSync(path.join(rootDir, 'package.json'), 'utf8'));
+    if (typeof pkg.version === 'string' && pkg.version.trim()) {
+      return pkg.version.trim();
+    }
+  } catch {
+    // Fallback
+  }
+  return '1.2.0';
+}
+
+async function copyPackagedPayload(
+  rootDir: string,
+  stageDir: string,
+  exePath: string,
+  version: string,
+  bundleNode: boolean
+): Promise<number> {
   await fs.rm(stageDir, { recursive: true, force: true });
   await fs.mkdir(stageDir, { recursive: true });
 
@@ -45,6 +66,18 @@ async function copyPackagedPayload(rootDir: string, stageDir: string, exePath: s
   await fs.copyFile(exePath, path.join(stageDir, 'DogSC.exe'));
   await fs.mkdir(path.join(stageDir, 'recordings'), { recursive: true });
 
+  if (bundleNode) {
+    const nodeBin = resolvePortableNodeBinary();
+    const runtimeDir = path.join(stageDir, 'runtime');
+    await fs.mkdir(runtimeDir, { recursive: true });
+    await fs.copyFile(nodeBin, path.join(runtimeDir, 'node.exe'));
+    await fs.writeFile(
+      path.join(runtimeDir, 'NODE_RUNTIME_NOTICE.txt'),
+      buildPortableRuntimeNotice(process.version),
+      'utf8'
+    );
+  }
+
   await fs.writeFile(
     path.join(stageDir, 'DogSC-Studio.cmd'),
     '@echo off\r\nstart "" "%~dp0DogSC.exe" %*\r\n',
@@ -54,22 +87,26 @@ async function copyPackagedPayload(rootDir: string, stageDir: string, exePath: s
   await fs.writeFile(
     path.join(stageDir, 'SIGNING_AND_DISTRIBUTION.txt'),
     [
-      'DogSC Windows v1.1.0 (x64)',
+      `DogSC Windows v${version} (x64)`,
       '============================',
       '',
       '1. Signing Status: UNSIGNED BUILD',
-      '   DogSC.exe and DogSC-Setup-x64-v1.1.0.exe do NOT carry an Authenticode code-signing certificate.',
+      `   DogSC.exe and DogSC-Setup-x64-v${version}.exe do NOT carry an Authenticode code-signing certificate.`,
       '   Verify binary integrity against SHA256SUMS.txt before execution:',
       '     Get-FileHash -Algorithm SHA256 <file>',
       '',
-      '2. External Runtime Dependencies (NOT BUNDLED):',
-      '   - Node.js >= 22.18.0 (recommended v24.x)',
+      bundleNode
+        ? '2. Bundled Runtime: runtime\\node.exe included (FFmpeg/Edge still resolved from host).'
+        : '2. External Runtime Dependencies (NOT BUNDLED):',
+      ...(bundleNode ? [] : ['   - Node.js >= 22.18.0 (recommended v24.x)']),
       '   - FFmpeg & FFprobe (in PATH or WinGet Links; subject to user-installed LGPL/GPL build license)',
       '   - Microsoft Edge (msedge.exe)',
       '',
       '3. Quick Commands:',
       '   DogSC.exe                 Start tray + hotkeys + DogSC Studio desktop window',
-      '   DogSC.exe --check         Verify external Node / FFmpeg / Edge dependencies',
+      '   DogSC.exe --check         Verify Node / FFmpeg / Edge & bundled runtime',
+      '   DogSC.exe --memo-check    Verify capture-protected teleprompter floating window',
+      '   DogSC.exe --check-update  Check release version & verify SHA-256 checksums',
       '   DogSC.exe --install       Install to %LOCALAPPDATA%\\Programs\\DogSC with shortcuts',
       '   DogSC.exe --uninstall     Cleanly remove installed files, shortcuts, and HKCU keys',
       '',
@@ -82,6 +119,7 @@ async function copyPackagedPayload(rootDir: string, stageDir: string, exePath: s
 
 export async function packageWindowsRelease(options?: {
   rootDir?: string;
+  bundleNode?: boolean;
 }): Promise<{
   exePath: string;
   portableDir: string;
@@ -92,14 +130,29 @@ export async function packageWindowsRelease(options?: {
   checksums: Array<{ file: string; sha256: string; bytes: number }>;
 }> {
   const rootDir = options?.rootDir ?? path.resolve(import.meta.dirname, '..');
+  const bundleNode = Boolean(options?.bundleNode);
+  const version = readAppVersion(rootDir);
   const distDir = path.join(rootDir, 'dist');
-  const portableDir = path.join(distDir, 'DogSC-Windows-x64');
-  const zipPath = path.join(distDir, 'DogSC-Windows-x64-v1.1.0.zip');
-  const setupExePath = path.join(distDir, 'DogSC-Setup-x64-v1.1.0.exe');
+  const portableDir = path.join(
+    distDir,
+    bundleNode ? 'DogSC-Windows-x64-portable' : 'DogSC-Windows-x64'
+  );
+  const zipName = bundleNode
+    ? `DogSC-Windows-x64-portable-v${version}.zip`
+    : `DogSC-Windows-x64-v${version}.zip`;
+  const zipPath = path.join(distDir, zipName);
+  const setupName = `DogSC-Setup-x64-v${version}.exe`;
+  const setupExePath = path.join(distDir, setupName);
   const shaSumsPath = path.join(distDir, 'SHA256SUMS.txt');
 
   const built = await buildDesktopBinary({ rootDir });
-  const packagedFileCount = await copyPackagedPayload(rootDir, portableDir, built.exePath);
+  const packagedFileCount = await copyPackagedPayload(
+    rootDir,
+    portableDir,
+    built.exePath,
+    version,
+    bundleNode
+  );
 
   await fs.rm(zipPath, { force: true });
   const compressCmd = `Compress-Archive -Path ${escapePsSingleQuoted(path.join(portableDir, '*'))} -DestinationPath ${escapePsSingleQuoted(zipPath)} -Force`;
@@ -144,7 +197,7 @@ export async function packageWindowsRelease(options?: {
       sourceDir: iexpStage,
       files: ['DogSC.exe', 'payload.zip', 'setup-bootstrap.cmd'],
       appLaunched: 'cmd.exe /c setup-bootstrap.cmd',
-      friendlyName: 'DogSC Studio Windows x64 v1.1.0 Setup',
+      friendlyName: `DogSC Studio Windows x64 v${version} Setup`,
     });
     await fs.writeFile(sedPath, sedContent, 'ascii');
     await fs.rm(setupExePath, { force: true });
@@ -164,8 +217,8 @@ export async function packageWindowsRelease(options?: {
 
   const targets = [
     { file: 'DogSC.exe', abs: built.exePath },
-    { file: 'DogSC-Windows-x64-v1.1.0.zip', abs: zipPath },
-    { file: 'DogSC-Setup-x64-v1.1.0.exe', abs: setupExePath },
+    { file: zipName, abs: zipPath },
+    { file: setupName, abs: setupExePath },
   ];
 
   const checksums: Array<{ file: string; sha256: string; bytes: number }> = [];
@@ -198,9 +251,10 @@ const isMain =
     path.resolve(import.meta.filename).toLowerCase();
 
 if (isMain) {
-  packageWindowsRelease()
+  const bundleNode = process.argv.includes('--bundle-node');
+  packageWindowsRelease({ bundleNode })
     .then((res) => {
-      console.log(`[PackageWin] 打包完成，共收录源码与资源文件 ${res.packagedFileCount} 项`);
+      console.log(`[PackageWin] 打包完成 (${bundleNode ? '便携内置 Node' : '标准轻量版'})，共收录源码与资源文件 ${res.packagedFileCount} 项`);
       for (const item of res.checksums) {
         console.log(`  - ${item.file}: ${item.bytes} bytes | SHA256=${item.sha256}`);
       }
@@ -211,4 +265,3 @@ if (isMain) {
       process.exit(1);
     });
 }
-

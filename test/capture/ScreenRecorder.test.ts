@@ -191,8 +191,11 @@ test('T12.7: parses -progress pipe:1 and derives firstFrameUnixMs from out_time_
 test('T10.3: detectEncoder identifies available video encoder', async () => {
   const encoder = await detectEncoder();
   assert.ok(
-    encoder === 'h264_nvenc' || encoder === 'libx264',
-    `Encoder must be h264_nvenc or libx264, got: ${encoder}`
+    encoder === 'h264_nvenc' ||
+      encoder === 'h264_amf' ||
+      encoder === 'h264_qsv' ||
+      encoder === 'libx264',
+    `Encoder must be one of tri-vendor hardware or libx264, got: ${encoder}`
   );
 });
 
