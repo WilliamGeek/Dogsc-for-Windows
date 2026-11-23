@@ -266,6 +266,12 @@ export class StudioApp {
     const params = new URLSearchParams(window.location.search);
     const requestedDir = params.get('dir') ?? undefined;
     await this.loadRecordingsList(requestedDir);
+
+    if (params.get('action') === 'record' && this.recordModalOpener) {
+      this.recordModalOpener(this.getContext());
+      const cleanQuery = requestedDir ? `?dir=${encodeURIComponent(requestedDir)}` : '';
+      window.history.replaceState(null, '', `${window.location.pathname}${cleanQuery}`);
+    }
   }
 
   private async loadOptionalViews(): Promise<void> {

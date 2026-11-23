@@ -182,7 +182,7 @@
 - [x] T16.6 按 `MASTER_REFACTOR_PLAN_V2.md` §6.3 SOP 完成编辑器 Browser MCP / Computer Use 全链路端到端验收。
 
 ### Wave F：桌面外壳打包、硬件设备矩阵与正式发布（开工前须用户决策 D2）
-- [ ] T17.1 桌面应用外壳集成（`NEED-DECISION`：由用户选定 WebView2 / Electron / Tauri）。
+- [x] T17.1 桌面应用外壳集成（采用内置 `.NET 4.x csc.exe` 编译的原生 x64 `DogSC.exe`：单实例托盘 + 全局热键 `Ctrl+Alt+Shift+S/R/M` + 自检/安装/卸载 + StudioServer/Edge `--app` 无地址栏桌面工作台，零 npm 依赖）。
 - [ ] T17.2 Windows x64 安装包构建、FFmpeg 分发合规声明与明确签名状态标注。
 - [ ] T17.3 运行 Win10/11、NVENC/libx264、多屏/混合 DPI、4K/60fps、音视频外设矩阵验证并输出 `docs/DEVICE_MATRIX_REPORT.md`。
 - [ ] T17.4 全量门禁 G1–G6 归档与发布 `v1.0.0-windows`。

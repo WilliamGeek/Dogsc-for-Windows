@@ -117,7 +117,9 @@
 
 2026-11-23 13:09 | ARCH-DAG-WaveE | DONE | 刷新 docs/ARCHITECTURE_DAG.json（dogsc-win-v0.5.0）并通过 cli.py validate --strict 与 render --strict 重建 docs/WORKFLOW.html 与 docs/WORKFLOW.md；点亮 M_EditorUI（✓ Studio E2E 通过）与 e_expsrv_editor，刷新 Start/M_AudioMux/G_Verify/Deliver 状态，保持 M_ShellPkg 与 H_Review 虚化（opacity 0.65） | cli.py --strict 0 warnings
 
-下一个任务：Wave F Windows 桌面外壳与安装包规划与实现 (T17.1-T17.4)
+2026-11-23 13:18 | T17.1 | DONE | 新增 src/desktop/DesktopBuilder.ts（零依赖双分辨率 32/64 PNG-in-ICO 图标生成、csc.exe/iexpress 定位与构建参数）、desktop/DogSC.cs（严格 C# 5 单实例 WinForms 托盘 + RegisterHotKey Ctrl+Alt+Shift+S/R/M + --version/--check/--install/--uninstall + StudioServer/Edge --app 无栏工作台）、desktop/assets/dogsc.ico、scripts/build-desktop.ts 与 test/desktop/DesktopShell.test.ts；web/studio/app.ts 支持 ?action=record 直达录制岛；实测编译 dist/DogSC.exe (26,112B) 并通过 --version / --check 全绿；core=54/web=18 全零 node:* | 347 pass / 352 total (0 fail, 5 skip E2E)
+
+下一个任务：T17.2 Windows x64 便携 ZIP + IExpress Setup 安装包与第三方合规声明
 
 
 

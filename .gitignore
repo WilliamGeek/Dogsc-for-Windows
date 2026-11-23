@@ -1,5 +1,7 @@
 node_modules/
 out/
+dist/
+audit-runs/
 *.mp4
 
 recordings/
