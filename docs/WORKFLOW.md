@@ -1,6 +1,6 @@
 # DogSC Windows · 项目级全栈架构与开发进度看板
 
-> **拓扑概览**：高亮绿流 = Wave A-D 全链路多源采集/混音/WebGL2渲染已落地 | 虚化节点 (opacity 0.65) = 待开发 Wave E-F 与 T11.7 人工终审 | **渲染模式**：`instance` | **规模**：24 节点 · 35 路径
+> **拓扑概览**：高亮绿流 = Wave A-E 全链路采集/混音/渲染与交互式编辑器已落地 | 虚化节点 (opacity 0.65) = 待开发 Wave F 桌面封装与 T11.7 人工终审 | **渲染模式**：`instance` | **规模**：24 节点 · 35 路径
 
 ## 一、 全景拓扑图 (Mermaid 同步版)
 
@@ -15,7 +15,7 @@ flowchart LR
   classDef block fill:#450a0a,stroke:#ef4444,stroke-width:2px,color:#fca5a5;
 
   subgraph S0 ["阶段 0-2: 多源采集与时钟对齐"]
-    Start["录制与重构总入口 (CLI) (✓ 53模块 / 336单测)"]:::endpoint
+    Start["录制与重构总入口 (CLI) (✓ 54核心/18前端 / 344单测)"]:::endpoint
     C_MultiSrc["窗口/区域/摄像头与分段 (✓ 区域/窗口/摄像头/分段)"]:::action
     C_Audio["系统音频与麦克风采集 (✓ WASAPI+Mic)"]:::action
     C_Screen["整屏 GPU 采集 (ddagrab) (✓ draw_mouse=0)"]:::action
@@ -35,15 +35,15 @@ flowchart LR
     M_WebGLFull["WebGL2 全通道扩展渲染 (✓ 全通道 Pass)"]:::action
     M_WebGLBase["WebGL2 基础合成渲染 (✓ 单光标)"]:::action
     M_ExportSrv["流式导出与路径安全服务 (✓ 409+Watchdog)"]:::action
-    M_AudioMux["多音轨混音与多规格导出 (✓ 混音+M4A)"]:::action
+    M_AudioMux["多音轨混音与多规格导出 (✓ 混音+多规格导出)"]:::action
     X_ExpFail["导出看门狗阻断 (✓ 30s/409 熔断)"]:::block
   end
   subgraph S3 ["Wave E-F: 质检门禁、编辑器与交付"]
-    M_EditorUI["交互式编辑器与录制岛 (○ 未开发 Wave E)"]:::action
-    G_Verify["自动质检与真同步门禁 (✓ G1+G2+G3)"]:::gate
+    M_EditorUI["交互式编辑器与录制岛 (✓ Studio E2E 通过)"]:::action
+    G_Verify["自动质检与真同步门禁 (✓ G1-G3+Studio E2E)"]:::gate
     M_ShellPkg["Windows 桌面外壳与打包 (○ 未开发 Wave F)"]:::action
     H_Review["人工与浏览器视觉终审 (⏳ 待复核 T11.7)"]:::human
-    Deliver["最终交付产物 (✓ Wave A-D 就绪)"]:::endpoint
+    Deliver["最终交付产物 (✓ Wave A-E 就绪)"]:::endpoint
     X_Term["统一异常收口终端 (✓ 异常收口)"]:::block
   end
 
@@ -88,7 +88,7 @@ flowchart LR
 
 | 节点 ID | 类型 | 阶段 | 名称 | 核心规则 / 代码锚点 / 状态 |
 | :--- | :--- | :--- | :--- | :--- |
-| `Start` | `endpoint` | 阶段 0-2: 多源采集与时钟对齐 | 录制与重构总入口 (CLI) | **[✓ 53模块 / 336单测]** scripts/record.ts |
+| `Start` | `endpoint` | 阶段 0-2: 多源采集与时钟对齐 | 录制与重构总入口 (CLI) | **[✓ 54核心/18前端 / 344单测]** scripts/record.ts |
 | `C_MultiSrc` | `action` | 阶段 0-2: 多源采集与时钟对齐 | 窗口/区域/摄像头与分段 | **[✓ 区域/窗口/摄像头/分段]** src/capture/WindowEnumeration.ts / CameraRecorder.ts / SegmentedSession.ts |
 | `C_Audio` | `action` | 阶段 0-2: 多源采集与时钟对齐 | 系统音频与麦克风采集 | **[✓ WASAPI+Mic]** src/capture/SystemAudioRecorder.ts / MicRecorder.ts / MediaDevices.ts |
 | `C_Screen` | `action` | 阶段 0-2: 多源采集与时钟对齐 | 整屏 GPU 采集 (ddagrab) | **[✓ draw_mouse=0]** src/capture/ScreenRecorder.ts:79 |
@@ -104,11 +104,11 @@ flowchart LR
 | `M_WebGLFull` | `action` | 阶段 3 / Wave C-D: WebGL2 渲染与导出 | WebGL2 全通道扩展渲染 | **[✓ 全通道 Pass]** web/renderer.ts |
 | `M_WebGLBase` | `action` | 阶段 3 / Wave C-D: WebGL2 渲染与导出 | WebGL2 基础合成渲染 | **[✓ 单光标]** web/renderer.ts |
 | `M_ExportSrv` | `action` | 阶段 3 / Wave C-D: WebGL2 渲染与导出 | 流式导出与路径安全服务 | **[✓ 409+Watchdog]** src/server/ExportServer.ts |
-| `M_AudioMux` | `action` | 阶段 3 / Wave C-D: WebGL2 渲染与导出 | 多音轨混音与多规格导出 | **[✓ 混音+M4A]** src/render/AudioMixPlan.ts / ExportServer.ts / scripts/export.ts |
+| `M_AudioMux` | `action` | 阶段 3 / Wave C-D: WebGL2 渲染与导出 | 多音轨混音与多规格导出 | **[✓ 混音+多规格导出]** src/render/AudioMixPlan.ts / ExportServer.ts / scripts/export.ts |
 | `X_ExpFail` | `block` | 阶段 3 / Wave C-D: WebGL2 渲染与导出 | 导出看门狗阻断 | **[✓ 30s/409 熔断]** src/server/ExportServer.ts:265 |
-| `M_EditorUI` | `action` | Wave E-F: 质检门禁、编辑器与交付 | 交互式编辑器与录制岛 | 支持时间线拆分/裁切/变速/缩放拖拽与原子保存 project.json，严格零假开关 |
-| `G_Verify` | `gate` | Wave E-F: 质检门禁、编辑器与交付 | 自动质检与真同步门禁 | **[✓ G1+G2+G3]** scripts/verify-export.ts |
+| `M_EditorUI` | `action` | Wave E-F: 质检门禁、编辑器与交付 | 交互式编辑器与录制岛 | **[✓ Studio E2E 通过]** src/server/StudioServer.ts / web/studio/* |
+| `G_Verify` | `gate` | Wave E-F: 质检门禁、编辑器与交付 | 自动质检与真同步门禁 | **[✓ G1-G3+Studio E2E]** scripts/verify-export.ts |
 | `M_ShellPkg` | `action` | Wave E-F: 质检门禁、编辑器与交付 | Windows 桌面外壳与打包 | 需用户拍板打包选型 D2 并完成 Win10/11 硬件设备矩阵实测 |
 | `H_Review` | `human` | Wave E-F: 质检门禁、编辑器与交付 | 人工与浏览器视觉终审 | T12.9 showinfo 时钟修复已落地，待用户/视觉终审成片后勾选 T11.7 |
-| `Deliver` | `endpoint` | Wave E-F: 质检门禁、编辑器与交付 | 最终交付产物 | **[✓ Wave A-D 就绪]** Wave A-D 全源采集混音与渲染就绪 → v1.0.0-windows |
+| `Deliver` | `endpoint` | Wave E-F: 质检门禁、编辑器与交付 | 最终交付产物 | **[✓ Wave A-E 就绪]** Wave A-E 全源采集与交互编辑器就绪 → v1.0.0-windows |
 | `X_Term` | `block` | Wave E-F: 质检门禁、编辑器与交付 | 统一异常收口终端 | **[✓ 异常收口]** scripts/export.ts:186 |

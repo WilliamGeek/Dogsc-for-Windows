@@ -115,7 +115,9 @@
 
 2026-11-23 13:07 | T16.6 | DONE | Chrome 1436x901 四轮 Live Studio E2E 闭环验收通过并修复 BUG-1..4（#studio-stage ResizeObserver 等比贴合与 .monitor-bar 解锁、/favicon.ico 204 + SVG 图标、无音轨 M4A 导出按钮禁用防护、app.ts:138 setInspectorTab TypeError、getRenderedScreenContentRect 内嵌内容区 0.63px 精确靶心投影）；Studio 修改（圆角 48/流体背景/windowLight/1080p30 HEVC）持久化并通过 60 帧 CLI 再导出（ffprobe: hevc 1920x1598@30fps, 60f, 8.48s）；存档 docs/audits/T16.6-studio-audit-report.json（Pass 4 控制台 0 报错/HTTP>=400 为 0）；基线 verify-export 非 --sync 通过（--sync 在 2026-11-20 历史会话呈预期 T12.9 前 24 帧漂移，待 Wave F T17.3 实机重录验收） | 344 pass / 349 total (0 fail, 5 skip E2E)
 
-下一个任务：ARCH-DAG-WaveE 更新与校验 + Wave F Windows 桌面外壳与安装包规划与实现 (T17.1-T17.4)
+2026-11-23 13:09 | ARCH-DAG-WaveE | DONE | 刷新 docs/ARCHITECTURE_DAG.json（dogsc-win-v0.5.0）并通过 cli.py validate --strict 与 render --strict 重建 docs/WORKFLOW.html 与 docs/WORKFLOW.md；点亮 M_EditorUI（✓ Studio E2E 通过）与 e_expsrv_editor，刷新 Start/M_AudioMux/G_Verify/Deliver 状态，保持 M_ShellPkg 与 H_Review 虚化（opacity 0.65） | cli.py --strict 0 warnings
+
+下一个任务：Wave F Windows 桌面外壳与安装包规划与实现 (T17.1-T17.4)
 
 
 

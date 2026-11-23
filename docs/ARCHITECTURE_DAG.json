@@ -1,10 +1,10 @@
 {
   "title": "DogSC Windows · 项目级全栈架构与开发进度看板",
-  "subtitle": "高亮绿流 = Wave A-D 全链路多源采集/混音/WebGL2渲染已落地 | 虚化节点 (opacity 0.65) = 待开发 Wave E-F 与 T11.7 人工终审",
+  "subtitle": "高亮绿流 = Wave A-E 全链路采集/混音/渲染与交互式编辑器已落地 | 虚化节点 (opacity 0.65) = 待开发 Wave F 桌面封装与 T11.7 人工终审",
   "mode": "instance",
   "run_meta": {
-    "run_id": "dogsc-win-v0.4.0",
-    "duration": "Wave A-D 已完成 / Wave E-F 待开发",
+    "run_id": "dogsc-win-v0.5.0",
+    "duration": "Wave A-E 已完成 / Wave F 待开发",
     "status": "in_progress"
   },
   "spine_y": 500,
@@ -21,12 +21,12 @@
       "type": "endpoint",
       "badge_id": "START",
       "label": "录制与重构总入口 (CLI)",
-      "subtitle": "record.ts / export.ts / 336通过 (341单测)",
+      "subtitle": "record.ts / export.ts / studio.ts / 344通过 (349单测)",
       "stage": "阶段 0-2: 多源采集与时钟对齐",
       "col": 0,
       "y": 500,
       "executed": true,
-      "execution_badge": "✓ 53模块 / 336单测",
+      "execution_badge": "✓ 54核心/18前端 / 344单测",
       "details": {
         "inputs": "CLI 参数 (--seconds / --fps / --display / --format) 或 recordings/<id>",
         "outputs": "多源会话产物与 MP4/M4A 成片",
@@ -287,15 +287,15 @@
       "type": "action",
       "badge_id": "WAVE D-E · T15.5/T16.5",
       "label": "多音轨混音与多规格导出",
-      "subtitle": "AudioMixPlan 混音+M4A (4K规格待 T16.5)",
+      "subtitle": "AudioMixPlan 混音+M4A + 1080p/1440p/4K/HEVC 导出",
       "stage": "阶段 3 / Wave C-D: WebGL2 渲染与导出",
       "col": 6,
       "y": 660,
       "executed": true,
-      "execution_badge": "✓ 混音+M4A",
+      "execution_badge": "✓ 混音+多规格导出",
       "details": {
         "inputs": "system-audio.wav + mic-audio.wav + audioClips + sourceSlices",
-        "outputs": "单遍 rawvideo+AAC MP4 合流与 --format m4a 纯音频导出 (1080p/1440p/4K UI 待 T16.5)",
+        "outputs": "单遍 rawvideo+AAC MP4/HEVC 合流、--format m4a 纯音频导出、1080p/1440p/4K 多比例规格（T15.5+T16.5 完成）",
         "code_anchor": "src/render/AudioMixPlan.ts / ExportServer.ts / scripts/export.ts"
       }
     },
@@ -318,16 +318,18 @@
     {
       "id": "M_EditorUI",
       "type": "action",
-      "badge_id": "WAVE E · T16.1-5",
+      "badge_id": "WAVE E · T16.1-6",
       "label": "交互式编辑器与录制岛",
-      "subtitle": "StudioServer + 多轨时间线 + 实时检查器",
+      "subtitle": "StudioServer + 多轨时间线 + 实时检查器 + 760px 导出弹窗",
       "stage": "Wave E-F: 质检门禁、编辑器与交付",
       "col": 7,
       "y": 350,
-      "executed": false,
-      "execution_badge": "○ 未开发 Wave E",
+      "executed": true,
+      "execution_badge": "✓ Studio E2E 通过",
       "details": {
-        "gate_rule": "支持时间线拆分/裁切/变速/缩放拖拽与原子保存 project.json，严格零假开关"
+        "outputs": "StudioServer + 760px ExportSheet + 多轨时间线 + 6标签实时检查器 + Chrome 四轮零报错验收",
+        "gate_rule": "支持时间线拆分/裁切/变速/缩放拖拽与原子保存 project.json，严格零假开关",
+        "code_anchor": "src/server/StudioServer.ts / web/studio/*"
       }
     },
     {
@@ -335,12 +337,12 @@
       "type": "gate",
       "badge_id": "GATE · G1-G3",
       "label": "自动质检与真同步门禁",
-      "subtitle": "verify-export --sync + SchemaInterop G3 + 336单测",
+      "subtitle": "verify-export + SchemaInterop G3 + Studio E2E + 344单测",
       "stage": "Wave E-F: 质检门禁、编辑器与交付",
       "col": 7,
       "y": 500,
       "executed": true,
-      "execution_badge": "✓ G1+G2+G3",
+      "execution_badge": "✓ G1-G3+Studio E2E",
       "details": {
         "gate_rule": "G1/G2 导出与 showinfo 真同步校验 + G3 v27/v28 双向无损互操作全部自动验证",
         "code_anchor": "scripts/verify-export.ts"
@@ -381,14 +383,14 @@
       "type": "endpoint",
       "badge_id": "DELIVER",
       "label": "最终交付产物",
-      "subtitle": "Wave A-D 全源采集混音与渲染就绪 → v1.0.0-windows",
+      "subtitle": "Wave A-E 全源采集与交互编辑器就绪 → v1.0.0-windows",
       "stage": "Wave E-F: 质检门禁、编辑器与交付",
       "col": 9,
       "y": 500,
       "executed": true,
-      "execution_badge": "✓ Wave A-D 就绪",
+      "execution_badge": "✓ Wave A-E 就绪",
       "details": {
-        "outputs": "已完成全源采集(屏/区/窗/摄像头/WASAPI/Mic/分段)+混音M4A+v0.2.0 53模块+WebGL2全通道；Wave E-F 完成后交付桌面完整版"
+        "outputs": "已完成全源采集/混音/v0.2.0 54核心+18前端模块/WebGL2全通道/交互式 Studio E2E；Wave F 完成后交付 Windows 桌面版"
       }
     },
     {
@@ -436,7 +438,7 @@
     { "id": "e_expfail_term", "source": "X_ExpFail", "target": "X_Term", "label": "kill进程树+删残片", "className": "edge-block", "executed": false, "route": { "busY": 1035 } },
     { "id": "e_expsrv_verify", "source": "M_ExportSrv", "target": "G_Verify", "label": "export.mp4", "className": "edge-main", "executed": true },
     { "id": "e_mux_verify", "source": "M_AudioMux", "target": "G_Verify", "label": "混音MP4/M4A", "className": "edge-main", "executed": true },
-    { "id": "e_expsrv_editor", "source": "M_ExportSrv", "target": "M_EditorUI", "label": "StudioServer对接", "className": "edge-main", "executed": false },
+    { "id": "e_expsrv_editor", "source": "M_ExportSrv", "target": "M_EditorUI", "label": "StudioServer对接", "className": "edge-main", "executed": true },
     { "id": "e_verify_review", "source": "G_Verify", "target": "H_Review", "label": "G1-G3通过→待肉眼", "className": "edge-main", "executed": false },
     { "id": "e_verify_deliver", "source": "G_Verify", "target": "Deliver", "label": "Wave A 自动闭环成片", "className": "edge-main", "executed": true, "route": { "busY": 620 } },
     { "id": "e_editor_pkg", "source": "M_EditorUI", "target": "M_ShellPkg", "label": "GUI工作台就绪", "className": "edge-main", "executed": false },
