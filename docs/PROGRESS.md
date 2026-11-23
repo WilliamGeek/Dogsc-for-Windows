@@ -107,8 +107,9 @@
 2026-11-23 10:38 | T15.6 | DONE | 新增 src/capture/SegmentedSession.ts（buildConcatListFileContent / buildLosslessConcatArgs / stitchSegmentedPointerTracks 暂停扣除鼠标轨合流 / LiveRecordingMarkerRecorder 暂停冻结时钟与 Ctrl+Shift+M/F8 热键规范 / concatMediaSegmentsLossless），并通过真机 ffmpeg 双段 MP4 无损拼接 + ffprobe 实测，Wave D 全部收官（新增 4 项单测，core=54 / web=11 零 node:* 且全过 stripTypeScriptTypes） | 336 pass / 341 total (0 fail, 5 skip E2E)
 2026-11-23 10:41 | ARCH-DAG-WaveD | DONE | 刷新 docs/ARCHITECTURE_DAG.json 并通过 cli.py validate --strict 与 render --strict（24 节点 / 35 路径 / 0 警告）重建 docs/WORKFLOW.html（489.0 KB）与 docs/WORKFLOW.md；点亮 C_MultiSrc（区域/窗口/摄像头/分段）、C_Audio（WASAPI+Mic）、M_AudioMux（混音+M4A）及对应通路与 336 通过单测计数，保持 M_EditorUI（Wave E）、M_ShellPkg（Wave F）与 H_Review（T11.7）虚化（opacity 0.65） | cli.py --strict 0 warnings
 2026-11-23 11:15 | T16.1 | DONE | 新增 src/server/StudioServer.ts（validateRecordingId / resolveExportSpec / 录制列表与明细 / ProjectValidator 强校验原子写入 project.json / 预解码 prepare-frames / 硬件设备枚举 / 后台录制与可取消多规格 MP4·M4A 导出 / 全路径 SafePath + 原始 .. 防护）与 scripts/studio.ts（Edge --app 无地址栏窗口模式启动器），新增 3 项单测 | 339 pass / 344 total (0 fail, 5 skip E2E)
+2026-11-23 11:19 | T16.2 | DONE | 新增 web/studio.html、web/studio/styles.css（对齐 macOS Warm Graphite 暗色/柔银浅色双主题、44px 顶栏/监视条与 7 轨家族色）、web/studio/state.ts（不可变 StudioHistory 撤销重做栈与 ProjectValidator 受控编辑器算子）、web/studio/player.ts（全 9 通道 WebGL2 实时预览与 LRU 纹理缓存）及 web/studio/app.ts；core=54/web=14 零 node:* 且全过 stripTypeScriptTypes | 339 pass / 344 total (0 fail, 5 skip E2E)
 
-下一个任务：T16.2（对齐 macOS Warm Graphite 设计系统的 Studio 三栏主界面、状态历史栈与 WebGL2 实时预览播放器）
+下一个任务：T16.3（web/studio/timeline.ts 多轨交互式时间线与 StudioState 纯状态机单测）
 
 
 

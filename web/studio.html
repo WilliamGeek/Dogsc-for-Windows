@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DogSC Studio</title>
+  <link rel="stylesheet" href="/web/studio/styles.css" />
+</head>
+<body>
+  <div class="studio-shell" id="studio-root">
+    <!-- 1. Top Chrome Bar (44px, aligned with EditorChromeMetrics.titleBarHeight) -->
+    <header class="chrome-bar">
+      <div class="chrome-group">
+        <div class="brand-mark">
+          <span class="brand-dot"></span>
+          <span>DogSC Studio</span>
+        </div>
+        <select id="recording-picker" class="chrome-select" aria-label="选择录制"></select>
+        <button id="btn-new-record" class="chrome-btn subtle-well" title="新建屏幕/窗口/音视频录制">
+          + 新建录制
+        </button>
+        <input id="project-title-input" class="chrome-title-input" type="text" placeholder="工程标题" aria-label="工程标题" />
+        <span id="save-status-pill" class="save-pill">就绪</span>
+      </div>
+
+      <div class="chrome-group">
+        <button id="btn-undo" class="chrome-btn" disabled title="撤销 (Ctrl+Z)">撤销</button>
+        <button id="btn-redo" class="chrome-btn" disabled title="重做 (Ctrl+Y)">重做</button>
+        <button id="btn-theme-toggle" class="chrome-btn" title="切换深色/浅色主题">浅色</button>
+        <button id="btn-open-export" class="primary-export-btn">导出</button>
+      </div>
+    </header>
+
+    <!-- 2. Middle Workspace: Central WebGL2 Monitor + Right Inspector -->
+    <main class="workspace-mid">
+      <section class="stage-column">
+        <div class="stage-viewport">
+          <div class="stage-canvas-wrap" id="stage-canvas-wrap">
+            <canvas id="studio-stage" width="1280" height="720"></canvas>
+            <div id="stage-focus-hint" class="stage-hint-pill">点击画面可直接重设当前缩放焦点</div>
+            <div id="focus-target-marker" class="focus-target-marker"></div>
+          </div>
+        </div>
+
+        <!-- Monitor Transport Bar + 3px Terracotta Scrub Progress -->
+        <div class="monitor-bar-wrap">
+          <div class="monitor-progress-track" id="monitor-progress-track" title="点击或拖动跳转播放头">
+            <div class="monitor-progress-rail">
+              <div class="monitor-progress-fill" id="monitor-progress-fill"></div>
+            </div>
+          </div>
+
+          <div class="monitor-bar">
+            <div class="transport-cluster">
+              <div class="segmented-well" id="quick-ratio-switch" aria-label="快速画布比例">
+                <button class="seg-opt active" data-ratio="适应">适应</button>
+                <button class="seg-opt" data-ratio="16:9">16:9</button>
+                <button class="seg-opt" data-ratio="9:16">9:16</button>
+                <button class="seg-opt" data-ratio="1:1">1:1</button>
+              </div>
+            </div>
+
+            <div class="transport-cluster">
+              <button id="btn-step-back" class="tbtn" title="上一帧 (←)">◀</button>
+              <button id="btn-play-toggle" class="play-disc-btn" title="播放 / 暂停 (Space)">▶</button>
+              <button id="btn-step-fwd" class="tbtn" title="下一帧 (→)">▶</button>
+              <span class="timecode-readout">
+                <strong id="tc-current">00:00.00</strong> / <span id="tc-total">00:00.00</span>
+              </span>
+            </div>
+
+            <div class="transport-cluster">
+              <select id="preview-speed-select" class="chrome-select" aria-label="预览倍速" style="height:26px;">
+                <option value="0.5">0.5×</option>
+                <option value="1" selected>1×</option>
+                <option value="1.5">1.5×</option>
+                <option value="2">2×</option>
+              </select>
+              <div class="segmented-well" id="quality-mode-toggle" aria-label="预览质量">
+                <button class="seg-opt active" data-quality="low">流畅</button>
+                <button class="seg-opt" data-quality="full">原画</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Inspector Drawer + 48px Vertical Icon Rail -->
+      <aside class="inspector-shell">
+        <div id="studio-inspector-body" class="inspector-body"></div>
+        <nav class="inspector-rail" id="studio-inspector-rail" aria-label="检查器分类">
+          <button class="rail-tab-btn active" data-tab="frame" title="画面与外框">
+            <span>▣</span><span>画面</span>
+          </button>
+          <button class="rail-tab-btn" data-tab="zoom" title="自动运镜与缩放">
+            <span>⊕</span><span>运镜</span>
+          </button>
+          <button class="rail-tab-btn" data-tab="opening" title="3D 开场序列">
+            <span>✦</span><span>开场</span>
+          </button>
+          <button class="rail-tab-btn" data-tab="cursor" title="矢量光标与点击动效">
+            <span>⌖</span><span>光标</span>
+          </button>
+          <button class="rail-tab-btn" data-tab="camera" title="摄像头画中画">
+            <span>◉</span><span>摄像头</span>
+          </button>
+          <button class="rail-tab-btn" data-tab="audio" title="系统声与麦克风">
+            <span>♫</span><span>声音</span>
+          </button>
+        </nav>
+      </aside>
+    </main>
+
+    <!-- 3. Bottom Multi-Track Interactive Timeline (256px) -->
+    <section id="studio-timeline" class="timeline-dock"></section>
+  </div>
+
+  <!-- Modal Containers (Recording Island & Multi-Spec Export Sheet) -->
+  <div id="studio-modal-backdrop" class="modal-backdrop">
+    <div id="studio-modal-card" class="modal-card"></div>
+  </div>
+
+  <script type="module" src="/web/studio/app.ts"></script>
+</body>
+</html>
