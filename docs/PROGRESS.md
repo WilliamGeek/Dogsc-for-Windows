@@ -105,8 +105,9 @@
 2026-11-23 10:34 | T15.4 | DONE | 新增 src/capture/CameraRecorder.ts（DirectShow dshow 摄像头录制、-vf showinfo 首帧 n:0 时钟锚点、buildCameraSyncAnchor、extractCameraFrames），扩展 RecordingSession.ts 多源音视频录制与 ProjectMediaManifest / CaptureConfiguration 真实标志，ExportServer.ts 开放 /camera_frames/ 安全路径受控静态帧服务，新增 5 项单测 | 328 pass / 333 total (0 fail, 5 skip E2E)
 2026-11-23 10:36 | T15.5 | DONE | 新增 src/render/AudioMixPlan.ts（buildAtempoFilterChain 任意倍速 [0.5,2.0] 级联、buildSessionAudioTracks、buildAudioMixFilterGraph atrim/adelay/afade/amix、buildAudioOnlyM4aArgs），扩展 ExportServer.ts 单遍 rawvideo+AAC 音画合流与 scripts/export.ts --format m4a 纯音频直出，并通过真机 ffmpeg 合成双 WAV -> M4A + ffprobe 实测（新增 4 项单测） | 332 pass / 337 total (0 fail, 5 skip E2E)
 2026-11-23 10:38 | T15.6 | DONE | 新增 src/capture/SegmentedSession.ts（buildConcatListFileContent / buildLosslessConcatArgs / stitchSegmentedPointerTracks 暂停扣除鼠标轨合流 / LiveRecordingMarkerRecorder 暂停冻结时钟与 Ctrl+Shift+M/F8 热键规范 / concatMediaSegmentsLossless），并通过真机 ffmpeg 双段 MP4 无损拼接 + ffprobe 实测，Wave D 全部收官（新增 4 项单测，core=54 / web=11 零 node:* 且全过 stripTypeScriptTypes） | 336 pass / 341 total (0 fail, 5 skip E2E)
+2026-11-23 10:41 | ARCH-DAG-WaveD | DONE | 刷新 docs/ARCHITECTURE_DAG.json 并通过 cli.py validate --strict 与 render --strict（24 节点 / 35 路径 / 0 警告）重建 docs/WORKFLOW.html（489.0 KB）与 docs/WORKFLOW.md；点亮 C_MultiSrc（区域/窗口/摄像头/分段）、C_Audio（WASAPI+Mic）、M_AudioMux（混音+M4A）及对应通路与 336 通过单测计数，保持 M_EditorUI（Wave E）、M_ShellPkg（Wave F）与 H_Review（T11.7）虚化（opacity 0.65） | cli.py --strict 0 warnings
 
-下一个任务：ARCH-DAG-WaveD & Wave E（交互式编辑器界面与多规格导出）
+下一个任务：Wave E（交互式 Web 编辑器界面，对齐 macOS Studio 功能与布局）& Wave F（Windows 桌面外壳与安装包）
 
 
 
