@@ -555,6 +555,7 @@ namespace DogSCDesktop
             this.Size = new Size(1, 1);
             this.StartPosition = FormStartPosition.Manual;
             this.Location = new Point(-32000, -32000);
+            this.CreateHandle();
         }
 
         protected override void SetVisibleCore(bool value)
@@ -766,14 +767,24 @@ namespace DogSCDesktop
                 if (m.Success && this.studioUrl == null)
                 {
                     this.studioUrl = m.Value;
-                    this.hotkeyForm.BeginInvoke(new MethodInvoker(delegate {
-                        if (!this.trayOnly || !string.IsNullOrEmpty(this.pendingQuery))
+                    try
+                    {
+                        if (!this.exiting && this.hotkeyForm.IsHandleCreated)
                         {
-                            string q = this.pendingQuery;
-                            this.pendingQuery = null;
-                            OpenStudioWindow(q);
+                            this.hotkeyForm.BeginInvoke(new MethodInvoker(delegate {
+                                if (!this.trayOnly || !string.IsNullOrEmpty(this.pendingQuery))
+                                {
+                                    string q = this.pendingQuery;
+                                    this.pendingQuery = null;
+                                    OpenStudioWindow(q);
+                                }
+                            }));
                         }
-                    }));
+                    }
+                    catch
+                    {
+                        // Ignore shutdown race if form already disposed
+                    }
                 }
             };
             this.serverProcess.Start();
@@ -929,3 +940,4 @@ namespace DogSCDesktop
         }
     }
 }
+
