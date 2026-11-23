@@ -60,8 +60,15 @@ import {
   buildAudioOnlyM4aArgs,
   buildSessionAudioTracks,
   extractAudioSourceSlices,
+  extractSpeechIntervals,
 } from '../render/AudioMixPlan.ts';
 import { AgentBridgeManager } from './AgentBridge.ts';
+import {
+  applySoundEffectToProject,
+  applyUploadedAssetToProject,
+  extractAudioWaveformPeaks,
+  mergeRecordingIntoProject,
+} from './MediaAssetsService.ts';
 
 const EDGE_EXE = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
 const SAFE_RECORDING_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
@@ -359,20 +366,23 @@ export async function startStudioServer(o: StudioServerOptions): Promise<StudioS
     meta: Record<string, any>
   ): Promise<void> {
     try {
+      const encodedObj = JSON.parse(encodeRecorderProject(project));
       const audioTracks = buildSessionAudioTracks({
-        project: JSON.parse(encodeRecorderProject(project)),
+        project: encodedObj,
         recDir,
         meta,
       });
       const sourceSlices = extractAudioSourceSlices(
-        JSON.parse(encodeRecorderProject(project)),
+        encodedObj,
         job.fps > 0 ? Number(meta.durationSeconds) || 1 : 1
       );
+      const speechIntervals = extractSpeechIntervals(encodedObj);
 
       if (job.format === 'm4a') {
         const m4aArgs = buildAudioOnlyM4aArgs(audioTracks, job.outFile, {
           durationSeconds: Number(meta.durationSeconds) || 1,
           sourceSlices,
+          speechIntervals,
         });
         if (!m4aArgs) {
           throw new Error('没有可导出的未静音音轨');
@@ -458,6 +468,7 @@ export async function startStudioServer(o: StudioServerOptions): Promise<StudioS
         durationSeconds: trueDuration,
         videoInputIndex: 0,
         sourceSlices,
+        speechIntervals,
       });
 
       const server = await startExportServer({
@@ -1018,6 +1029,101 @@ export async function startStudioServer(o: StudioServerOptions): Promise<StudioS
           }
           await persistProjectAtomic(recId, sessionDir, out.nextProject);
           sendJson(res, 200, out.payload);
+          return;
+        }
+
+        if (req.method === 'GET' && subRoute === 'waveform') {
+          const parsedUrl = new URL(decodedPath + (req.url?.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''), 'http://127.0.0.1');
+          const samplesParam = Number(parsedUrl.searchParams.get('samples'));
+          const payload = extractAudioWaveformPeaks(sessionDir, {
+            samples: Number.isFinite(samplesParam) && samplesParam > 0 ? samplesParam : 160,
+          });
+          sendJson(res, 200, payload);
+          return;
+        }
+
+        if (req.method === 'POST' && subRoute === 'assets') {
+          const rawBody = await readJsonBody(req);
+          const body = rawBody && typeof rawBody === 'object' ? (rawBody as Record<string, any>) : {};
+          const metaPath = join(sessionDir, 'meta.json');
+          const projectPath = join(sessionDir, 'project.json');
+          try {
+            const meta = existsSync(metaPath) ? JSON.parse(readFileSync(metaPath, 'utf8')) : {};
+            const currentProj = decodeRecorderProject(JSON.parse(readFileSync(projectPath, 'utf8')));
+            const rawDur = Math.max(Number(meta?.durationSeconds) || 8, 0.2);
+            const result = applyUploadedAssetToProject(currentProj, sessionDir, rawDur, {
+              fileName: String(body.fileName ?? 'upload.bin'),
+              base64Data: String(body.base64Data ?? ''),
+              kind: typeof body.kind === 'string' ? body.kind : undefined,
+              applyAsWallpaper: Boolean(body.applyAsWallpaper),
+              insertOnTimeline: Boolean(body.insertOnTimeline),
+              startTime: typeof body.startTime === 'number' ? body.startTime : 0,
+            });
+            await persistProjectAtomic(recId, sessionDir, result.project);
+            sendJson(res, 200, {
+              ok: true,
+              asset: result.asset,
+              sizeBytes: result.sizeBytes,
+              project: JSON.parse(encodeRecorderProject(result.project)),
+            });
+          } catch (err: any) {
+            sendJson(res, 400, { error: err?.message ?? String(err) });
+          }
+          return;
+        }
+
+        if (req.method === 'POST' && subRoute === 'sfx') {
+          const rawBody = await readJsonBody(req);
+          const body = rawBody && typeof rawBody === 'object' ? (rawBody as Record<string, any>) : {};
+          const projectPath = join(sessionDir, 'project.json');
+          try {
+            const currentProj = decodeRecorderProject(JSON.parse(readFileSync(projectPath, 'utf8')));
+            const result = applySoundEffectToProject(currentProj, sessionDir, {
+              preset: String(body.preset ?? 'click') as any,
+              startTime: typeof body.startTime === 'number' ? body.startTime : 0,
+            });
+            await persistProjectAtomic(recId, sessionDir, result.project);
+            sendJson(res, 200, {
+              ok: true,
+              asset: result.asset,
+              audioClip: result.audioClip,
+              project: JSON.parse(encodeRecorderProject(result.project)),
+            });
+          } catch (err: any) {
+            sendJson(res, 400, { error: err?.message ?? String(err) });
+          }
+          return;
+        }
+
+        if (req.method === 'POST' && subRoute === 'merge-recording') {
+          const rawBody = await readJsonBody(req);
+          const body = rawBody && typeof rawBody === 'object' ? (rawBody as Record<string, any>) : {};
+          const sourceRecId = typeof body.sourceRecordingId === 'string' ? body.sourceRecordingId.trim() : '';
+          const sourceDir = sourceRecId ? resolveSessionDir(sourceRecId) : null;
+          if (!sourceDir || !existsSync(sourceDir) || sourceRecId === recId) {
+            sendJson(res, 400, { error: '无效的源录制 ID' });
+            return;
+          }
+          const metaPath = join(sessionDir, 'meta.json');
+          const projectPath = join(sessionDir, 'project.json');
+          try {
+            const meta = existsSync(metaPath) ? JSON.parse(readFileSync(metaPath, 'utf8')) : {};
+            const currentProj = decodeRecorderProject(JSON.parse(readFileSync(projectPath, 'utf8')));
+            const merged = mergeRecordingIntoProject({
+              targetProject: currentProj,
+              targetMeta: meta,
+              targetSessionDir: sessionDir,
+              sourceRecId,
+              sourceRecDir: sourceDir,
+            });
+            await persistProjectAtomic(recId, sessionDir, merged);
+            sendJson(res, 200, {
+              ok: true,
+              project: JSON.parse(encodeRecorderProject(merged)),
+            });
+          } catch (err: any) {
+            sendJson(res, 400, { error: err?.message ?? String(err) });
+          }
           return;
         }
       }

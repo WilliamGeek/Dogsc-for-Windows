@@ -23,6 +23,12 @@ export interface AudioMixTrackInput {
   playbackRate?: number;
   fadeIn?: number;
   fadeOut?: number;
+  ducksUnderSpeech?: boolean;
+}
+
+export interface SpeechInterval {
+  start: number;
+  end: number;
 }
 
 export interface AudioTimelineSlice {
@@ -221,6 +227,7 @@ export function buildSessionAudioTracks(options: {
           typeof clip.fadeOut === 'number' && Number.isFinite(clip.fadeOut)
             ? Math.max(0, clip.fadeOut)
             : 0,
+        ducksUnderSpeech: Boolean(clip.ducksUnderSpeech),
       });
     }
   }
@@ -229,9 +236,74 @@ export function buildSessionAudioTracks(options: {
 }
 
 /**
+ * Pure function: extracts merged speech activity intervals (seconds) from project subtitle cues
+ * so BGM tracks with `ducksUnderSpeech` smoothly attenuate around spoken sections.
+ */
+export function extractSpeechIntervals(
+  project: Record<string, any> | null | undefined,
+  options: { paddingSeconds?: number; mergeGapSeconds?: number; maxDuration?: number } = {}
+): SpeechInterval[] {
+  const cues = project?.timeline?.subtitleCues;
+  if (!Array.isArray(cues) || cues.length === 0) return [];
+
+  const pad = Math.max(0, options.paddingSeconds ?? 0.15);
+  const mergeGap = Math.max(0, options.mergeGapSeconds ?? 0.2);
+  const capEnd = options.maxDuration && options.maxDuration > 0 ? options.maxDuration : 86400;
+
+  const raw: SpeechInterval[] = [];
+  for (const cue of cues) {
+    const startRaw = Number(cue?.timing?.startTime);
+    const durRaw = Number(cue?.timing?.duration);
+    if (!Number.isFinite(startRaw) || !Number.isFinite(durRaw) || durRaw <= 0) continue;
+    const s = Math.max(0, startRaw - pad);
+    const e = Math.min(capEnd, startRaw + durRaw + pad);
+    if (e > s + 0.01) {
+      raw.push({ start: s, end: e });
+    }
+  }
+  if (raw.length === 0) return [];
+
+  raw.sort((a, b) => a.start - b.start);
+  const merged: SpeechInterval[] = [{ ...raw[0] }];
+  for (let i = 1; i < raw.length; i++) {
+    const prev = merged[merged.length - 1];
+    const cur = raw[i];
+    if (cur.start <= prev.end + mergeGap) {
+      prev.end = Math.max(prev.end, cur.end);
+    } else {
+      merged.push({ ...cur });
+    }
+  }
+  return merged.slice(0, 40);
+}
+
+/**
+ * Pure function: constructs an FFmpeg `volume` filter expression that ducks volume to `duckGain`
+ * during speech intervals using `:eval=frame`.
+ */
+export function buildDuckingVolumeFilter(
+  baseVolume: number,
+  intervals: readonly SpeechInterval[],
+  duckGain: number = 0.25
+): string {
+  const base = Number.isFinite(baseVolume) ? Math.max(0, baseVolume) : 1;
+  const ratio = Number.isFinite(duckGain) ? Math.min(Math.max(duckGain, 0), 1) : 0.25;
+  const active = intervals.filter((iv) => Number.isFinite(iv.start) && Number.isFinite(iv.end) && iv.end > iv.start).slice(0, 40);
+  if (active.length === 0) {
+    return `volume=${fmtNum(base, 4)}`;
+  }
+  const cond = active
+    .map((iv) => `between(t,${fmtNum(Math.max(0, iv.start), 3)},${fmtNum(iv.end, 3)})`)
+    .join('+');
+  const duckVol = fmtNum(base * ratio, 4);
+  const normalVol = fmtNum(base, 4);
+  return `volume='if(gt(${cond},0),${duckVol},${normalVol})':eval=frame`;
+}
+
+/**
  * Pure function: constructs an FFmpeg `filter_complex` string combining all active
  * tracks with slice trimming, speed adjustment (`atempo`), positive-offset delay (`adelay`),
- * fades (`afade`), per-track volume, and multi-track mixing (`amix`).
+ * fades (`afade`), per-track volume (including speech ducking), and multi-track mixing (`amix`).
  */
 export function buildAudioMixFilterGraph(
   tracks: readonly AudioMixTrackInput[],
@@ -239,6 +311,7 @@ export function buildAudioMixFilterGraph(
     durationSeconds: number;
     videoInputIndex?: number | null;
     sourceSlices?: readonly AudioTimelineSlice[];
+    speechIntervals?: readonly SpeechInterval[];
   }
 ): AudioMixGraph | null {
   const activeTracks = tracks.filter(
@@ -366,7 +439,12 @@ export function buildAudioMixFilterGraph(
       chain.push(`afade=t=out:st=${fmtNum(fadeOutStart)}:d=${fmtNum(fadeOut)}`);
     }
 
-    chain.push(`volume=${fmtNum(vol, 4)}`);
+    const speechIntervals = options.speechIntervals;
+    if (track.ducksUnderSpeech && speechIntervals && speechIntervals.length > 0) {
+      chain.push(buildDuckingVolumeFilter(vol, speechIntervals));
+    } else {
+      chain.push(`volume=${fmtNum(vol, 4)}`);
+    }
     filterParts.push(`[${inIdx}:a]${chain.join(',')}${trkLabel}`);
   }
 
@@ -398,12 +476,14 @@ export function buildAudioOnlyM4aArgs(
     durationSeconds: number;
     sourceSlices?: readonly AudioTimelineSlice[];
     audioBitrate?: string;
+    speechIntervals?: readonly SpeechInterval[];
   }
 ): string[] | null {
   const graph = buildAudioMixFilterGraph(tracks, {
     durationSeconds: options.durationSeconds,
     videoInputIndex: null,
     sourceSlices: options.sourceSlices,
+    speechIntervals: options.speechIntervals,
   });
   if (!graph) {
     return null;

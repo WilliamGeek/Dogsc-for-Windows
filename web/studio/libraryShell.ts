@@ -7,6 +7,7 @@
  */
 
 import { AiAssistantPanel, type LibraryPanelHost } from './aiPanel.ts';
+import { AssetsLibraryPanel } from './assetsPanel.ts';
 
 export type StudioLibraryTab = 'ai' | 'assets' | 'subtitles' | 'motion';
 export type LibrarySubPanelRenderer = (container: HTMLElement, host: LibraryPanelHost) => void;
@@ -15,6 +16,7 @@ export class StudioLibraryShell {
   private activeTab: StudioLibraryTab = 'ai';
   private isOpen = true;
   private readonly aiPanel = new AiAssistantPanel();
+  private readonly assetsPanel = new AssetsLibraryPanel();
   private customRenderers: Partial<Record<'assets' | 'subtitles' | 'motion', LibrarySubPanelRenderer>> = {};
   private lastHost: LibraryPanelHost | null = null;
   private boundChrome = false;
@@ -112,6 +114,11 @@ export class StudioLibraryShell {
 
     if (this.activeTab === 'ai') {
       this.aiPanel.mountOrSync(body, host);
+      return;
+    }
+
+    if (this.activeTab === 'assets') {
+      this.assetsPanel.mountOrSync(body, host);
       return;
     }
 
